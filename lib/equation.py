@@ -87,9 +87,10 @@ class Equation(object):
 
         # Values for each time step
         self.T = np.linspace(self.t_min, self.t_max, self.t_poi)
-        self.X = []
-        self.R = []
-        self.W = []
+        self.X = [self.x0.copy()]
+        self.R = [self.r0]
+        self.W = [0.]
+        self.Xr = [self.x0.copy()]
 
         self.x_real = None # real (exact) solution
         self.x_calc = None # calculated solution
@@ -101,15 +102,16 @@ class Equation(object):
         '''
 
         self.i+= 1
-        self.t = self.T[i]
+        self.t = self.T[self.i]
         self.x = x.copy().reshape(self.d, self.m)
         self.r = r
-        self.w+= np.sqrt(self.h) * np.random.randn((self.d, self.m))
+        self.w+= np.sqrt(self.h) * np.random.randn(self.d, self.m)
 
         if True:
             self.X.append(self.x.copy())
-            self.R.append(self.r.copy())
+            self.R.append(self.r)
             self.W.append(self.w.copy())
+            self.Xr.append(self.xr(self.t, self.w))
 
     def check(self):
         '''
@@ -138,33 +140,42 @@ class Equation(object):
         if self.x_real is not None and self.x_calc is not None:
             self.x_err2 = np.linalg.norm(self.x_real - self.x_calc, axis=0)
 
-    def plot_x(self):
+    def plot_x_vs_t(self, m=0):
         '''
-        Plot calculation result.
+        Plot calculation result x(t) for selected sample index m.
         '''
 
-        if self.t is None or self.x_calc is None:
-            return print('SDE is not ready. Can not plot')
+        if len(self.X) > 1:
+            Xc = [X[:, m] for X in self.X]
+            for i in range(self.d):
+                plt.plot(self.T, [x[i] for x in Xc],
+                    label='x_%d'%(i+1))
 
-        for i in range(self.x_calc.shape[0]):
-            plt.plot(self.t, self.x_calc[i, :], label='x_%d'%(i+1))
-        plt.title('SDE Solution')
+        if len(self.Xr) > 1:
+            Xr = [X[:, m] for X in self.Xr]
+            for i in range(self.d):
+                plt.plot(self.T, [x[i] for x in Xr],
+                    '--', label='x_%d (real)'%(i+1))
+
+        plt.title('Solution')
         plt.xlabel('t')
         plt.ylabel('x')
         plt.legend(loc='best')
         plt.show()
 
-    def plot_x_err(self):
+    def plot_x_err_vs_t(self, m=0):
         '''
-        Plot error of calculation result if exact solution is set.
+        Plot calculation result x(t) error for selected sample index m.
         '''
 
-        if self.t is None or self.x_err2 is None:
-            return print('SDE is not ready. Can not plot')
+        if len(self.X) > 1 and len(self.Xr) > 1:
+            Xc = np.array([X[:, m] for X in self.X]).T
+            Xr = np.array([X[:, m] for X in self.Xr]).T
+            err = np.linalg.norm(Xc - Xr, axis=0)
+            plt.plot(self.T, err)
 
-        plt.plot(self.t, self.x_err2)
         plt.semilogy()
-        plt.title('SDE Solution error')
+        plt.title('Solution error')
         plt.xlabel('t')
         plt.ylabel('Error')
         plt.show()

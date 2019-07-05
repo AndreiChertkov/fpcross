@@ -23,12 +23,10 @@ class Solver(object):
 
         self.EQ.init()
 
-        x = self.EQ.x0.reshape(-1, 1)
-        for t in self.EQ.t[:-1]:
-            x_curr = self.step_x(x[:, -1], t)
-            x = np.hstack([x, x_curr.reshape(-1, 1)])
-
-        self.EQ.set_sol(x)
+        for _ in range(self.EQ.t_poi - 1):
+            x = self.step_x(self.EQ.x, self.EQ.t)
+            r = None
+            self.EQ.add(x, r)
 
     def step_x(self, x, t):
         '''
@@ -44,18 +42,10 @@ class Solver(object):
         '''
 
         h = self.EQ.h
-
-        f = self.EQ.f
-        if callable(f): f = f(x, t)
-
-        s = self.EQ.s
-        if callable(s): s = s(x, t)
-
+        f = self.EQ.f(x, t)
+        s = self.EQ.s(x, t)
         e = np.random.randn(*x.shape)
-
-        res = x + h * f + np.sqrt(h) * s.dot(e)
-
-        return res
+        return x + h * f + np.sqrt(h) * s.dot(e)
 
     def sde_step_r(self, r, x, t, fx, s, h):
         '''
