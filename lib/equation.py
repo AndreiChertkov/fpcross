@@ -4,15 +4,17 @@ import matplotlib.pyplot as plt
 class Equation(object):
     '''
     Class that represents stochastic differential equation.
-    dx = f(x, t) dt + s(x, t) dW, fx = df / dx,
+    dx = f(t, x) dt + s(t, x) dW, fx = df / dx,
     where x is a d-dim vector, dW is a q-dim noise (Brownian motion),
-    x0 is initial condition.
+    x0 is initial condition,
+    r0 is initial distribution of r = r(x).
     '''
 
     def __init__(self, x0, r0, d=1, q=None, m=1, t_min=0., t_max=1., t_poi=100):
         '''
         Constructor with parameters:
         x0    - [d or d x 1 nd.array] initial condition
+        r0    - [float] initial distribution
         d     - [int] dimension of coordinate
         q     - [int] dimension of noise
         m     - [int] number of samples
@@ -36,6 +38,26 @@ class Equation(object):
 
         self.init()
 
+    def init(self):
+        '''
+        Set all main variables to default state (t=t0, x=x0, w=0)
+        (remove result of previous calculation).
+        '''
+
+        # Current values
+        self.i = 0
+        self.t = self.t_min
+        self.x = self.x0.copy()
+        self.r = self.r0
+        self.w = 0.
+
+        # Values for each time step
+        self.T = np.linspace(self.t_min, self.t_max, self.t_poi)
+        self.X = [self.x.copy()]
+        self.R = [self.r]
+        self.W = [self.w]
+        self.Xr = [self.x0.copy()]
+
     def prep(self, s, f, fx, xr=None):
         '''
         Set equation functions:
@@ -56,47 +78,7 @@ class Equation(object):
 
         return self
 
-    def _func2samples(self, v):
-        if len(v.shape) == 2: return v
-        return np.repeat(v.reshape(self.d, 1), self.m, axis=1)
-
-    def s(self, t, x):
-        return self._func2samples(self._s(t, x))
-
-    def f(self, t, x):
-        return self._func2samples(self._f(t, x))
-
-    def fx(self, t, x):
-        return self._func2samples(self._fx(t, x))
-
-    def xr(self, t, w):
-        return self._func2samples(self._xr(t, w))
-
-    def init(self):
-        '''
-        Set all main variables to default state
-        (remove result of previous calculation).
-        '''
-
-        # Current values
-        self.i = 0
-        self.t = self.t_min
-        self.x = self.x0.copy()
-        self.r = None
-        self.w = 0.
-
-        # Values for each time step
-        self.T = np.linspace(self.t_min, self.t_max, self.t_poi)
-        self.X = [self.x0.copy()]
-        self.R = [self.r0]
-        self.W = [0.]
-        self.Xr = [self.x0.copy()]
-
-        self.x_real = None # real (exact) solution
-        self.x_calc = None # calculated solution
-        self.x_err2 = None # x-calculation error
-
-    def add(self, x, r):
+    def step(self, x, r):
         '''
         Add new step.
         '''
@@ -113,32 +95,21 @@ class Equation(object):
             self.W.append(self.w.copy())
             self.Xr.append(self.xr(self.t, self.w))
 
-    def check(self):
-        '''
-        Check calculation results.
-        '''
+    def _func2samples(self, v):
+        if len(v.shape) == 2: return v
+        return np.repeat(v.reshape(self.d, 1), self.m, axis=1)
 
-        x_calc = self.x
-        x_real = self.xr(self.t, self.w)
-        err = np.linalg.norm(x_real - x_calc, axis=0)
+    def s(self, t, x):
+        return self._func2samples(self._s(t, x))
 
-        print('Error at t_max : %-12.2e'%(np.mean(err)))
+    def f(self, t, x):
+        return self._func2samples(self._f(t, x))
 
-        return
+    def fx(self, t, x):
+        return self._func2samples(self._fx(t, x))
 
-        self.w = self.t
-
-
-
-        self.x_real = None
-        if self.xr is not None:
-            self.x_real = np.array([
-                self.xr(t_, w_) for t_, w_  in zip(self.T, self.W)
-            ]).reshape(self.d, -1)
-
-        self.x_err2 = None
-        if self.x_real is not None and self.x_calc is not None:
-            self.x_err2 = np.linalg.norm(self.x_real - self.x_calc, axis=0)
+    def xr(self, t, w):
+        return self._func2samples(self._xr(t, w))
 
     def plot_x_vs_t(self, m=0):
         '''
@@ -146,15 +117,13 @@ class Equation(object):
         '''
 
         if len(self.X) > 1:
-            Xc = [X[:, m] for X in self.X]
             for i in range(self.d):
-                plt.plot(self.T, [x[i] for x in Xc],
+                plt.plot(self.T, [X[i, m] for X in self.X],
                     label='x_%d'%(i+1))
 
         if len(self.Xr) > 1:
-            Xr = [X[:, m] for X in self.Xr]
             for i in range(self.d):
-                plt.plot(self.T, [x[i] for x in Xr],
+                plt.plot(self.T, [X[i, m] for X in self.Xr],
                     '--', label='x_%d (real)'%(i+1))
 
         plt.title('Solution')
@@ -185,5 +154,4 @@ class Equation(object):
         Plot distribution.
         '''
 
-        if True:
-            return print('SDE is not ready. Can not plot')
+        return
