@@ -9,7 +9,7 @@ class Equation(object):
     x0 is initial condition.
     '''
 
-    def __init__(self, x0, d=1, q=None, m=1, t_min=0., t_max=1., t_poi=100):
+    def __init__(self, x0, r0, d=1, q=None, m=1, t_min=0., t_max=1., t_poi=100):
         '''
         Constructor with parameters:
         x0    - [d or d x 1 nd.array] initial condition
@@ -26,6 +26,7 @@ class Equation(object):
         self.m = m or 1
 
         self.x0 = np.repeat(x0.reshape(self.d, 1), self.m, axis=1)
+        self.r0 = r0
 
         self.t_min = t_min
         self.t_max = t_max
@@ -38,22 +39,38 @@ class Equation(object):
     def prep(self, s, f, fx, xr=None):
         '''
         Set equation functions:
-        s(t, x)  - noise coefficients
-        f(t, x)  - rhs function
-        fx(t, x) - rhs derivative
-        xr(t, w) - (optional) real solution
+        s(t, x)  - [d x q nd.array] noise coefficients
+        f(t, x)  - [d or d x m nd.array] rhs function
+        fx(t, x) - [d or d x m nd.array] rhs derivative
+        xr(t, w) - [d or d x m nd.array] (optional) real solution
         Function inputs:
             t - [float] current time
             x - [d x m nd.array] current coordinate
             w - [q x m nd.array] current Brownian motion value
         '''
 
-        self.s = s
-        self.f = f
-        self.fx = fx
-        self.xr = xr
+        self._s = s
+        self._f = f
+        self._fx = fx
+        self._xr = xr
 
         return self
+
+    def _func2samples(self, v):
+        if len(v.shape) == 2: return v
+        return np.repeat(v.reshape(self.d, 1), self.m, axis=1)
+
+    def s(self, t, x):
+        return self._func2samples(self._s(t, x))
+
+    def f(self, t, x):
+        return self._func2samples(self._f(t, x))
+
+    def fx(self, t, x):
+        return self._func2samples(self._fx(t, x))
+
+    def xr(self, t, w):
+        return self._func2samples(self._xr(t, w))
 
     def init(self):
         '''
@@ -101,10 +118,9 @@ class Equation(object):
 
         x_calc = self.x
         x_real = self.xr(self.t, self.w)
+        err = np.linalg.norm(x_real - x_calc, axis=0)
 
-        print(x_calc)
-        print(x_real)
-        print(np.linalg.norm(x_real - x_calc, axis=0))
+        print('Error at t_max : %-12.2e'%(np.mean(err)))
 
         return
 
