@@ -9,7 +9,7 @@ class Equation(object):
     x0 is initial condition.
     '''
 
-    def __init__(self, x0, d, q, m, t_min=0., t_max=1., t_poi=100):
+    def __init__(self, x0, d=1, q=None, m=1, t_min=0., t_max=1., t_poi=100):
         '''
         Constructor with parameters:
         x0    - [d or d x 1 nd.array] initial condition
@@ -21,11 +21,11 @@ class Equation(object):
         t_poi - [int] number of time steps
         '''
 
-        self.x0 = x0.reshape(d, 1)
+        self.d = d or 1
+        self.q = q or d
+        self.m = m or 1
 
-        self.d = d
-        self.q = q
-        self.m = m
+        self.x0 = np.repeat(x0.reshape(self.d, 1), self.m, axis=1)
 
         self.t_min = t_min
         self.t_max = t_max
@@ -33,7 +33,7 @@ class Equation(object):
 
         self.h = (t_max - t_min) / (t_poi - 1)
 
-        self.clean()
+        self.init()
 
     def prep(self, s, f, fx, xr=None):
         '''
@@ -55,17 +55,18 @@ class Equation(object):
 
         return self
 
-    def clean(self):
+    def init(self):
         '''
         Set all main variables to default state
         (remove result of previous calculation).
         '''
 
         # Current values
+        self.i = 0
         self.t = self.t_min
         self.x = self.x0.copy()
         self.r = None
-        self.w = None
+        self.w = 0.
 
         # Values for each time step
         self.T = np.linspace(self.t_min, self.t_max, self.t_poi)
@@ -77,26 +78,44 @@ class Equation(object):
         self.x_calc = None # calculated solution
         self.x_err2 = None # x-calculation error
 
-    def set_sol(self, x_calc=None):
+    def add(self, x, r):
         '''
-        Set calculation result.
+        Add new step.
         '''
 
-        self.x_calc = x_calc
+        self.i+= 1
+        self.t = self.T[i]
+        self.x = x.copy().reshape(self.d, self.m)
+        self.r = r
+        self.w+= np.sqrt(self.h) * np.random.randn((self.d, self.m))
 
-        return self
+        if True:
+            self.X.append(self.x.copy())
+            self.R.append(self.r.copy())
+            self.W.append(self.w.copy())
 
-    def prep(self):
+    def check(self):
         '''
-        Prepare main parameters.
+        Check calculation results.
         '''
+
+        x_calc = self.x
+        x_real = self.xr(self.t, self.w)
+
+        print(x_calc)
+        print(x_real)
+        print(np.linalg.norm(x_real - x_calc, axis=0))
+
+        return
 
         self.w = self.t
+
+
 
         self.x_real = None
         if self.xr is not None:
             self.x_real = np.array([
-                self.xr(t_, w_) for t_, w_  in zip(self.t, self.w)
+                self.xr(t_, w_) for t_, w_  in zip(self.T, self.W)
             ]).reshape(self.d, -1)
 
         self.x_err2 = None

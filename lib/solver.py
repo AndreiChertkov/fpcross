@@ -3,12 +3,15 @@ import matplotlib.pyplot as plt
 
 class Solver(object):
     '''
-    Class that represent solver for stochastic differential equations.
+    Class that represents solver for stochastic differential equations
+    dx = f(x, t) dt + s(x, t) dW, fx = df / dx,
+    where x is a d-dim vector, dW is a q-dim noise (Brownian motion),
+    x0 is initial condition.
     '''
 
-    def __init__(self, EQ=None):
+    def __init__(self, EQ):
         '''
-        EQ - is a stochastic differential equation to solve
+        EQ - [instance of Equation] stochastic differential equation to solve
         '''
 
         self.EQ = EQ
@@ -18,7 +21,7 @@ class Solver(object):
         Solve ODE (without stochastic part).
         '''
 
-        self.EQ.clean()
+        self.EQ.init()
 
         x = self.EQ.x0.reshape(-1, 1)
         for t in self.EQ.t[:-1]:
