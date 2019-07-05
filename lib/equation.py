@@ -1,13 +1,59 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-class Sde(object):
+class Equation(object):
     '''
-    Class that represent stochastic differential equation.
+    Class that represents stochastic differential equation.
+    dx = f(x, t) dt + s(x, t) dW, fx = df / dx,
+    where x is a d-dim vector, dW is a q-dim noise (Brownian motion),
+    x0 is initial condition.
     '''
 
-    def __init__(self):
+    def __init__(self, x0, d, q, m, t_min=0., t_max=1., t_poi=100):
+        '''
+        Constructor with parameters:
+        x0    - [d or d x 1 nd.array] initial condition
+        d     - [int] dimension of coordinate
+        q     - [int] dimension of noise
+        m     - [int] number of samples
+        t_min - [float] start time
+        t_max - [float] end time
+        t_poi - [int] number of time steps
+        '''
+
+        self.x0 = x0.reshape(d, 1)
+
+        self.d = d
+        self.q = q
+        self.m = m
+
+        self.t_min = t_min
+        self.t_max = t_max
+        self.t_poi = t_poi
+
+        self.h = (t_max - t_min) / (t_poi - 1)
+
         self.clean()
+
+    def prep(self, s, f, fx, xr=None):
+        '''
+        Set equation functions:
+        s(t, x)  - noise coefficients
+        f(t, x)  - rhs function
+        fx(t, x) - rhs derivative
+        xr(t, w) - (optional) real solution
+        Function inputs:
+            t - [float] current time
+            x - [d x m nd.array] current coordinate
+            w - [q x m nd.array] current Brownian motion value
+        '''
+
+        self.s = s
+        self.f = f
+        self.fx = fx
+        self.xr = xr
+
+        return self
 
     def clean(self):
         '''
@@ -15,40 +61,21 @@ class Sde(object):
         (remove result of previous calculation).
         '''
 
+        # Current values
+        self.t = self.t_min
+        self.x = self.x0.copy()
+        self.r = None
+        self.w = None
+
+        # Values for each time step
+        self.T = np.linspace(self.t_min, self.t_max, self.t_poi)
+        self.X = []
+        self.R = []
+        self.W = []
+
         self.x_real = None # real (exact) solution
         self.x_calc = None # calculated solution
         self.x_err2 = None # x-calculation error
-
-    def set(self, d, q, s, f, fx, x0, xr=None):
-        '''
-        Set equation parameters:
-        dx = f(x, t) dt + s(x, t) dW, fx = df / dx,
-        where x is a d-dim vector, dW is a q-dim noise,
-        x0 is initial condition and xr is (optional) real solution.
-        '''
-
-        self.d = d
-        self.q = q
-        self.s = s
-        self.f = f
-        self.fx = fx
-        self.x0 = x0.reshape(d, 1)
-        self.xr = xr
-
-        return self
-
-    def set_desc(self, t_min=0., t_max=1., t_poi=100):
-        '''
-        Set descritization parameters.
-        '''
-
-        self.t_min = t_min
-        self.t_max = t_max
-        self.t_poi = t_poi
-        self.t = np.linspace(t_min, t_max, t_poi)
-        self.h = (t_max - t_min) / (t_poi - 1)
-
-        return self
 
     def set_sol(self, x_calc=None):
         '''
