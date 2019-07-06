@@ -7,10 +7,10 @@ class Equation(object):
     dx = f(t, x) dt + s(t, x) dW, fx = df / dx,
     where x is a d-dim vector, dW is a q-dim noise (Brownian motion),
     x0 is initial condition,
-    r0 is initial distribution of r = r(x).
+    r0 is initial distribution of r = r(t, x).
     '''
 
-    def __init__(self, x0, r0, d=1, q=None, m=1, t_min=0., t_max=1., t_poi=100):
+    def __init__(self, x0, r0, d=1, q=None, m=1):
         '''
         Constructor with parameters:
         x0    - [d or d x 1 nd.array] initial condition
@@ -18,9 +18,6 @@ class Equation(object):
         d     - [int] dimension of coordinate
         q     - [int] dimension of noise
         m     - [int] number of samples
-        t_min - [float] start time
-        t_max - [float] end time
-        t_poi - [int] number of time steps
         '''
 
         self.d = d or 1
@@ -30,35 +27,40 @@ class Equation(object):
         self.x0 = np.repeat(x0.reshape(self.d, 1), self.m, axis=1)
         self.r0 = r0
 
+        self.init_t_lim()
+        self.init_x_lim()
+        self.init_funcs()
+
+    def init_t_lim(self, t_min=0., t_max=1., t_poi=100):
+        '''
+        Set values for time limits:
+        t_min - [float] start time
+        t_max - [float] end time
+        t_poi - [int] number of time steps
+        '''
+
         self.t_min = t_min
         self.t_max = t_max
         self.t_poi = t_poi
 
-        self.h = (t_max - t_min) / (t_poi - 1)
-
-        self.init()
-
-    def init(self):
+    def init_x_lim(self, x_min=0., x_max=1., x_poi=100):
         '''
-        Set all main variables to default state (t=t0, x=x0, w=0)
-        (remove result of previous calculation).
+        Set values for spatial variable limits:
+        x_min - [float or list or d nd.array] minimum value
+        x_max - [float or list or d nd.array] maximum value
+        x_poi - [int or list or d nd.array] number of spatial points
         '''
 
-        # Current values
-        self.i = 0
-        self.t = self.t_min
-        self.x = self.x0.copy()
-        self.r = self.r0
-        self.w = 0.
+        def to_arr(x):
+            if isinstance(x, (int, float)): return np.ones(self.d) * x
+            if isinstance(x, (list)): return np.array(x)
+            return x
 
-        # Values for each time step
-        self.T = np.linspace(self.t_min, self.t_max, self.t_poi)
-        self.X = [self.x.copy()]
-        self.R = [self.r]
-        self.W = [self.w]
-        self.Xr = [self.x0.copy()]
+        self.x_min = to_arr(x_min)
+        self.x_max = to_arr(x_max)
+        self.x_poi = to_arr(x_poi)
 
-    def prep(self, s, f, fx, xr=None):
+    def init_funcs(self, s=None, f=None, fx=None, xr=None):
         '''
         Set equation functions:
         s(t, x)  - [d x q nd.array] noise coefficients
@@ -76,11 +78,32 @@ class Equation(object):
         self._fx = fx
         self._xr = xr
 
-        return self
+    def prep(self):
+        '''
+        Set all main variables to default state (t=t0, x=x0, w=0)
+        (remove result of previous calculation).
+        '''
+
+        # Time step
+        self.h = (self.t_max - self.t_min) / (self.t_poi - 1)
+
+        # Current values
+        self.i = 0
+        self.t = self.t_min
+        self.x = self.x0.copy()
+        self.r = self.r0
+        self.w = 0.
+
+        # Values for each time step
+        self.T = np.linspace(self.t_min, self.t_max, self.t_poi)
+        self.X = [self.x.copy()]
+        self.R = [self.r]
+        self.W = [self.w]
+        self.Xr = [self.x0.copy()]
 
     def step(self, x, r):
         '''
-        Add new step.
+        Add new time step.
         '''
 
         self.i+= 1
@@ -94,6 +117,8 @@ class Equation(object):
             self.R.append(self.r)
             self.W.append(self.w.copy())
             self.Xr.append(self.xr(self.t, self.w))
+
+        return self
 
     def _func2samples(self, v):
         if len(v.shape) == 2: return v

@@ -20,8 +20,6 @@ class Solver(object):
         Solve ODE (without stochastic part).
         '''
 
-        self.EQ.init()
-
         for _ in range(self.EQ.t_poi - 1):
             x = self.step_x(self.EQ.t, self.EQ.x)
             r = None
