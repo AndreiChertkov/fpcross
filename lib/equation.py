@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib import animation, rc
 
 class Equation(object):
     '''
@@ -217,3 +218,33 @@ class Equation(object):
 
         #fig.savefig('./figures/tmp.png', transparent=False, dpi=200, bbox_inches="tight", pad_inches=0.5)
         plt.show()
+
+    def anim_r(self, fffolder=None, delt=200):
+        '''
+        Build animation for distribution.
+        '''
+
+        def anim(i):
+            t = self.T[i]
+            r = self.R[i].reshape((self.x_poi[0], self.x_poi[1]))
+            x1 = self.Xg1
+            x2 = self.Xg2
+
+            ax.clear()
+            ax.set_title('Spatial distribution (t=%f)'%t)
+            ax.set_xlabel('x1')
+            ax.set_ylabel('x2')
+            ct = ax.contourf(x1, x2, r)
+            return (ct,)
+
+        if fffolder:
+            from os import path
+            ffpath = path.join(fffolder, 'ffmpeg')
+        plt.rcParams['animation.ffmpeg_path'] = ffpath
+
+        fig = plt.figure(figsize=(5, 5))
+        ax = fig.add_subplot(111)
+
+        anim = animation.FuncAnimation(
+            fig, anim, frames=len(self.T), interval=delt, blit=False)
+        return anim.to_html5_video()
