@@ -144,43 +144,75 @@ class Equation(object):
     def xr(self, t, w):
         return self._func2samples(self._xr(t, w))
 
-    def plot_x_vs_t(self, m=0):
+    def pres(self):
+        '''
+        Present calculation result in text form.
+        '''
+
+        x1 = self.Xg1
+        x2 = self.Xg2
+        r0 = self.r0.reshape((self.x_poi[0], self.x_poi[1]))
+        rt = self.r.reshape((self.x_poi[0], self.x_poi[1]))
+
+        print('r min  : t=min %-8.4f | t=max %-8.4f'%(np.min(r0), np.min(rt)))
+        print('r max  : t=min %-8.4f | t=max %-8.4f'%(np.max(r0), np.max(rt)))
+        print('r mean : t=min %-8.4f | t=max %-8.4f'%(np.mean(r0), np.mean(rt)))
+
+    def plot_x(self, m=0):
         '''
         Plot calculation result x(t) for selected sample index m.
         '''
 
+        fig = plt.figure(figsize=(10, 5))
+        gs = mpl.gridspec.GridSpec(
+            ncols=12, nrows=1, left=0.1, right=0.9, top=0.9, bottom=0.1)
+
+        self.plot_x_vs_t(fig.add_subplot(gs[0, :5]), m)
+        self.plot_x_err_vs_t(fig.add_subplot(gs[0, 7:]), m)
+
+    def plot_x_vs_t(self, ax=None, m=0):
+        '''
+        Plot calculation result x(t) for selected sample index m.
+        '''
+
+        if not ax:
+            fig = plt.figure(figsize=(5, 5))
+            ax = fig.add_subplot(111)
+
         if len(self.X) > 1:
             for i in range(self.d):
-                plt.plot(self.T, [X[i, m] for X in self.X],
+                ax.plot(self.T, [X[i, m] for X in self.X],
                     label='x_%d'%(i+1))
 
         if len(self.Xr) > 1:
             for i in range(self.d):
-                plt.plot(self.T, [X[i, m] for X in self.Xr],
+                ax.plot(self.T, [X[i, m] for X in self.Xr],
                     '--', label='x_%d (real)'%(i+1))
 
-        plt.title('Solution')
-        plt.xlabel('t')
-        plt.ylabel('x')
-        plt.legend(loc='best')
-        plt.show()
+        ax.set_title('Solution')
+        ax.set_xlabel('t')
+        ax.set_ylabel('x')
+        ax.legend(loc='best')
 
-    def plot_x_err_vs_t(self, m=0):
+    def plot_x_err_vs_t(self, ax=None, m=0):
         '''
         Plot calculation result x(t) error for selected sample index m.
         '''
+
+        if not ax:
+            fig = plt.figure(figsize=(5, 5))
+            ax = fig.add_subplot(111)
 
         if len(self.X) > 1 and len(self.Xr) > 1:
             Xc = np.array([X[:, m] for X in self.X]).T
             Xr = np.array([X[:, m] for X in self.Xr]).T
             err = np.linalg.norm(Xc - Xr, axis=0)
-            plt.plot(self.T, err)
+            ax.plot(self.T, err)
 
-        plt.semilogy()
-        plt.title('Solution error')
-        plt.xlabel('t')
-        plt.ylabel('Error')
-        plt.show()
+        ax.semilogy()
+        ax.set_title('Solution error')
+        ax.set_xlabel('t')
+        ax.set_ylabel('Error')
 
     def plot_r(self):
         '''
@@ -191,10 +223,6 @@ class Equation(object):
         x2 = self.Xg2
         r0 = self.r0.reshape((self.x_poi[0], self.x_poi[1]))
         rt = self.r.reshape((self.x_poi[0], self.x_poi[1]))
-
-        print('min  : %-8.4f | %-8.4f'%(np.min(r0), np.min(rt)))
-        print('max  : %-8.4f | %-8.4f'%(np.max(r0), np.max(rt)))
-        print('mean : %-8.4f | %-8.4f'%(np.mean(r0), np.mean(rt)))
 
         fig = plt.figure(figsize=(10, 5))
         gs = mpl.gridspec.GridSpec(
