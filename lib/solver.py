@@ -1,3 +1,4 @@
+import time
 import numpy as np
 
 class Solver(object):
@@ -15,15 +16,22 @@ class Solver(object):
 
         self.EQ = EQ
 
-    def solve_ode(self):
+        self.E = 1.
+
+    def solve(self):
         '''
-        Solve ODE (without stochastic part).
+        Solve SDE.
         '''
+        _t = time.time()
 
         for _ in range(self.EQ.t_poi - 1):
             x = self.step_x(self.EQ.t, self.EQ.x)
-            r = None
+            r = self.step_r(self.EQ.t, self.EQ.x, self.EQ.r)
             self.EQ.step(x, r)
+
+        _t = time.time() - _t
+        print('Total time    : %-8.4f sec'%_t)
+        print('Time per step : %-8.4f sec'%(_t/(self.EQ.t_poi - 1)))
 
     def step_x(self, t, x):
         '''
@@ -51,7 +59,7 @@ class Solver(object):
         '''
 
         h = self.EQ.h
-        fx = self.EQ.fx(x, t)
-        r = r * (1. - h * np.trace(fx_func(x, t)))
+        fx = self.EQ.fx(t, x)
+        r = self.E * r * (1. - h * np.trace(fx))
 
         return r
