@@ -66,6 +66,8 @@ class Equation(object):
         self.Xg = np.array([self.Xg1, self.Xg2])
         self.Xg = self.Xg.reshape((2, -1))
 
+        # self.m =
+
     def init_funcs(self, s, f, fx, x0, r0, xr=None):
         '''
         Set equation functions:

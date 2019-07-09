@@ -1,5 +1,6 @@
 import time
 import numpy as np
+from scipy.interpolate import RectBivariateSpline
 
 class Solver(object):
     '''
@@ -60,6 +61,10 @@ class Solver(object):
 
         h = self.EQ.h
         fx = self.EQ.fx(t, x)
+
+        # r_ = RectBivariateSpline(t, t, val.reshape((m, m)))
+
         r = self.E * r * (1. - h * np.trace(fx))
+
 
         return r
