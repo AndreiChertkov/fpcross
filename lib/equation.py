@@ -1,3 +1,5 @@
+from os import path
+
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -8,21 +10,23 @@ class Equation(object):
     Class that represents stochastic differential equation.
     dx = f(t, x) dt + s(t, x) dW, fx = df / dx,
     where x is a d-dim vector, dW is a q-dim noise (Brownian motion),
-    x0 is initial condition,
-    r0 is initial distribution of r = r(t, x).
+    x0 is initial condition, r0 is initial distribution of r = r(t, x).
     '''
 
-    def __init__(self, d=1, q=None, m=1):
+    def __init__(self, d=2, q=None, m=1):
         '''
         Constructor with parameters:
-        d     - [int] dimension of coordinate
-        q     - [int] dimension of noise (default =d)
-        m     - [int] number of samples
+        d     - [int] dimension of coordinate (default: 2)
+        q     - [int] dimension of noise (default: d)
+        m     - [int] number of samples (default: 1)
         '''
 
         self.d = d or 1
         self.q = q or d
         self.m = m or 1
+
+        if self.d != 2:
+            raise NotImplementedError('Spatial dimension should be 2')
 
     def init_t_lim(self, t_min=0., t_max=1., t_poi=100):
         '''
@@ -42,23 +46,19 @@ class Equation(object):
     def init_x_lim(self, x_min=0., x_max=1., x_poi=100):
         '''
         Set values for spatial variable limits:
-        x_min - [float or list or d nd.array] minimum value
-        x_max - [float or list or d nd.array] maximum value
-        x_poi - [int or list or d nd.array] number of spatial points
+        x_min - [float or list or d nd.array] minimum value for each dim.
+        x_max - [float or list or d nd.array] maximum value for each dim.
+        x_poi - [int or list or d nd.array] number of points for each dim.
         '''
 
-        def to_arr(x):
+        def to_list(x):
             if isinstance(x, (int, float)): return list(np.ones(self.d) * x)
             if isinstance(x, (np.ndarray)): return list(x)
             return x
 
-            if isinstance(x, (int, float)): return np.ones(self.d) * x
-            if isinstance(x, (list)): return np.array(x)
-            return x
-
-        self.x_min = to_arr(x_min)
-        self.x_max = to_arr(x_max)
-        self.x_poi = [int(n) for n in to_arr(x_poi)]
+        self.x_min = to_list(x_min)
+        self.x_max = to_list(x_max)
+        self.x_poi = [int(n) for n in to_list(x_poi)]
 
         # X-grid (2d case!)
         self.Xg = np.linspace(x_min, x_max, x_poi)
@@ -69,11 +69,13 @@ class Equation(object):
     def init_funcs(self, s, f, fx, x0, r0, xr=None):
         '''
         Set equation functions:
-        s(t, x)  - [d x q nd.array] noise coefficients
-        f(t, x)  - [d or d x m nd.array] rhs function
-        fx(t, x) - [d or d x m nd.array] rhs derivative
-        x0(t, x) - [d nd.array] initial condition
-        r0(t, x) - [float] initial distribution
+        s(t, x)  - [d x q nd.array] noise coefficients matrix
+                   t - [float] current time
+                   x - [d x m nd.array] current coordinate
+        f(t, x)  - [d or d x 1 nd.array] rhs function
+        fx(t, x) - [d x d nd.array] rhs derivative
+        x0(t, x) - [d or d x 1 nd.array] initial condition
+        r0(t, x) - [x.shape nd.array] initial distribution
         xr(t, w) - [d or d x m nd.array] (optional) real solution
         Function inputs:
             t - [float] current time
@@ -147,11 +149,9 @@ class Equation(object):
 
     def pres(self):
         '''
-        Present calculation result in text form.
+        Present general info.
         '''
 
-        x1 = self.Xg1
-        x2 = self.Xg2
         r0 = self.r0
         rt = self.r
 
@@ -163,6 +163,10 @@ class Equation(object):
         '''
         Plot calculation result x(t) for selected sample index m.
         '''
+
+        if len(self.X) <= 1 and len(self.Xr) <= 1: return
+        if len(self.Xr) <= 1:
+            return self.plot_x_vs_t(None, m)
 
         fig = plt.figure(figsize=(10, 5))
         gs = mpl.gridspec.GridSpec(
@@ -176,9 +180,8 @@ class Equation(object):
         Plot calculation result x(t) for selected sample index m.
         '''
 
-        if not ax:
-            fig = plt.figure(figsize=(5, 5))
-            ax = fig.add_subplot(111)
+        if not ax: ax = plt.figure(figsize=(5, 5)).add_subplot(111)
+        if len(self.X) <= 1 and len(self.Xr) <= 1: return
 
         if len(self.X) > 1:
             for i in range(self.d):
@@ -200,16 +203,13 @@ class Equation(object):
         Plot calculation result x(t) error for selected sample index m.
         '''
 
-        if not ax:
-            fig = plt.figure(figsize=(5, 5))
-            ax = fig.add_subplot(111)
+        if len(self.X) <= 1 or len(self.Xr) <= 1: return
+        if not ax: ax = plt.figure(figsize=(5, 5)).add_subplot(111)
 
-        if len(self.X) > 1 and len(self.Xr) > 1:
-            Xc = np.array([X[:, m] for X in self.X]).T
-            Xr = np.array([X[:, m] for X in self.Xr]).T
-            err = np.linalg.norm(Xc - Xr, axis=0)
-            ax.plot(self.T, err)
-
+        Xc = np.array([X[:, m] for X in self.X]).T
+        Xr = np.array([X[:, m] for X in self.Xr]).T
+        err = np.linalg.norm(Xc - Xr, axis=0)
+        ax.plot(self.T, err)
         ax.semilogy()
         ax.set_title('Solution error')
         ax.set_xlabel('t')
@@ -217,7 +217,7 @@ class Equation(object):
 
     def plot_r(self):
         '''
-        Plot distribution.
+        Plot distribution r at initial and final time moments.
         '''
 
         x1 = self.Xg1
@@ -225,35 +225,44 @@ class Equation(object):
         r0 = self.r0.reshape((self.x_poi[0], self.x_poi[1]))
         rt = self.r.reshape((self.x_poi[0], self.x_poi[1]))
 
-        fig = plt.figure(figsize=(10, 5))
+        fig = plt.figure(figsize=(10, 6))
         gs = mpl.gridspec.GridSpec(
-            ncols=12, nrows=1, left=0.1, right=0.9, top=0.9, bottom=0.1)
+            ncols=4, nrows=2, left=0.01, right=0.99, top=0.99, bottom=0.01,
+            wspace=0.4, hspace=0.3,
+            width_ratios=[1, 1, 1, 1], height_ratios=[6, 1])
 
-        ax = fig.add_subplot(gs[0, :4])
-        cs1 = ax.contourf(x1, x2, r0)
+        ax = fig.add_subplot(gs[0, :2])
+        ct1 = ax.contourf(x1, x2, r0)
         ax.set_title('Initial spatial distribution (t=0)')
         ax.set_xlabel('x1')
         ax.set_ylabel('x2')
 
-        ax = fig.add_subplot(gs[0, 8:])
-        cs2 = ax.contourf(x1, x2, rt)
+        ax = fig.add_subplot(gs[0, 2:])
+        ct2 = ax.contourf(x1, x2, rt)
         ax.set_title('Final spatial distribution (t)')
         ax.set_xlabel('x1')
         ax.set_ylabel('x2')
 
-        ax = fig.add_subplot(gs[0, 5:7])
-        cb = plt.colorbar(cs1, cax=ax)
-        # cb.add_lines(cs2)
+        ax = fig.add_subplot(gs[1, 1:3])
+        cb = plt.colorbar(ct1, cax=ax, orientation='horizontal')
+        # cb.add_lines(ct2)
 
         #fig.savefig('./figures/tmp.png', transparent=False, dpi=200, bbox_inches="tight", pad_inches=0.5)
         plt.show()
 
     def anim_r(self, fffolder=None, delt=200):
         '''
-        Build animation for distribution.
+        Build animation for calculated distribution r as function of time t.
         '''
 
-        def anim(i):
+        if fffolder:
+            ffpath = path.join(fffolder, 'ffmpeg')
+            plt.rcParams['animation.ffmpeg_path'] = ffpath
+
+        fig = plt.figure(figsize=(7, 7))
+        ax = fig.add_subplot(111)
+
+        def run(i):
             t = self.T[i]
             r = self.R[i].reshape((self.x_poi[0], self.x_poi[1]))
             x1 = self.Xg1
@@ -266,14 +275,6 @@ class Equation(object):
             ct = ax.contourf(x1, x2, r)
             return (ct,)
 
-        if fffolder:
-            from os import path
-            ffpath = path.join(fffolder, 'ffmpeg')
-        plt.rcParams['animation.ffmpeg_path'] = ffpath
-
-        fig = plt.figure(figsize=(5, 5))
-        ax = fig.add_subplot(111)
-
         anim = animation.FuncAnimation(
-            fig, anim, frames=len(self.T), interval=delt, blit=False)
+            fig, run, frames=len(self.T), interval=delt, blit=False)
         return anim.to_html5_video()
