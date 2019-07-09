@@ -126,7 +126,8 @@ class Equation(object):
             self.X.append(self.x.copy())
             self.R.append(self.r)
             self.W.append(self.w.copy())
-            self.Xr.append(self.xr(self.t, self.w))
+            if self._xr:
+                self.Xr.append(self.xr(self.t, self.w))
 
     def _func2samples(self, v):
         if len(v.shape) == 2: return v
@@ -151,8 +152,8 @@ class Equation(object):
 
         x1 = self.Xg1
         x2 = self.Xg2
-        r0 = self.r0.reshape((self.x_poi[0], self.x_poi[1]))
-        rt = self.r.reshape((self.x_poi[0], self.x_poi[1]))
+        r0 = self.r0
+        rt = self.r
 
         print('r min  : t=min %-8.4f | t=max %-8.4f'%(np.min(r0), np.min(rt)))
         print('r max  : t=min %-8.4f | t=max %-8.4f'%(np.max(r0), np.max(rt)))
