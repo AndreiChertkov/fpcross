@@ -62,6 +62,7 @@ def calc(X, A, l, ni=0):
     type: int, <= dimensions
 
     OUTPUT:
+    
     Y - approximated values of the function in given points
     type: ndarray [number of points] of float
     '''
