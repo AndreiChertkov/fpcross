@@ -296,6 +296,48 @@ class Intertrain(object):
         x+= (self.l[:, 1] + self.l[:, 0]) / 2.
         return x
 
+    def points_1d(self, n=None, l1=None, l2=None):
+        '''
+        Get points of 1D Chebyshev grid (from max to min value).
+        Limits and number of points for the first spatial axis are used
+        if related optional parameters are not set.
+
+        OUTPUT:
+
+        x - grid points
+        type: ndarray [number of points] of float
+        '''
+
+
+        if n is None: n = self.n[0]
+        if l1 is None: l1 = self.l[0, 0]
+        if l2 is None: l2 = self.l[0, 1]
+
+        i = np.arange(n)
+        t = np.cos(np.pi * i / (n - 1))
+        x = t * (l2-l1) / 2. + (l1+l2) / 2.
+
+        return x
+
+    def points_2d(self):
+        '''
+        Get points of 2D Chebyshev grid (from max to min value).
+        Limits and number of points for the 1th and 2th spatial axis are used
+        if related optional parameters are not set.
+
+        OUTPUT:
+
+        x - grid points
+        type: ndarray [2, number of points] of float
+        '''
+
+        x1 = self.points_1d(self.n[0], self.l[0, 0], self.l[0, 1])
+        x2 = self.points_1d(self.n[1], self.l[1, 0], self.l[1, 1])
+        x1, x2 = np.meshgrid(x1, x2)
+        x = np.array([x1, x2]).reshape((2, -1))
+
+        return x
+
     def polynomial(self, X, m):
         '''
         Calculate Chebyshev polynomials of order until m
