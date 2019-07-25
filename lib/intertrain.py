@@ -44,7 +44,7 @@ class Intertrain(object):
     by Chebyshev polynomials in the TT-format with cross approximation.
     '''
 
-    def __init__(self, n, l, ni=0, eps=1.E-6):
+    def __init__(self, n, l, ns=0, eps=1.E-6):
         '''
         INPUT:
 
@@ -54,51 +54,54 @@ class Intertrain(object):
         l - min-max values of variable for each dimension
         type: ndarray (or list) [dimensions, 2] of float
 
-        ni - (optional) is a number of dimensions that should be skipped
+        ns - (optional) is a number of dimensions that should be skipped
         (are not transformed)
         type: int, <= dimensions
 
-        eps - (optional) is the accuracy of the approximation
+        eps - (optional) is the desired accuracy of the approximation
         type: float
         '''
 
         self.n = n if isinstance(n, np.ndarray) else np.array(n)
         self.l = l if isinstance(l, np.ndarray) else np.array(l)
         self.d = self.l.shape[0]
-        self.ni = ni
+        self.ns = ns
         self.eps = eps
 
         self.init()
 
     def init(self, f=None, Y=None):
         '''
-        Init training data, using given function (cross approximation will be
-        applied in this case) or given tensor with data.
+        Init main calculation parameters and training data, using
+        given function f (cross approximation will be applied in this case)
+        or given tt-tensor Y with data.
 
         INPUT:
 
-        f - function that calculate tensor element (first ni dimensions
-        are simple indices of int form but in float ndarray, other dimensions
-        are coord. of points)
-        input type: ndarray [dimensions] of float
-        output type: float
+        f - (optional) function that calculate tensor element for given point
+        (if ns>0, then first ns dimensions should be simple integer indices)
+        type: function
+            input type: ndarray [dimensions] of float
+            output type: float
 
-        Y - tensor of function values on nodes of the Chebyshev mesh
-        (for different axis numbers of points may be not equal)
-        type: TT-tensor [n1, n2, ..., ndim] of float
+        Y - (optional) tensor of function values on nodes of the Chebyshev mesh
+        (for different axes different numbers of points may be used)
+        type: TT-tensor [n_1, n_2, ..., n_dim] of float
         '''
 
-        self._t_init = 0.
-        self._t_prep = 0.
-        self._t_calc = 0.
-        self._t_func = 0.
+        self._t_init = 0. # Time of training data collection
+        self._t_prep = 0. # Time of interpolation coefficients calculation
+        self._t_calc = 0. # Average time of interpolation evaluation for 1 poi
+        self._t_func = 0. # Average time of function evaluation for 1 poi
 
         self.err = 0.
-        self.calc_num = 0
-        self.cs_iter = 0
-        self.cs_err_rel = 0.
-        self.cs_err_abs = 0.
-        self.cs_e_rank = 0.
+        self.crs_res = {
+            'evals': 0,
+            'iters': 0,
+            'erank': 0.,
+            'err_rel': 0.,
+            'err_abs': 0.,
+        }
 
         self._t_init = time.time()
 
@@ -120,7 +123,7 @@ class Intertrain(object):
 
         G = tt.tensor.to_list(self.Y)
 
-        for i in range(self.ni, self.Y.d):
+        for i in range(self.ns, self.Y.d):
             sh = G[i].shape
             G[i] = np.swapaxes(G[i], 0, 1)
             G[i] = G[i].reshape((sh[1], -1))
@@ -128,7 +131,8 @@ class Intertrain(object):
             G[i] = G[i].reshape((sh[1], sh[0], sh[2]))
             G[i] = np.swapaxes(G[i], 0, 1)
 
-        self.A = tt.tensor.from_list(G).round(self.eps)
+        self.A = tt.tensor.from_list(G)
+        self.A = self.A.round(self.eps)
 
         self._t_prep = time.time() - self._t_prep
 
@@ -160,14 +164,14 @@ class Intertrain(object):
         for j in range(X.shape[1]):
             i = 0
 
-            if i <= self.ni-1:
+            if i <= self.ns - 1:
                 Q = G[i][:, int(X[i, j]), :]
             else:
                 T = self.polynomial_trans(X[i, j], G[i].shape[1], i)
                 Q = np.tensordot(G[i], T, axes=([1], [0]))
 
             for i in range(1, X.shape[0]):
-                if i <= self.ni - 1:
+                if i <= self.ns - 1:
                     Q = np.dot(Q, G[i][:, int(X[i, j]), :])
                     continue
 
@@ -186,9 +190,12 @@ class Intertrain(object):
 
         INPUT:
 
-        f - (optional) interpolated function (if not set, then function from
-        init arg will be used)
+        f - (optional) function that calculate tensor element for given point
+        (if not set, then function from init arg will be used)
+        (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
+            input type: ndarray [dimensions] of float
+            output type: float
 
         npoi - (optional) number of points for error check
         type: int
@@ -207,8 +214,15 @@ class Intertrain(object):
             opts = (i+1, n, l[0], l[1])
             print('Dim %-2d | Poi %-3d | Min %-6.3f | Max %-6.3f |'%opts)
 
+        print('------------------ Result (cross appr)')
+        print('Func. evaluations: %8d'%self.crs_res['evals'])
+        print('Cross iterations : %8d'%self.crs_res['iters'])
+        print('Av. tt-rank      : %8.2e'%self.crs_res['erank'])
+        print('Cross err (rel)  : %8.2e'%self.crs_res['err_rel'])
+        print('Cross err (abs)  : %8.2e'%self.crs_res['err_abs'])
+
         if self.A is not None and (f or self.f):
-            self.check(f, npoi, a, b)
+            self.check(f or self.f, npoi, a, b)
 
             print('------------------ Test (random points)')
             print('Number of points : %d'%npoi)
@@ -230,9 +244,12 @@ class Intertrain(object):
 
         INPUT:
 
-        f - (optional) interpolated function (if not set, then function from
-        init arg will be used)
+        f - (optional) function that calculate tensor element for given point
+        (if not set, then function from init arg will be used)
+        (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
+            input type: ndarray [dimensions] of float
+            output type: float
 
         npoi - (optional) number of points for error check
         type: int
@@ -244,8 +261,12 @@ class Intertrain(object):
         type: float
         '''
 
+        f = f or self.f
+        if f is None:
+            raise ValueError('Interpolated function is not set.')
+
         X = a + np.random.random((self.d, npoi)) * (b - a)
-        Y_real = (f or self.f)(X)
+        Y_real = f(X)
         Y_calc = self.calc(X)
         self.err = np.abs((Y_calc - Y_real) / Y_real)
 
@@ -413,11 +434,11 @@ class Intertrain(object):
 
         INPUT:
 
-        f - function that calculate tensor element (first ni dimensions
-        are simple indices of int form but in float ndarray, other dimensions
-        are coord. of points)
-        input type: ndarray [dimensions] of float
-        output type: float
+        f - (optional) function that calculate tensor element for given point
+        (if ns>0, then first ns dimensions should be simple integer indices)
+        type: function
+            input type: ndarray [dimensions] of float
+            output type: float
 
         OUTPUT:
 
@@ -450,7 +471,7 @@ class Intertrain(object):
                 # x = np.hstack((Ind[i, :n_dim_ind], x))
                 Ycurr = self.f(x)
                 Ytmp.add(Ind[i, :], Ycurr)
-                self.calc_num+= 1
+                self.crs_res['evals'] += 1
             return Y
 
         file_log = './tmp.txt'
@@ -485,13 +506,13 @@ class Intertrain(object):
         try:
             log = open(file_log, 'r')
             res = log.readlines()[-1].split('swp: ')[1]
-            self.cs_iter = int(res.split('/')[0])+1
+            self.crs_res['iters'] = int(res.split('/')[0])+1
             res = res.split('er_rel = ')[1]
-            self.cs_err_rel = float(res.split('er_abs = ')[0])
+            self.crs_res['err_rel'] = float(res.split('er_abs = ')[0])
             res = res.split('er_abs = ')[1]
-            self.cs_err_abs = float(res.split('erank = ')[0])
+            self.crs_res['err_abs'] = float(res.split('erank = ')[0])
             res = res.split('erank = ')[1]
-            self.cs_e_rank = float(res.split('fun_eval')[0])
+            self.crs_res['erank'] = float(res.split('fun_eval')[0])
         except:
             pass
 
