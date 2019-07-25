@@ -2,6 +2,7 @@ import sys
 import time
 
 import numpy as np
+from scipy.linalg import toeplitz
 
 import tt
 from tt.cross.rectcross import cross as rect_cross
@@ -183,6 +184,49 @@ class Intertrain(object):
         self._t_calc = (time.time() - self._t_calc) / X.shape[1]
 
         return Y
+
+    def dif2(self):
+        '''
+        Calculate second order differentiation matrix on Chebyshev grid
+        on interval [-1,1].
+
+        OUTPUT:
+
+        D - second order differentiation matrix
+        type: ndarray [num. poi., num. poi.] of float
+
+        TODO:
+
+        Add (check) support for custom limits.
+        '''
+
+        m = self.n[0] - 1
+        m1 = np.int(np.floor((m + 1) / 2))
+        m2 = np.int(np.ceil((m + 1) / 2))
+        k = np.arange(m+1)
+        th = k * np.pi / m
+
+        T = np.tile(th/2, (m + 1, 1))
+        DX = 2*np.sin(T.T+T)*np.sin(T.T-T)
+        DX[m1:, :] = -np.flipud(np.fliplr(DX[0:m2, :]))
+        DX[range(m + 1), range(m + 1)] = 1.
+        DX = DX.T
+
+        Z = 1 / DX
+        Z[range(m + 1), range(m + 1)] = 0.
+
+        C = toeplitz((-1.)**k)
+        C[+0, :] *= 2
+        C[-1, :] *= 2
+        C[:, +0] *= 0.5
+        C[:, -1] *= 0.5
+
+        D = np.eye(m + 1)
+        for ell in range(2):
+            D = (ell + 1) * Z * (C * np.tile(np.diag(D), (m + 1, 1)).T - D)
+            D[range(m + 1), range(m + 1)] = -np.sum(D, axis=1)
+
+        return D
 
     def info(self, f=None, npoi=10, a=-1., b=1.):
         '''
