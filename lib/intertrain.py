@@ -7,38 +7,6 @@ from scipy.linalg import toeplitz
 import tt
 from tt.cross.rectcross import cross as rect_cross
 
-class SparseArray:
-    '''
-    Keep elements of (sparse) multidimensional array as elements of dictionary.
-    '''
-
-    def __init__(self):
-        self.elements = {}
-
-    def ind_to_tuple(self, ind):
-        if isinstance(ind,(tuple)):
-            return ind
-        else:
-            return tuple(ind)
-
-    def read(self, ind):
-        try:
-            value = self.elements[self.ind_to_tuple(ind)]
-        except KeyError:
-            value = None
-        return value
-
-    def add(self, ind, value):
-        self.elements[self.ind_to_tuple(ind)] = value
-
-    def add_if_new(self, ind, value, eps=1.E-16):
-        value0 = self.read(ind)
-        if value0==None:
-            self.add(ind, value)
-            return
-        if abs(value-value0) > eps:
-            self.add(ind, value)
-
 class Intertrain(object):
     '''
     Class for multidimensional function interpolation
@@ -80,11 +48,11 @@ class Intertrain(object):
 
         INPUT:
 
-        f - (optional) function that calculate tensor element for given point
+        f - (optional) function that calculate tensor elements for given points
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
-            input type: ndarray [dimensions] of float
-            output type: float
+            input type: ndarray [dimensions, number of points] of float
+            output type: ndarray [number of points] of float
 
         Y - (optional) tensor of function values on nodes of the Chebyshev mesh
         (for different axes different numbers of points may be used)
@@ -235,12 +203,12 @@ class Intertrain(object):
 
         INPUT:
 
-        f - (optional) function that calculate tensor element for given point
+        f - (optional) function that calculate tensor elements for given points
         (if not set, then function from init arg will be used)
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
-            input type: ndarray [dimensions] of float
-            output type: float
+            input type: ndarray [dimensions, number of points] of float
+            output type: ndarray [number of points] of float
 
         npoi - (optional) number of points for error check
         type: int
@@ -289,12 +257,12 @@ class Intertrain(object):
 
         INPUT:
 
-        f - (optional) function that calculate tensor element for given point
+        f - (optional) function that calculate tensor elements for given points
         (if not set, then function from init arg will be used)
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
-            input type: ndarray [dimensions] of float
-            output type: float
+            input type: ndarray [dimensions, number of points] of float
+            output type: ndarray [number of points] of float
 
         npoi - (optional) number of points for error check
         type: int
@@ -339,6 +307,36 @@ class Intertrain(object):
         t = np.cos(np.pi * i / (self.n - 1))
         x = t * (self.l[:, 1] - self.l[:, 0]) / 2.
         x += (self.l[:, 1] + self.l[:, 0]) / 2.
+        return x
+
+    def points(self, i):
+        '''
+        Get points of Chebyshev multidimensional (dim) grid
+        for given multi indeces i. Points for every axis k are calculated as
+        x = cos(i[k]*pi/(n[k]-1)), where n[k] is a total number of points
+        for selected axis k, and then these points are scaled according to
+        given limits l.
+
+        INPUT:
+
+        i - multi index for the grid point
+        type: ndarray (or list) [dimensions, number of points] of int
+
+        OUTPUT:
+
+        x - grid point
+        type: ndarray [dimensions, number of points] of float
+        '''
+
+        if not isinstance(i, np.ndarray): i = np.array(i)
+
+        n = np.repeat(self.n.reshape((-1, 1)), i.shape[1], axis=1)
+        l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), i.shape[1], axis=1)
+        l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), i.shape[1], axis=1)
+
+        t = np.cos(np.pi * i / (n - 1))
+        x = t * (l2 - l1) / 2.
+        x += (l2 + l1) / 2.
         return x
 
     def points_1d(self, n=None, l1=None, l2=None):
@@ -486,11 +484,11 @@ class Intertrain(object):
 
         INPUT:
 
-        f - function that calculate tensor element for given point
+        f - function that calculate tensor elements for given points
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
-            input type: ndarray [dimensions] of float
-            output type: float
+            input type: ndarray [dimensions, number of points] of float
+            output type: ndarray [number of points] of float
 
         fpath - (optional) file for output info
         type: str
@@ -501,35 +499,12 @@ class Intertrain(object):
         type: tt.tensor [n_1, n_2, ..., n_dim] of float
         '''
 
-        def func(Ind):
-            '''
-            Calculate tensor's elements for given indices.
-
-            INPUT:
-
-            Ind - are the indices of tensor
-            type: ndarray [number of points, dimensions] of int
-
-            OUTPUT:
-
-            Y - elements of the tensor
-            type: ndarray [number of points] of float
-            '''
-
-            Y = np.zeros(Ind.shape[0])
-            for i in range(Ind.shape[0]):
-                Ycurr = Ytmp.read(Ind[i, :])
-                if Ycurr is not None:
-                    Y[i] = Ycurr
-                    continue
-                x = self.point(Ind[i, :])
-                # x = np.hstack((Ind[i, :n_dim_ind], x))
-                Ycurr = self.f(x)
-                Ytmp.add(Ind[i, :], Ycurr)
-                self.crs_res['evals'] += 1
+        def func(ind):
+            self.crs_res['evals'] += ind.shape[0]
+            self._t_func = time.time()
+            Y = self.f(self.points(ind.T))
+            self._t_func = (time.time() - self._t_func) / ind.shape[0]
             return Y
-
-        Ytmp = SparseArray()
 
         log = open(fpath, 'w')
         stdout0 = sys.stdout
@@ -560,7 +535,6 @@ class Intertrain(object):
         self.crs_res['erank'] = float(res.split('fun_eval')[0])
 
         return Y
-
 
 def interpolate(Y):
     '''
