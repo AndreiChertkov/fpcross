@@ -56,10 +56,11 @@ class Intertrain(object):
         type: ndarray (or list) [dimensions, 2] of float
 
         ns - (optional) is a number of dimensions that should be skipped
-        (are not transformed)
+        (are not transformed while interpolation)
         type: int, <= dimensions
 
         eps - (optional) is the desired accuracy of the approximation
+        (is used in tt-round and cross approximation operations)
         type: float
         '''
 
@@ -128,7 +129,7 @@ class Intertrain(object):
             sh = G[i].shape
             G[i] = np.swapaxes(G[i], 0, 1)
             G[i] = G[i].reshape((sh[1], -1))
-            G[i] = self.interpolate(G[i])
+            G[i] = interpolate(G[i])
             G[i] = G[i].reshape((sh[1], sh[0], sh[2]))
             G[i] = np.swapaxes(G[i], 0, 1)
 
@@ -150,6 +151,8 @@ class Intertrain(object):
 
         Y - approximated values of the function in given points
         type: ndarray [number of points] of float
+
+        TODO: try to vectorize for each point
         '''
 
         if self.A is None:
@@ -195,9 +198,7 @@ class Intertrain(object):
         D - second order differentiation matrix
         type: ndarray [num. poi., num. poi.] of float
 
-        TODO:
-
-        Add (check) support for custom limits.
+        TODO: add (check) support for custom limits.
         '''
 
         m = self.n[0] - 1
@@ -337,7 +338,7 @@ class Intertrain(object):
 
         t = np.cos(np.pi * i / (self.n - 1))
         x = t * (self.l[:, 1] - self.l[:, 0]) / 2.
-        x+= (self.l[:, 1] + self.l[:, 0]) / 2.
+        x += (self.l[:, 1] + self.l[:, 0]) / 2.
         return x
 
     def points_1d(self, n=None, l1=None, l2=None):
@@ -466,7 +467,7 @@ class Intertrain(object):
 
 
         x = (2. * x - self.l[n, 1] - self.l[n, 0])
-        x/= (self.l[n, 1] - self.l[n, 0])
+        x /= (self.l[n, 1] - self.l[n, 0])
 
         T = np.ones(m)
         if m == 1: return T
@@ -477,42 +478,7 @@ class Intertrain(object):
 
         return T
 
-    def interpolate(self, Y):
-        '''
-        Find coefficients A_i for interpolation of 1D functions by Chebyshev
-        polynomials f(x) = \sum_{i} (A_i * T_i(x)) using fast Fourier transform.
-        It can find coefficients for several functions on one call
-        if all functions have equal numbers of grid points.
-
-        INPUT:
-
-        Y - values of function at the mesh nodes
-        type: ndarray (or list) [number of points, number of functions] of float
-
-        OUTPUT:
-
-        A - constructed matrix of coefficients
-        type: ndarray [number of points, number of functions] of float
-        '''
-
-        if not isinstance(Y, np.ndarray): Y = np.array(Y)
-
-        n = Y.shape[0]
-
-        Yext = np.zeros((2*n - 2, Y.shape[1]))
-        Yext[0:n, :] = Y[:, :]
-
-        for k in range(n, 2*n - 2):
-            Yext[k, :] = Y[2*n - k - 2, :]
-
-        A = np.zeros(Y.shape)
-        for k in range(Y.shape[1]):
-            A[:, k] = (np.fft.fft(Yext[:, k]).real/(n - 1))[0:n]
-            A[0, k] /= 2.
-
-        return A
-
-    def cross(self, f):
+    def cross(self, f, fpath = './tmp.txt'):
         '''
         Calculate function's values tensor on the multidimensional
         Chebyshev mesh (for dimensions that are not skipped)
@@ -520,19 +486,22 @@ class Intertrain(object):
 
         INPUT:
 
-        f - (optional) function that calculate tensor element for given point
+        f - function that calculate tensor element for given point
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
             input type: ndarray [dimensions] of float
             output type: float
 
+        fpath - (optional) file for output info
+        type: str
+
         OUTPUT:
 
         Y - approximated tensor of the function's values in given points
-        type: tt.tensor [dimensions] of float
+        type: tt.tensor [n_1, n_2, ..., n_dim] of float
         '''
 
-        def calc_vals(Ind):
+        def func(Ind):
             '''
             Calculate tensor's elements for given indices.
 
@@ -560,21 +529,15 @@ class Intertrain(object):
                 self.crs_res['evals'] += 1
             return Y
 
-        file_log = './tmp.txt'
-
         Ytmp = SparseArray()
 
-        try:
-            log = open(file_log, 'w')
-        except:
-            pass
-        else:
-            stdout0 = sys.stdout
-            sys.stdout = log
+        log = open(fpath, 'w')
+        stdout0 = sys.stdout
+        sys.stdout = log
 
         Y0 = tt.rand(self.n, self.n.shape[0], 1)
         Y = rect_cross(
-            calc_vals,
+            func,
             Y0,
             eps=self.eps,
             nswp=200,
@@ -583,23 +546,53 @@ class Intertrain(object):
             verbose=True
         )
 
-        try:
-            log.close()
-            sys.stdout = stdout0
-        except:
-            pass
+        log.close()
+        sys.stdout = stdout0
 
-        try:
-            log = open(file_log, 'r')
-            res = log.readlines()[-1].split('swp: ')[1]
-            self.crs_res['iters'] = int(res.split('/')[0])+1
-            res = res.split('er_rel = ')[1]
-            self.crs_res['err_rel'] = float(res.split('er_abs = ')[0])
-            res = res.split('er_abs = ')[1]
-            self.crs_res['err_abs'] = float(res.split('erank = ')[0])
-            res = res.split('erank = ')[1]
-            self.crs_res['erank'] = float(res.split('fun_eval')[0])
-        except:
-            pass
+        log = open(fpath, 'r')
+        res = log.readlines()[-1].split('swp: ')[1]
+        self.crs_res['iters'] = int(res.split('/')[0])+1
+        res = res.split('er_rel = ')[1]
+        self.crs_res['err_rel'] = float(res.split('er_abs = ')[0])
+        res = res.split('er_abs = ')[1]
+        self.crs_res['err_abs'] = float(res.split('erank = ')[0])
+        res = res.split('erank = ')[1]
+        self.crs_res['erank'] = float(res.split('fun_eval')[0])
 
         return Y
+
+
+def interpolate(Y):
+    '''
+    Find coefficients A_i for interpolation of 1D functions by Chebyshev
+    polynomials f(x) = \sum_{i} (A_i * T_i(x)) using fast Fourier transform.
+    It can find coefficients for several functions on one call
+    if all functions have equal numbers of grid points.
+
+    INPUT:
+
+    Y - values of function at the mesh nodes
+    type: ndarray (or list) [number of points, number of functions] of float
+
+    OUTPUT:
+
+    A - constructed matrix of coefficients
+    type: ndarray [number of points, number of functions] of float
+    '''
+
+    if not isinstance(Y, np.ndarray): Y = np.array(Y)
+
+    n = Y.shape[0]
+
+    Yext = np.zeros((2*n - 2, Y.shape[1]))
+    Yext[0:n, :] = Y[:, :]
+
+    for k in range(n, 2*n - 2):
+        Yext[k, :] = Y[2*n - k - 2, :]
+
+    A = np.zeros(Y.shape)
+    for k in range(Y.shape[1]):
+        A[:, k] = (np.fft.fft(Yext[:, k]).real / (n - 1))[0:n]
+        A[0, k] /= 2.
+
+    return A
