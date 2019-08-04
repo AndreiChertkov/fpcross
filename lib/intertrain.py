@@ -40,6 +40,9 @@ class Intertrain(object):
 
         self.init()
 
+    def copy(self):
+        return Intertrain(self.n, self.l, self.ns, self.eps)
+
     def init(self, f=None, Y=None):
         '''
         Init main calculation parameters and training data, using
@@ -81,6 +84,8 @@ class Intertrain(object):
 
         self._t_init = time.time() - self._t_init
 
+        return self
+
     def prep(self):
         '''
         Build tensor of interpolation coefficients according to training data.
@@ -105,6 +110,8 @@ class Intertrain(object):
         self.A = self.A.round(self.eps)
 
         self._t_prep = time.time() - self._t_prep
+
+        return self
 
     def calc(self, X):
         '''
@@ -506,9 +513,9 @@ class Intertrain(object):
             self._t_func = (time.time() - self._t_func) / ind.shape[0]
             return Y
 
-        log = open(fpath, 'w')
-        stdout0 = sys.stdout
-        sys.stdout = log
+        # log = open(fpath, 'w')
+        # stdout0 = sys.stdout
+        # sys.stdout = log
 
         Y0 = tt.rand(self.n, self.n.shape[0], 1)
         Y = rect_cross(
@@ -521,18 +528,18 @@ class Intertrain(object):
             verbose=True
         )
 
-        log.close()
-        sys.stdout = stdout0
+        # log.close()
+        # sys.stdout = stdout0
 
-        log = open(fpath, 'r')
-        res = log.readlines()[-1].split('swp: ')[1]
-        self.crs_res['iters'] = int(res.split('/')[0])+1
-        res = res.split('er_rel = ')[1]
-        self.crs_res['err_rel'] = float(res.split('er_abs = ')[0])
-        res = res.split('er_abs = ')[1]
-        self.crs_res['err_abs'] = float(res.split('erank = ')[0])
-        res = res.split('erank = ')[1]
-        self.crs_res['erank'] = float(res.split('fun_eval')[0])
+        # log = open(fpath, 'r')
+        # res = log.readlines()[-1].split('swp: ')[1]
+        # self.crs_res['iters'] = int(res.split('/')[0])+1
+        # res = res.split('er_rel = ')[1]
+        # self.crs_res['err_rel'] = float(res.split('er_abs = ')[0])
+        # res = res.split('er_abs = ')[1]
+        # self.crs_res['err_abs'] = float(res.split('erank = ')[0])
+        # res = res.split('erank = ')[1]
+        # self.crs_res['erank'] = float(res.split('fun_eval')[0])
 
         return Y
 
