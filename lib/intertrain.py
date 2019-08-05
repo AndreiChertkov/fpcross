@@ -10,27 +10,32 @@ from tt.cross.rectcross import cross as rect_cross
 class Intertrain(object):
     '''
     Class for the fast multidimensional function interpolation
-    by Chebyshev polynomials in the full (numpy) or sparse
-    (TT with cross approximation) format using FFT.
+    by Chebyshev polynomials in the dense (numpy) or sparse
+    (tensor train (TT) with cross approximation) format
+    using Fast Fourier Transform (FFT).
     '''
 
-    def __init__(self, n, l, ns=0, eps=1.E-6):
+    def __init__(self, n, l, ns=0, eps=1.E-6, with_tt=True):
         '''
         INPUT:
 
         n - total number of points for each dimension
-        type: ndarray (or list) [dimensions] of int
+        type: ndarray (or list) [dimensions] of int >= 2
 
         l - min-max values of variable for each dimension
         type: ndarray (or list) [dimensions, 2] of float
 
         ns - (optional) is a number of dimensions that should be skipped
         (are not transformed while interpolation)
-        type: int, <= dimensions
+        type: int 0 <= and <= dimensions
 
         eps - (optional) is the desired accuracy of the approximation
         (is used in tt-round and cross approximation operations)
-        type: float
+        type: float > 0
+
+        with_tt - (optional) flag; if true, then TT-format will be used
+        instead of dense (numpy) format
+        type: bool
         '''
 
         self.n = n if isinstance(n, np.ndarray) else np.array(n)
@@ -38,29 +43,34 @@ class Intertrain(object):
         self.d = self.l.shape[0]
         self.ns = ns
         self.eps = eps
+        self.with_tt = with_tt
 
         self.init()
 
     def copy(self):
-        return Intertrain(self.n, self.l, self.ns, self.eps)
+        '''
+        Create a copy of the class instance.
+        '''
+
+        return Intertrain(self.n, self.l, self.ns, self.eps, self.with_tt)
 
     def init(self, f=None, Y=None):
         '''
         Init main calculation parameters and training data, using
-        given function f (cross approximation will be applied in this case)
-        or given tt-tensor Y with data.
+        given function f (cross approximation will be applied if TT-format
+        is used) or given tensor Y (in numpy or TT-format) of data.
 
         INPUT:
 
         f - (optional) function that calculate tensor elements for given points
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
-            input type: ndarray [dimensions, number of points] of float
+            inp type: ndarray [dimensions, number of points] of float
             output type: ndarray [number of points] of float
 
         Y - (optional) tensor of function values on nodes of the Chebyshev mesh
         (for different axes different numbers of points may be used)
-        type: TT-tensor [n_1, n_2, ..., n_dim] of float
+        type: ndarray or TT-tensor [n_1, n_2, ..., n_dim] of float
         '''
 
         self._t_init = 0. # Time of training data collection
@@ -215,8 +225,8 @@ class Intertrain(object):
         (if not set, then function from init arg will be used)
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
-            input type: ndarray [dimensions, number of points] of float
-            output type: ndarray [number of points] of float
+            inp type: ndarray [dimensions, number of points] of float
+            out type: ndarray [number of points] of float
 
         npoi - (optional) number of points for error check
         type: int
@@ -269,8 +279,8 @@ class Intertrain(object):
         (if not set, then function from init arg will be used)
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
-            input type: ndarray [dimensions, number of points] of float
-            output type: ndarray [number of points] of float
+            inp type: ndarray [dimensions, number of points] of float
+            out type: ndarray [number of points] of float
 
         npoi - (optional) number of points for error check
         type: int
@@ -495,8 +505,8 @@ class Intertrain(object):
         f - function that calculate tensor elements for given points
         (if ns>0, then first ns dimensions should be simple integer indices)
         type: function
-            input type: ndarray [dimensions, number of points] of float
-            output type: ndarray [number of points] of float
+            inp type: ndarray [dimensions, number of points] of float
+            out type: ndarray [number of points] of float
 
         fpath - (optional) file for output info
         type: str
