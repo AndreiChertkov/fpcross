@@ -9,8 +9,9 @@ from tt.cross.rectcross import cross as rect_cross
 
 class Intertrain(object):
     '''
-    Class for multidimensional function interpolation
-    by Chebyshev polynomials in the TT-format with cross approximation.
+    Class for the fast multidimensional function interpolation
+    by Chebyshev polynomials in the full (numpy) or sparse
+    (TT with cross approximation) format using FFT.
     '''
 
     def __init__(self, n, l, ns=0, eps=1.E-6):
@@ -543,17 +544,57 @@ class Intertrain(object):
 
         return Y
 
+def polynomials(X, m):
+    '''
+    Calculate Chebyshev polynomials of order 0, 1, ..., m in given X points.
+    type: [m+1, x.shape]
+
+    INPUT:
+
+    X - values of x variable
+    type: ndarray (or list) [dimensions, number of points] of float
+    * in case of 1D, it may be ndarray (or list) [number of points]
+    * in case of one point in 1D, it may be float
+    * each value should be in range -1 <= >= 1
+
+    m - max order of polynomial (will calculate for 0, 1, ..., m)
+    type: int, >= 0
+
+    OUTPUT:
+
+    T - Chebyshev polynomials of order 0, 1, ..., m
+    type: ndarray [m+1, *X.shape] of float
+    * if X is float, it will be ndarray [m+1]
+    '''
+
+    if not isinstance(X, np.ndarray):
+        X = np.array(X)
+
+    if len(X.shape):
+        T = np.ones([m+1] + list(X.shape))
+    else:
+        T = np.ones([m+1, 1])
+
+    if m > 0:
+        T[1,] = X.copy()
+        for k in range(2, m+1):
+            T[k, ] = 2. * X * T[k-1, ] - T[k-2, ]
+
+    return T if len(X.shape) else T.reshape(-1)
+
 def interpolate(Y):
     '''
-    Find coefficients A_i for interpolation of 1D functions by Chebyshev
-    polynomials f(x) = \sum_{i} (A_i * T_i(x)) using fast Fourier transform.
+    Find coefficients a_i for interpolation of 1D functions by Chebyshev
+    polynomials f(x) = \sum_{i} (a_i * T_i(x)) using fast Fourier transform.
+
     It can find coefficients for several functions on one call
     if all functions have equal numbers of grid points.
 
     INPUT:
 
-    Y - values of function at the mesh nodes
+    Y - values of function at the nodes of the Chebyshev grid (x_j=cos(\pi j/N))
     type: ndarray (or list) [number of points, number of functions] of float
+    * in case of one function, it may be ndarray (or list) [number of points]
 
     OUTPUT:
 
@@ -561,19 +602,19 @@ def interpolate(Y):
     type: ndarray [number of points, number of functions] of float
     '''
 
-    if not isinstance(Y, np.ndarray): Y = np.array(Y)
+    if not isinstance(Y, np.ndarray):
+        Y = np.array(Y)
+    if len(Y.shape) == 1:
+        Y = Y.reshape(-1, 1)
 
     n = Y.shape[0]
 
-    Yext = np.zeros((2*n - 2, Y.shape[1]))
-    Yext[0:n, :] = Y[:, :]
+    V = np.vstack([Y, Y[n-2:0:-1, :]])
 
-    for k in range(n, 2*n - 2):
-        Yext[k, :] = Y[2*n - k - 2, :]
+    A = np.fft.fft(V, axis=0).real
 
-    A = np.zeros(Y.shape)
-    for k in range(Y.shape[1]):
-        A[:, k] = (np.fft.fft(Yext[:, k]).real / (n - 1))[0:n]
-        A[0, k] /= 2.
+    A = A[:n, :] / (n - 1)
+    A[0, :] /= 2.
+    A[n-1, :] /= 2.
 
     return A
