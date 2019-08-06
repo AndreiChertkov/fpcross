@@ -45,6 +45,10 @@ class Intertrain(object):
         self.eps = eps
         self.with_tt = with_tt
 
+        if self.n.shape[0] != self.l.shape[0]:
+            raise IndexError('Shape mismatch for n and l params.')
+
+
         self.init()
 
     def copy(self):
@@ -148,7 +152,7 @@ class Intertrain(object):
 
         else:
             self.Y = None
-            raise ValueError('Is not implemented.')
+            raise NotImplementedError('Is not implemented.')
 
         self._t_init = time.time() - self._t_init
 
@@ -382,104 +386,54 @@ class Intertrain(object):
         Y_calc = self.calc(X)
         self.err = np.abs((Y_calc - Y_real) / Y_real)
 
-    def point(self, i):
-        '''
-        Get point of Chebyshev multidimensional (dim) grid
-        for given multi index i. Points for every axis k are calculated as
-        x = cos(i[k]*pi/(n[k]-1)), where n[k] is a total number of points
-        for selected axis k, and then these points are scaled according to
-        given limits l.
-
-        INPUT:
-
-        i - multi index for the grid point
-        type: ndarray (or list) [dimensions] of int
-
-        OUTPUT:
-
-        x - grid point
-        type: ndarray [dimensions] of float
-        '''
-
-        if not isinstance(i, np.ndarray): i = np.array(i)
-
-        t = np.cos(np.pi * i / (self.n - 1))
-        x = t * (self.l[:, 1] - self.l[:, 0]) / 2.
-        x += (self.l[:, 1] + self.l[:, 0]) / 2.
-        return x
-
-    def pois(self, i):
+    def pois(self, I):
         '''
         Get points of Chebyshev multidimensional (dim) grid
-        for given multi indices i. Points for every axis k are calculated as
+        for given multi indices I. Points for every axis k are calculated as
         x = cos(i[k]*pi/(n[k]-1)), where n[k] is a total number of points
         for selected axis k, and then these points are scaled according to
         given limits l.
 
         INPUT:
 
-        i - multi index for the grid points
+        I - multi index for the grid points
         type: ndarray (or list) [dimensions, number of points] of int
 
         OUTPUT:
 
-        x - grid point
+        X - grid points
         type: ndarray [dimensions, number of points] of float
         '''
 
-        if not isinstance(i, np.ndarray):
-            i = np.array(i)
+        if not isinstance(I, np.ndarray):
+            I = np.array(I)
 
-        n = np.repeat(self.n.reshape((-1, 1)), i.shape[1], axis=1)
-        l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), i.shape[1], axis=1)
-        l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), i.shape[1], axis=1)
+        n = np.repeat(self.n.reshape((-1, 1)), I.shape[1], axis=1)
+        l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), I.shape[1], axis=1)
+        l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), I.shape[1], axis=1)
 
-        t = np.cos(np.pi * i / (n - 1))
-        x = t * (l2 - l1) / 2.
-        x += (l2 + l1) / 2.
-        return x
+        t = np.cos(np.pi * I / (n - 1))
+        X = t * (l2 - l1) / 2.
+        X += (l2 + l1) / 2.
 
-    def points_1d(self, n=None, l1=None, l2=None):
+        return X
+
+    def grid(self):
         '''
-        Get points of 1D Chebyshev grid (from max to min value).
-        Limits and number of points for the first spatial axis are used
-        if related optional parameters are not set.
+        Get all points of flatten multidimensional Chebyshev grid
+        (from max to min value).
 
         OUTPUT:
 
-        x - grid points
-        type: ndarray [number of points] of float
+        X - grid points
+        type: ndarray [dimensions, number of n1 * n2 * ... * nd] of float
         '''
 
+        I = [np.arange(self.n[d]).reshape(1, -1) for d in range(self.d)]
+        I = np.meshgrid(*I)
+        I = np.array(I).reshape((self.d, -1))
 
-        if n is None: n = self.n[0]
-        if l1 is None: l1 = self.l[0, 0]
-        if l2 is None: l2 = self.l[0, 1]
-
-        i = np.arange(n)
-        t = np.cos(np.pi * i / (n - 1))
-        x = t * (l2-l1) / 2. + (l1+l2) / 2.
-
-        return x
-
-    def points_2d(self):
-        '''
-        Get points of 2D Chebyshev grid (from max to min value).
-        Limits and number of points for the 1th and 2th spatial axis are used
-        if related optional parameters are not set.
-
-        OUTPUT:
-
-        x - grid points
-        type: ndarray [2, number of points] of float
-        '''
-
-        x1 = self.points_1d(self.n[0], self.l[0, 0], self.l[0, 1])
-        x2 = self.points_1d(self.n[1], self.l[1, 0], self.l[1, 1])
-        x1, x2 = np.meshgrid(x1, x2)
-        x = np.array([x1, x2]).reshape((2, -1))
-
-        return x
+        return self.pois(I)
 
     def polynomial(self, X, m):
         '''
