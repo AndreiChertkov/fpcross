@@ -647,7 +647,6 @@ class Intertrain(object):
 def polynomials(X, m):
     '''
     Calculate Chebyshev polynomials of order 0, 1, ..., m in given X points.
-    type: [m+1, x.shape]
 
     INPUT:
 
@@ -657,12 +656,12 @@ def polynomials(X, m):
     * in case of one point in 1D, it may be float
     * each value should be in range -1 <= >= 1
 
-    m - max order of polynomial (will calculate for 0, 1, ..., m)
+    m - max order of polynomial (function will calculate for 0, 1, ..., m)
     type: int, >= 0
 
     OUTPUT:
 
-    T - Chebyshev polynomials of order 0, 1, ..., m
+    T - Chebyshev polynomials of order 0, 1, ..., m in given points
     type: ndarray [m+1, *X.shape] of float
     * if X is float, it will be ndarray [m+1]
     '''
@@ -685,14 +684,15 @@ def polynomials(X, m):
 def interpolate(Y):
     '''
     Find coefficients a_i for interpolation of 1D functions by Chebyshev
-    polynomials f(x) = \sum_{i} (a_i * T_i(x)) using fast Fourier transform.
+    polynomials f(x) = \sum_{i} (a_i * T_i(x)) using Fast Fourier Transform.
 
-    It can find coefficients for several functions on one call
+    It can find coefficients for several functions on the one call
     if all functions have equal numbers of grid points.
 
     INPUT:
 
-    Y - values of function at the nodes of the Chebyshev grid (x_j=cos(\pi j/N))
+    Y - values of function at the nodes of the Chebyshev grid
+    x_j=cos(\pi j/N), j = 0, 1, ..., N (N = number of points - 1)
     type: ndarray (or list) [number of points, number of functions] of float
     * in case of one function, it may be ndarray (or list) [number of points]
 
@@ -700,6 +700,10 @@ def interpolate(Y):
 
     A - constructed matrix of coefficients
     type: ndarray [number of points, number of functions] of float
+
+    LINKS:
+    - https://en.wikipedia.org/wiki/Discrete_Chebyshev_transform
+    - https://www.mathworks.com/matlabcentral/mlc-downloads/downloads/submissions/23972/versions/22/previews/chebfun/examples/approx/html/ChebfunFFT.html
     '''
 
     if not isinstance(Y, np.ndarray):
@@ -708,13 +712,9 @@ def interpolate(Y):
         Y = Y.reshape(-1, 1)
 
     n = Y.shape[0]
-
     V = np.vstack([Y, Y[n-2:0:-1, :]])
-
     A = np.fft.fft(V, axis=0).real
-
     A = A[:n, :] / (n - 1)
     A[0, :] /= 2.
     A[n-1, :] /= 2.
-
     return A
