@@ -66,7 +66,7 @@ class Intertrain(object):
 
         '''
 
-        return Intertrain(self.n, self.l, self.ns, self.eps, self.with_tt)
+        return Intertrain(self.n, self.l, self.ns, self.eps, self.log_path, self.with_tt)
 
     def init(self, f=None, Y=None, opts=None):
         '''
@@ -179,6 +179,8 @@ class Intertrain(object):
 
         Y - approximated values of the function in given points
         type: ndarray [number of points] of float
+
+        TODO! Vectorize calculations for points vector
         '''
 
         if self.A is None:
@@ -190,8 +192,10 @@ class Intertrain(object):
         self._t_calc = time.time()
 
         if self.with_tt:
-            G = tt.tensor.to_list(self.A)
             Y = np.zeros(X.shape[1])
+            G = tt.tensor.to_list(self.A)
+            r = max([G_.shape[1] for G_ in G])
+            T = polynomials(X, r, self.l)
 
             for j in range(X.shape[1]):
                 i = 0
@@ -199,29 +203,27 @@ class Intertrain(object):
                 if i <= self.ns - 1:
                     Q = G[i][:, int(X[i, j]), :]
                 else:
-                    T = self.polynomial_trans(X[i, j], G[i].shape[1], i)
-                    Q = np.tensordot(G[i], T, axes=([1], [0]))
+                    F = T[:G[i].shape[1], i, j]
+                    Q = np.tensordot(G[i], F, axes=([1], [0]))
 
                 for i in range(1, X.shape[0]):
                     if i <= self.ns - 1:
                         Q = np.dot(Q, G[i][:, int(X[i, j]), :])
                         continue
-
-                    T = self.polynomial_trans(X[i, j], G[i].shape[1], i)
-                    Q = np.dot(Q, np.tensordot(G[i], T, axes=([1], [0])))
+                    F = T[:G[i].shape[1], i, j]
+                    Q = np.dot(Q, np.tensordot(G[i], F, axes=([1], [0])))
 
                 Y[j] = Q[0, 0]
         else:
             Y = np.zeros(X.shape[1])
+            r = np.max(self.n-1)
+            T = polynomials(X, r, self.l)
 
             for j in range(X.shape[1]):
-                A_tmp = self.A.copy()
-                T = (2.*X[:, j]-x_lim[:, 1]-x_lim[:, 0]) / (x_lim[:, 1]-x_lim[:, 0])
-
+                B = self.A.copy()
                 for i in range(X.shape[0]):
-                    Tch = ch_ut.polynomial(self.A.shape[i], T)
-                    A_tmp = np.tensordot(A_tmp, Tch[:,i], axes=([0], [0]))
-                Y[j] = A_tmp
+                    B = np.tensordot(B, T[:, i, j], axes=([0], [0]))
+                Y[j] = B
 
         self._t_calc = (time.time() - self._t_calc) / X.shape[1]
 
@@ -237,7 +239,7 @@ class Intertrain(object):
         D - second order differentiation matrix
         type: ndarray [num. poi., num. poi.] of float
 
-        TODO: add (check) support for custom limits.
+        TODO! Add (check) support for custom limits.
         '''
 
         m = self.n[0] - 1
@@ -406,72 +408,7 @@ class Intertrain(object):
 
         return self.pois(I)
 
-    def polynomial(self, X, m):
-        '''
-        Calculate Chebyshev polynomials of order until m
-        in given points.
-
-        INPUT:
-
-        X - values of x variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        m - upper bound for order of polynomial (will calculate for 0, ..., m-1)
-        type: int
-
-        OUTPUT:
-
-        T - Chebyshev polynomials of order 0, 1, ..., m-1
-        type: ndarray [m, *X.shape] of float
-        '''
-
-        if not isinstance(X, np.ndarray): X = np.array(X)
-
-        T = np.ones([m] + list(X.shape))
-        if m == 1: return T
-
-        T[1, :] = X.copy()
-        for n in range(2, m):
-            T[n, ] = 2. * X * T[n-1, ] - T[n-2, ]
-
-        return T
-
-    def polynomial_trans(self, x, m, n):
-        '''
-        Calculate Chebyshev polynomials of order until m
-        in given point x (with scaling) related to n-th spatial axis.
-
-        INPUT:
-
-        x - value of x variable
-        type: float
-
-        m - upper bound for order of polynomial (will calculate for 0, ..., m-1)
-        type: int
-
-        n - number of spatial axis (0, ..., dim-1)
-        type: int
-
-        OUTPUT:
-
-        T - Chebyshev polynomials of order 0, 1, ..., m-1
-        type: ndarray [m] of float
-        '''
-
-
-        x = (2. * x - self.l[n, 1] - self.l[n, 0])
-        x /= (self.l[n, 1] - self.l[n, 0])
-
-        T = np.ones(m)
-        if m == 1: return T
-
-        T[1] = x
-        for n in range(2, m):
-            T[n] = 2. * x * T[n-1] - T[n-2]
-
-        return T
-
-def polynomials(X, m):
+def polynomials(X, m, l=None):
     '''
     Calculate Chebyshev polynomials of order 0, 1, ..., m in given X points.
 
@@ -486,6 +423,11 @@ def polynomials(X, m):
     m - max order of polynomial (function will calculate for 0, 1, ..., m)
     type: int, >= 0
 
+    l - (optional) min-max values of variable for each dimension
+    * default limits are [-1, 1]; if l is given then X values values will be
+    * scaled from l-limits to [-1, 1] limits
+    type: ndarray (or list) [dimensions, 2] of float
+
     OUTPUT:
 
     T - Chebyshev polynomials of order 0, 1, ..., m in given points
@@ -495,6 +437,21 @@ def polynomials(X, m):
 
     if not isinstance(X, np.ndarray):
         X = np.array(X)
+
+    if l is not None:
+        if not isinstance(l, np.ndarray):
+            l = np.array(l)
+        if len(X.shape) > 1:
+            l1 = np.repeat(l[:, 0].reshape((-1, 1)), X.shape[-1], axis=1)
+            l2 = np.repeat(l[:, 1].reshape((-1, 1)), X.shape[-1], axis=1)
+        elif len(X.shape) == 1:
+            l1 = np.repeat(l[0, 0], X.shape[0], axis=0)
+            l2 = np.repeat(l[:, 1], X.shape[0], axis=0)
+        else:
+            l1 = l[0, 0]
+            l2 = l[0, 1]
+        X = (2. * X - l2 - l1)
+        X/= (l2 - l1)
 
     if len(X.shape):
         T = np.ones([m+1] + list(X.shape))
