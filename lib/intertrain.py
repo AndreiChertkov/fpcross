@@ -112,6 +112,9 @@ class Intertrain(object):
         self.Y = Y
         self.A = None
 
+        self.D1 = None
+        self.D2 = None
+
         if self.f is None or self.Y is not None:
             return self
 
@@ -228,47 +231,6 @@ class Intertrain(object):
         self._t_calc = (time.time() - self._t_calc) / X.shape[1]
 
         return Y
-
-    def dif2(self):
-        '''
-        Calculate second order differentiation matrix on Chebyshev grid
-        on interval [-1, 1].
-
-        OUTPUT:
-
-        D - second order differentiation matrix
-        type: ndarray [num. poi., num. poi.] of float
-
-        TODO! Add (check) support for custom limits.
-        '''
-
-        m = self.n[0] - 1
-        m1 = np.int(np.floor((m + 1) / 2))
-        m2 = np.int(np.ceil((m + 1) / 2))
-        k = np.arange(m+1)
-        th = k * np.pi / m
-
-        T = np.tile(th/2, (m + 1, 1))
-        DX = 2*np.sin(T.T+T)*np.sin(T.T-T)
-        DX[m1:, :] = -np.flipud(np.fliplr(DX[0:m2, :]))
-        DX[range(m + 1), range(m + 1)] = 1.
-        DX = DX.T
-
-        Z = 1 / DX
-        Z[range(m + 1), range(m + 1)] = 0.
-
-        C = toeplitz((-1.)**k)
-        C[+0, :] *= 2
-        C[-1, :] *= 2
-        C[:, +0] *= 0.5
-        C[:, -1] *= 0.5
-
-        D = np.eye(m + 1)
-        for ell in range(2):
-            D = (ell + 1) * Z * (C * np.tile(np.diag(D), (m + 1, 1)).T - D)
-            D[range(m + 1), range(m + 1)] = -np.sum(D, axis=1)
-
-        return D
 
     def info(self, f=None, npoi=10, a=-1., b=1.):
         '''
@@ -408,6 +370,38 @@ class Intertrain(object):
 
         return self.pois(I)
 
+    def dif1(self):
+        '''
+        Construct first order differentiation matrix on Chebyshev grid
+        on interval [-1, 1].
+
+        OUTPUT:
+
+        D1 - first order differentiation matrix
+        type: ndarray [number of points, number of points] of float
+
+        TODO! Add (check) support for custom limits.
+        '''
+
+        self.D1 = chdiv(self.n[0], 1)[0]
+        return self.D1
+
+    def dif2(self):
+        '''
+        Construct second order differentiation matrix on Chebyshev grid
+        on interval [-1, 1].
+
+        OUTPUT:
+
+        D2 - second order differentiation matrix
+        type: ndarray [number of points, number of points] of float
+
+        TODO! Add (check) support for custom limits.
+        '''
+
+        self.D1, self.D2 = chdiv(self.n[0], 2)
+        return self.D2
+
 def polynomials(X, m, l=None):
     '''
     Calculate Chebyshev polynomials of order 0, 1, ..., m in given X points.
@@ -502,6 +496,54 @@ def interpolate(Y):
     A[0, :] /= 2.
     A[n-1, :] /= 2.
     return A
+
+def chdiv(n, m):
+    '''
+    Construct differentiation matrices on Chebyshev grid of order 1, 2, ..., m
+    and size n x n on interval [-1, 1].
+
+    INPUT:
+
+    n - matrix size
+    type: int, >= 2
+
+    m - maximum matrix order (will construct for 1, 2, ..., m)
+    type: int, >= 1
+
+    OUTPUT:
+
+    D - list of differentiation matrices (D1, D2, ..., Dm)
+    type: [m] of ndarray [n, n] of float
+    '''
+
+    n1 = np.int(np.floor(n / 2))
+    n2 = np.int(np.ceil(n / 2))
+    k = np.arange(n)
+    th = k * np.pi / (n-1)
+
+    T = np.tile(th/2, (n, 1))
+    DX = 2*np.sin(T.T+T)*np.sin(T.T-T)
+    DX[n1:, :] = -np.flipud(np.fliplr(DX[0:n2, :]))
+    DX[range(n), range(n)] = 1.
+    DX = DX.T
+
+    Z = 1 / DX
+    Z[range(n), range(n)] = 0.
+
+    C = toeplitz((-1.)**k)
+    C[+0, :] *= 2
+    C[-1, :] *= 2
+    C[:, +0] *= 0.5
+    C[:, -1] *= 0.5
+
+    D_list = []
+    D = np.eye(n)
+    for ell in range(2):
+        D = (ell + 1) * Z * (C * np.tile(np.diag(D), (n, 1)).T - D)
+        D[range(n), range(n)] = -np.sum(D, axis=1)
+        D_list.append(D)
+
+    return tuple(D_list)
 
 def cross(f, f_pois, n, eps=1.E-6, opts=None, fpath='./tmp.txt'):
     '''
