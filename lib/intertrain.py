@@ -140,8 +140,10 @@ class Intertrain(object):
                 self.f, self.pois, self.n, self.eps, self.opts, self.log_path)
             self._t_func = self.crs_res['t_func']
         else:
-            self.Y = None
-            raise NotImplementedError('Is not implemented.')
+            self._t_func = time.time()
+            X = self.grid()
+            self.Y = self.f(X).reshape(self.n, order='F')
+            self._t_func = (time.time() - self._t_func) / X.shape[1]
 
         self._t_init = time.time() - self._t_init
 
@@ -172,7 +174,6 @@ class Intertrain(object):
             self.A = self.A.round(self.eps)
         else:
             self.A = self.Y.copy()
-
             for i in range(len(self.Y.shape)):
                 self.A = np.swapaxes(self.A, 0, i)
                 self.A = self.A.reshape((self.Y.shape[i], -1))
@@ -240,7 +241,8 @@ class Intertrain(object):
             for j in range(X.shape[1]):
                 B = self.A.copy()
                 for i in range(X.shape[0]):
-                    B = np.tensordot(B, T[:, i, j], axes=([0], [0]))
+                    F = T[:B.shape[0], i, j]
+                    B = np.tensordot(B, F, axes=([0], [0]))
                 Y[j] = B
 
         self._t_calc = (time.time() - self._t_calc) / X.shape[1]
