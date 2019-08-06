@@ -15,7 +15,7 @@ class Intertrain(object):
     using Fast Fourier Transform (FFT).
     '''
 
-    def __init__(self, n, l, ns=0, eps=1.E-6, with_tt=True):
+    def __init__(self, n, l, ns=0, eps=1.E-6, log_path='./tmp.txt', with_tt=True):
         '''
         INPUT:
 
@@ -33,6 +33,9 @@ class Intertrain(object):
         (is used in tt-round and cross approximation operations)
         type: float > 0
 
+        log_path - (optional) file for output computation info
+        type: str
+
         with_tt - (optional) flag; if true, then TT-format will be used
         instead of dense (numpy) format
         type: bool
@@ -43,6 +46,7 @@ class Intertrain(object):
         self.d = self.l.shape[0]
         self.ns = ns
         self.eps = eps
+        self.log_path = log_path
         self.with_tt = with_tt
 
         if self.n.shape[0] != self.l.shape[0]:
@@ -64,7 +68,7 @@ class Intertrain(object):
 
         return Intertrain(self.n, self.l, self.ns, self.eps, self.with_tt)
 
-    def init(self, f=None, Y=None, fpath='./tmp.txt'):
+    def init(self, f=None, Y=None, opts=None):
         '''
         Init main calculation parameters and training data, using
         given function f (cross approximation will be applied if TT-format
@@ -82,8 +86,11 @@ class Intertrain(object):
         (for different axes different numbers of points may be used)
         type: ndarray or TT-tensor [n_1, n_2, ..., n_dim] of float
 
-        fpath - (optional) file for output info
-        type: str
+        opts - (optional) dictionary with optional parameters:
+            nswp - (default: 200) for cross approximation
+            kickrank - (default: 1) for cross approximation
+            rf - (default: 2) for cross approximation
+        type: dict
 
         OUTPUT:
 
@@ -97,13 +104,9 @@ class Intertrain(object):
         self._t_func = 0. # Average time of function evaluation for 1 poi
 
         self.err = 0.
-        self.crs_res = {
-            'evals': 0,
-            'iters': 0,
-            'erank': 0.,
-            'err_rel': 0.,
-            'err_abs': 0.,
-        }
+        self.crs_res = None
+
+        self.opts = opts or {}
 
         self.f = f
         self.Y = Y
@@ -115,41 +118,9 @@ class Intertrain(object):
         self._t_init = time.time()
 
         if self.with_tt:
-            def func(ind):
-                self.crs_res['evals'] += ind.shape[0]
-                self._t_func = time.time()
-                Y = self.f(self.pois(ind.T))
-                self._t_func = (time.time() - self._t_func) / ind.shape[0]
-                return Y
-
-            log = open(fpath, 'w')
-            stdout0 = sys.stdout
-            sys.stdout = log
-
-            Y0 = tt.rand(self.n, self.n.shape[0], 1)
-            self.Y = rect_cross(
-                func,
-                Y0,
-                eps=self.eps,
-                nswp=200,
-                kickrank=1,
-                rf=2,
-                verbose=True
-            )
-
-            log.close()
-            sys.stdout = stdout0
-
-            log = open(fpath, 'r')
-            res = log.readlines()[-1].split('swp: ')[1]
-            self.crs_res['iters'] = int(res.split('/')[0])+1
-            res = res.split('er_rel = ')[1]
-            self.crs_res['err_rel'] = float(res.split('er_abs = ')[0])
-            res = res.split('er_abs = ')[1]
-            self.crs_res['err_abs'] = float(res.split('erank = ')[0])
-            res = res.split('erank = ')[1]
-            self.crs_res['erank'] = float(res.split('fun_eval')[0])
-
+            self.Y, self.crs_res = cross(
+                self.f, self.pois, self.n, self.eps, self.opts, self.log_path)
+            self._t_func = self.crs_res['t_func']
         else:
             self.Y = None
             raise NotImplementedError('Is not implemented.')
@@ -329,7 +300,7 @@ class Intertrain(object):
             opts = (i+1, n, l[0], l[1])
             print('Dim %-2d | Poi %-3d | Min %-6.3f | Max %-6.3f |'%opts)
 
-        if self.with_tt:
+        if self.with_tt and self.crs_res is not None:
             print('------------------ Result (cross appr)')
             print('Func. evaluations: %8d'%self.crs_res['evals'])
             print('Cross iterations : %8d'%self.crs_res['iters'])
@@ -338,7 +309,7 @@ class Intertrain(object):
             print('Cross err (abs)  : %8.2e'%self.crs_res['err_abs'])
 
         if self.A is not None and (f or self.f):
-            self.check(f or self.f, npoi, a, b)
+            self.test(f or self.f, npoi, a, b)
 
             print('------------------ Test (random points)')
             print('Number of points : %d'%npoi)
@@ -354,7 +325,7 @@ class Intertrain(object):
 
         print('------------------')
 
-    def check(self, f=None, npoi=10, a=-1., b=1.):
+    def test(self, f=None, npoi=10, a=-1., b=1.):
         '''
         Calculate interpolation error on random points.
 
@@ -574,3 +545,92 @@ def interpolate(Y):
     A[0, :] /= 2.
     A[n-1, :] /= 2.
     return A
+
+def cross(f, f_pois, n, eps=1.E-6, opts=None, fpath='./tmp.txt'):
+    '''
+    Construct tensor in TT-format of function values on given tensor product
+    grid by cross approximation.
+
+    INPUT:
+
+    f - function that calculate tensor elements for given points
+    type: function
+        inp type: ndarray [dimensions, number of points] of float
+        output type: ndarray [number of points] of float
+
+    f_pois - function that calculate grid points for given indices
+    type: function
+        inp type: ndarray [dimensions, number of points] of float
+        output type: ndarray [dimensions, number of points] of float
+
+    n - total number of points for each dimension
+    type: ndarray (or list) [dimensions] of int >= 2
+
+    eps - (optional) is the desired accuracy of the approximation
+    type: float > 0
+
+    opts - (optional) dictionary with optional cross aproximation parameters:
+        nswp - (default: 200)
+        kickrank - (default: 1)
+        rf - (default: 2)
+    type: dict
+
+    OUTPUT:
+
+    Y - tensor of function values on given tensor product grid
+    type: TT-tensor [*n] of float
+
+    crs_res - dictionary with calculation details
+    * evals, iters, err_rel, err_abs, erank, t_func
+    type: dict
+
+    fpath - (optional) file path for output cross approximation native info
+    type: str
+    '''
+
+    if not isinstance(n, np.ndarray): n = np.array(n)
+    if opts is None: opts = {}
+
+    crs_res = {}
+    crs_res['evals'] = 0
+    crs_res['t_func'] = 0.
+
+    def func(ind):
+        X = f_pois(ind.T)
+        t = time.time()
+        Y = f(X)
+        crs_res['t_func'] += time.time() - t
+        crs_res['evals'] += ind.shape[0]
+        return Y
+
+    log = open(fpath, 'w')
+    stdout0 = sys.stdout
+    sys.stdout = log
+
+    Z = tt.rand(n, n.shape[0], 1)
+    Y = rect_cross(
+        func,
+        Z,
+        eps=eps,
+        nswp=opts.get('nswp', 200),
+        kickrank=opts.get('kickrank', 1),
+        rf=opts.get('rf', 2),
+        verbose=True
+    )
+    log.close()
+    sys.stdout = stdout0
+
+    log = open(fpath, 'r')
+    res = log.readlines()[-1].split('swp: ')[1]
+    crs_res['iters'] = int(res.split('/')[0])+1
+    res = res.split('er_rel = ')[1]
+    crs_res['err_rel'] = float(res.split('er_abs = ')[0])
+    res = res.split('er_abs = ')[1]
+    crs_res['err_abs'] = float(res.split('erank = ')[0])
+    res = res.split('erank = ')[1]
+    crs_res['erank'] = float(res.split('fun_eval')[0])
+    log.close()
+
+    crs_res['t_func']/= crs_res['evals']
+
+    return (Y, crs_res)
