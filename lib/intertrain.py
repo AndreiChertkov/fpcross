@@ -13,6 +13,21 @@ class Intertrain(object):
     by Chebyshev polynomials in the dense (numpy) or sparse
     (tensor train (TT) with cross approximation) format
     using Fast Fourier Transform (FFT).
+
+    Basic usage:
+    1 Initialize class instance with grid and accuracy parameters.
+    2 Call "init" with function of interest as argument.
+    3 Call "prep" for interpolation process.
+    4 Call "calc" for approximation of function values on given points.
+    5 Call "info" for demonstration of calculation results.
+
+    Advanced usage:
+    - Call "grid" for the full Chebyshev grid.
+    - Call "pois" for subset of Chebyshev grid for given indices.
+    - Call "dif1" for the 1th order differentiation matrix on Chebyshev grid.
+    - Call "dif2" for the 2th order differentiation matrix on Chebyshev grid.
+    - Call "copy" to obtain new clean instance with the same input parameters.
+    - Call "test" to obtain interpolation accuracy for random points.
     '''
 
     def __init__(self, n, l, ns=0, eps=1.E-6, log_path='./tmp.txt', with_tt=True):
@@ -121,7 +136,7 @@ class Intertrain(object):
         self._t_init = time.time()
 
         if self.with_tt:
-            self.Y, self.crs_res = cross(
+            self.Y, self.crs_res = Intertrain.cross(
                 self.f, self.pois, self.n, self.eps, self.opts, self.log_path)
             self._t_func = self.crs_res['t_func']
         else:
@@ -149,7 +164,7 @@ class Intertrain(object):
                 sh = G[i].shape
                 G[i] = np.swapaxes(G[i], 0, 1)
                 G[i] = G[i].reshape((sh[1], -1))
-                G[i] = interpolate(G[i])
+                G[i] = Intertrain.interpolate(G[i])
                 G[i] = G[i].reshape((sh[1], sh[0], sh[2]))
                 G[i] = np.swapaxes(G[i], 0, 1)
 
@@ -161,7 +176,7 @@ class Intertrain(object):
             for i in range(len(self.Y.shape)):
                 self.A = np.swapaxes(self.A, 0, i)
                 self.A = self.A.reshape((self.Y.shape[i], -1))
-                self.A = interpolate(self.A)
+                self.A = Intertrain.interpolate(self.A)
                 self.A = self.A.reshape(self.Y.shape)
                 self.A = np.swapaxes(self.A, i, 0)
 
@@ -198,7 +213,7 @@ class Intertrain(object):
             Y = np.zeros(X.shape[1])
             G = tt.tensor.to_list(self.A)
             r = max([G_.shape[1] for G_ in G])
-            T = polynomials(X, r, self.l)
+            T = Intertrain.polynomials(X, r, self.l)
 
             for j in range(X.shape[1]):
                 i = 0
@@ -220,7 +235,7 @@ class Intertrain(object):
         else:
             Y = np.zeros(X.shape[1])
             r = np.max(self.n-1)
-            T = polynomials(X, r, self.l)
+            T = Intertrain.polynomials(X, r, self.l)
 
             for j in range(X.shape[1]):
                 B = self.A.copy()
@@ -321,6 +336,8 @@ class Intertrain(object):
         Y_calc = self.calc(X)
         self.err = np.abs((Y_calc - Y_real) / Y_real)
 
+        return self.err
+
     def pois(self, I):
         '''
         Get points of Chebyshev multidimensional (dim) grid
@@ -383,7 +400,7 @@ class Intertrain(object):
         TODO! Add (check) support for custom limits.
         '''
 
-        self.D1 = chdiv(self.n[0], 1)[0]
+        self.D1 = Intertrain.chdiv(self.n[0], 1)[0]
         return self.D1
 
     def dif2(self):
@@ -399,237 +416,241 @@ class Intertrain(object):
         TODO! Add (check) support for custom limits.
         '''
 
-        self.D1, self.D2 = chdiv(self.n[0], 2)
+        self.D1, self.D2 = Intertrain.chdiv(self.n[0], 2)
         return self.D2
 
-def polynomials(X, m, l=None):
-    '''
-    Calculate Chebyshev polynomials of order 0, 1, ..., m in given X points.
+    @staticmethod
+    def polynomials(X, m, l=None):
+        '''
+        Calculate Chebyshev polynomials of order 0, 1, ..., m in given X points.
 
-    INPUT:
+        INPUT:
 
-    X - values of x variable
-    type: ndarray (or list) [dimensions, number of points] of float
-    * in case of 1D, it may be ndarray (or list) [number of points]
-    * in case of one point in 1D, it may be float
-    * each value should be in range -1 <= >= 1
+        X - values of x variable
+        type: ndarray (or list) [dimensions, number of points] of float
+        * in case of 1D, it may be ndarray (or list) [number of points]
+        * in case of one point in 1D, it may be float
+        * each value should be in range -1 <= >= 1
 
-    m - max order of polynomial (function will calculate for 0, 1, ..., m)
-    type: int, >= 0
+        m - max order of polynomial (function will calculate for 0, 1, ..., m)
+        type: int, >= 0
 
-    l - (optional) min-max values of variable for each dimension
-    * default limits are [-1, 1]; if l is given then X values values will be
-    * scaled from l-limits to [-1, 1] limits
-    type: ndarray (or list) [dimensions, 2] of float
+        l - (optional) min-max values of variable for each dimension
+        * default limits are [-1, 1]; if l is given then X values values will be
+        * scaled from l-limits to [-1, 1] limits
+        type: ndarray (or list) [dimensions, 2] of float
 
-    OUTPUT:
+        OUTPUT:
 
-    T - Chebyshev polynomials of order 0, 1, ..., m in given points
-    type: ndarray [m+1, *X.shape] of float
-    * if X is float, it will be ndarray [m+1]
-    '''
+        T - Chebyshev polynomials of order 0, 1, ..., m in given points
+        type: ndarray [m+1, *X.shape] of float
+        * if X is float, it will be ndarray [m+1]
+        '''
 
-    if not isinstance(X, np.ndarray):
-        X = np.array(X)
+        if not isinstance(X, np.ndarray):
+            X = np.array(X)
 
-    if l is not None:
-        if not isinstance(l, np.ndarray):
-            l = np.array(l)
-        if len(X.shape) > 1:
-            l1 = np.repeat(l[:, 0].reshape((-1, 1)), X.shape[-1], axis=1)
-            l2 = np.repeat(l[:, 1].reshape((-1, 1)), X.shape[-1], axis=1)
-        elif len(X.shape) == 1:
-            l1 = np.repeat(l[0, 0], X.shape[0], axis=0)
-            l2 = np.repeat(l[:, 1], X.shape[0], axis=0)
+        if l is not None:
+            if not isinstance(l, np.ndarray):
+                l = np.array(l)
+            if len(X.shape) > 1:
+                l1 = np.repeat(l[:, 0].reshape((-1, 1)), X.shape[-1], axis=1)
+                l2 = np.repeat(l[:, 1].reshape((-1, 1)), X.shape[-1], axis=1)
+            elif len(X.shape) == 1:
+                l1 = np.repeat(l[0, 0], X.shape[0], axis=0)
+                l2 = np.repeat(l[:, 1], X.shape[0], axis=0)
+            else:
+                l1 = l[0, 0]
+                l2 = l[0, 1]
+            X = (2. * X - l2 - l1)
+            X/= (l2 - l1)
+
+        if len(X.shape):
+            T = np.ones([m+1] + list(X.shape))
         else:
-            l1 = l[0, 0]
-            l2 = l[0, 1]
-        X = (2. * X - l2 - l1)
-        X/= (l2 - l1)
+            T = np.ones([m+1, 1])
 
-    if len(X.shape):
-        T = np.ones([m+1] + list(X.shape))
-    else:
-        T = np.ones([m+1, 1])
+        if m > 0:
+            T[1,] = X.copy()
+            for k in range(2, m+1):
+                T[k, ] = 2. * X * T[k-1, ] - T[k-2, ]
 
-    if m > 0:
-        T[1,] = X.copy()
-        for k in range(2, m+1):
-            T[k, ] = 2. * X * T[k-1, ] - T[k-2, ]
+        return T if len(X.shape) else T.reshape(-1)
 
-    return T if len(X.shape) else T.reshape(-1)
+    @staticmethod
+    def interpolate(Y):
+        '''
+        Find coefficients a_i for interpolation of 1D functions by Chebyshev
+        polynomials f(x) = \sum_{i} (a_i * T_i(x)) using Fast Fourier Transform.
 
-def interpolate(Y):
-    '''
-    Find coefficients a_i for interpolation of 1D functions by Chebyshev
-    polynomials f(x) = \sum_{i} (a_i * T_i(x)) using Fast Fourier Transform.
+        It can find coefficients for several functions on the one call
+        if all functions have equal numbers of grid points.
 
-    It can find coefficients for several functions on the one call
-    if all functions have equal numbers of grid points.
+        INPUT:
 
-    INPUT:
+        Y - values of function at the nodes of the Chebyshev grid
+        x_j=cos(\pi j/N), j = 0, 1, ..., N (N = number of points - 1)
+        type: ndarray (or list) [number of points, number of functions] of float
+        * in case of one function, it may be ndarray (or list) [number of points]
 
-    Y - values of function at the nodes of the Chebyshev grid
-    x_j=cos(\pi j/N), j = 0, 1, ..., N (N = number of points - 1)
-    type: ndarray (or list) [number of points, number of functions] of float
-    * in case of one function, it may be ndarray (or list) [number of points]
+        OUTPUT:
 
-    OUTPUT:
+        A - constructed matrix of coefficients
+        type: ndarray [number of points, number of functions] of float
 
-    A - constructed matrix of coefficients
-    type: ndarray [number of points, number of functions] of float
+        LINKS:
+        - https://en.wikipedia.org/wiki/Discrete_Chebyshev_transform
+        - https://www.mathworks.com/matlabcentral/mlc-downloads/downloads/submissions/23972/versions/22/previews/chebfun/examples/approx/html/ChebfunFFT.html
+        '''
 
-    LINKS:
-    - https://en.wikipedia.org/wiki/Discrete_Chebyshev_transform
-    - https://www.mathworks.com/matlabcentral/mlc-downloads/downloads/submissions/23972/versions/22/previews/chebfun/examples/approx/html/ChebfunFFT.html
-    '''
+        if not isinstance(Y, np.ndarray):
+            Y = np.array(Y)
+        if len(Y.shape) == 1:
+            Y = Y.reshape(-1, 1)
 
-    if not isinstance(Y, np.ndarray):
-        Y = np.array(Y)
-    if len(Y.shape) == 1:
-        Y = Y.reshape(-1, 1)
+        n = Y.shape[0]
+        V = np.vstack([Y, Y[n-2:0:-1, :]])
+        A = np.fft.fft(V, axis=0).real
+        A = A[:n, :] / (n - 1)
+        A[0, :] /= 2.
+        A[n-1, :] /= 2.
+        return A
 
-    n = Y.shape[0]
-    V = np.vstack([Y, Y[n-2:0:-1, :]])
-    A = np.fft.fft(V, axis=0).real
-    A = A[:n, :] / (n - 1)
-    A[0, :] /= 2.
-    A[n-1, :] /= 2.
-    return A
+    @staticmethod
+    def chdiv(n, m):
+        '''
+        Construct differentiation matrices on Chebyshev grid of order 1, 2, ..., m
+        and size n x n on interval [-1, 1].
 
-def chdiv(n, m):
-    '''
-    Construct differentiation matrices on Chebyshev grid of order 1, 2, ..., m
-    and size n x n on interval [-1, 1].
+        INPUT:
 
-    INPUT:
+        n - matrix size
+        type: int, >= 2
 
-    n - matrix size
-    type: int, >= 2
+        m - maximum matrix order (will construct for 1, 2, ..., m)
+        type: int, >= 1
 
-    m - maximum matrix order (will construct for 1, 2, ..., m)
-    type: int, >= 1
+        OUTPUT:
 
-    OUTPUT:
+        D - list of differentiation matrices (D1, D2, ..., Dm)
+        type: [m] of ndarray [n, n] of float
+        '''
 
-    D - list of differentiation matrices (D1, D2, ..., Dm)
-    type: [m] of ndarray [n, n] of float
-    '''
+        n1 = np.int(np.floor(n / 2))
+        n2 = np.int(np.ceil(n / 2))
+        k = np.arange(n)
+        th = k * np.pi / (n-1)
 
-    n1 = np.int(np.floor(n / 2))
-    n2 = np.int(np.ceil(n / 2))
-    k = np.arange(n)
-    th = k * np.pi / (n-1)
+        T = np.tile(th/2, (n, 1))
+        DX = 2*np.sin(T.T+T)*np.sin(T.T-T)
+        DX[n1:, :] = -np.flipud(np.fliplr(DX[0:n2, :]))
+        DX[range(n), range(n)] = 1.
+        DX = DX.T
 
-    T = np.tile(th/2, (n, 1))
-    DX = 2*np.sin(T.T+T)*np.sin(T.T-T)
-    DX[n1:, :] = -np.flipud(np.fliplr(DX[0:n2, :]))
-    DX[range(n), range(n)] = 1.
-    DX = DX.T
+        Z = 1 / DX
+        Z[range(n), range(n)] = 0.
 
-    Z = 1 / DX
-    Z[range(n), range(n)] = 0.
+        C = toeplitz((-1.)**k)
+        C[+0, :] *= 2
+        C[-1, :] *= 2
+        C[:, +0] *= 0.5
+        C[:, -1] *= 0.5
 
-    C = toeplitz((-1.)**k)
-    C[+0, :] *= 2
-    C[-1, :] *= 2
-    C[:, +0] *= 0.5
-    C[:, -1] *= 0.5
+        D_list = []
+        D = np.eye(n)
+        for ell in range(2):
+            D = (ell + 1) * Z * (C * np.tile(np.diag(D), (n, 1)).T - D)
+            D[range(n), range(n)] = -np.sum(D, axis=1)
+            D_list.append(D)
 
-    D_list = []
-    D = np.eye(n)
-    for ell in range(2):
-        D = (ell + 1) * Z * (C * np.tile(np.diag(D), (n, 1)).T - D)
-        D[range(n), range(n)] = -np.sum(D, axis=1)
-        D_list.append(D)
+        return tuple(D_list)
 
-    return tuple(D_list)
+    @staticmethod
+    def cross(f, f_pois, n, eps=1.E-6, opts=None, fpath='./tmp.txt'):
+        '''
+        Construct tensor in TT-format of function values on given tensor product
+        grid by cross approximation.
 
-def cross(f, f_pois, n, eps=1.E-6, opts=None, fpath='./tmp.txt'):
-    '''
-    Construct tensor in TT-format of function values on given tensor product
-    grid by cross approximation.
+        INPUT:
 
-    INPUT:
+        f - function that calculate tensor elements for given points
+        type: function
+            inp type: ndarray [dimensions, number of points] of float
+            output type: ndarray [number of points] of float
 
-    f - function that calculate tensor elements for given points
-    type: function
-        inp type: ndarray [dimensions, number of points] of float
-        output type: ndarray [number of points] of float
+        f_pois - function that calculate grid points for given indices
+        type: function
+            inp type: ndarray [dimensions, number of points] of float
+            output type: ndarray [dimensions, number of points] of float
 
-    f_pois - function that calculate grid points for given indices
-    type: function
-        inp type: ndarray [dimensions, number of points] of float
-        output type: ndarray [dimensions, number of points] of float
+        n - total number of points for each dimension
+        type: ndarray (or list) [dimensions] of int >= 2
 
-    n - total number of points for each dimension
-    type: ndarray (or list) [dimensions] of int >= 2
+        eps - (optional) is the desired accuracy of the approximation
+        type: float > 0
 
-    eps - (optional) is the desired accuracy of the approximation
-    type: float > 0
+        opts - (optional) dictionary with optional cross aproximation parameters:
+            nswp - (default: 200)
+            kickrank - (default: 1)
+            rf - (default: 2)
+        type: dict
 
-    opts - (optional) dictionary with optional cross aproximation parameters:
-        nswp - (default: 200)
-        kickrank - (default: 1)
-        rf - (default: 2)
-    type: dict
+        OUTPUT:
 
-    OUTPUT:
+        Y - tensor of function values on given tensor product grid
+        type: TT-tensor [*n] of float
 
-    Y - tensor of function values on given tensor product grid
-    type: TT-tensor [*n] of float
+        crs_res - dictionary with calculation details
+        * evals, iters, err_rel, err_abs, erank, t_func
+        type: dict
 
-    crs_res - dictionary with calculation details
-    * evals, iters, err_rel, err_abs, erank, t_func
-    type: dict
+        fpath - (optional) file path for output cross approximation native info
+        type: str
+        '''
 
-    fpath - (optional) file path for output cross approximation native info
-    type: str
-    '''
+        if not isinstance(n, np.ndarray): n = np.array(n)
+        if opts is None: opts = {}
 
-    if not isinstance(n, np.ndarray): n = np.array(n)
-    if opts is None: opts = {}
+        crs_res = {}
+        crs_res['evals'] = 0
+        crs_res['t_func'] = 0.
 
-    crs_res = {}
-    crs_res['evals'] = 0
-    crs_res['t_func'] = 0.
+        def func(ind):
+            X = f_pois(ind.T)
+            t = time.time()
+            Y = f(X)
+            crs_res['t_func'] += time.time() - t
+            crs_res['evals'] += ind.shape[0]
+            return Y
 
-    def func(ind):
-        X = f_pois(ind.T)
-        t = time.time()
-        Y = f(X)
-        crs_res['t_func'] += time.time() - t
-        crs_res['evals'] += ind.shape[0]
-        return Y
+        log = open(fpath, 'w')
+        stdout0 = sys.stdout
+        sys.stdout = log
 
-    log = open(fpath, 'w')
-    stdout0 = sys.stdout
-    sys.stdout = log
+        Z = tt.rand(n, n.shape[0], 1)
+        Y = rect_cross(
+            func,
+            Z,
+            eps=eps,
+            nswp=opts.get('nswp', 200),
+            kickrank=opts.get('kickrank', 1),
+            rf=opts.get('rf', 2),
+            verbose=True
+        )
+        log.close()
+        sys.stdout = stdout0
 
-    Z = tt.rand(n, n.shape[0], 1)
-    Y = rect_cross(
-        func,
-        Z,
-        eps=eps,
-        nswp=opts.get('nswp', 200),
-        kickrank=opts.get('kickrank', 1),
-        rf=opts.get('rf', 2),
-        verbose=True
-    )
-    log.close()
-    sys.stdout = stdout0
+        log = open(fpath, 'r')
+        res = log.readlines()[-1].split('swp: ')[1]
+        crs_res['iters'] = int(res.split('/')[0])+1
+        res = res.split('er_rel = ')[1]
+        crs_res['err_rel'] = float(res.split('er_abs = ')[0])
+        res = res.split('er_abs = ')[1]
+        crs_res['err_abs'] = float(res.split('erank = ')[0])
+        res = res.split('erank = ')[1]
+        crs_res['erank'] = float(res.split('fun_eval')[0])
+        log.close()
 
-    log = open(fpath, 'r')
-    res = log.readlines()[-1].split('swp: ')[1]
-    crs_res['iters'] = int(res.split('/')[0])+1
-    res = res.split('er_rel = ')[1]
-    crs_res['err_rel'] = float(res.split('er_abs = ')[0])
-    res = res.split('er_abs = ')[1]
-    crs_res['err_abs'] = float(res.split('erank = ')[0])
-    res = res.split('erank = ')[1]
-    crs_res['erank'] = float(res.split('fun_eval')[0])
-    log.close()
+        crs_res['t_func']/= crs_res['evals']
 
-    crs_res['t_func']/= crs_res['evals']
-
-    return (Y, crs_res)
+        return (Y, crs_res)
