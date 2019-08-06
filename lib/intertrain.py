@@ -50,11 +50,17 @@ class Intertrain(object):
     def copy(self):
         '''
         Create a copy of the class instance.
+
+        OUTPUT:
+
+        intertrain - new class instance
+        type: Intertrain
+
         '''
 
         return Intertrain(self.n, self.l, self.ns, self.eps, self.with_tt)
 
-    def init(self, f=None, Y=None):
+    def init(self, f=None, Y=None, fpath='./tmp.txt'):
         '''
         Init main calculation parameters and training data, using
         given function f (cross approximation will be applied if TT-format
@@ -71,6 +77,14 @@ class Intertrain(object):
         Y - (optional) tensor of function values on nodes of the Chebyshev mesh
         (for different axes different numbers of points may be used)
         type: ndarray or TT-tensor [n_1, n_2, ..., n_dim] of float
+
+        fpath - (optional) file for output info
+        type: str
+
+        OUTPUT:
+
+        self - class instance
+        type: Intertrain
         '''
 
         self._t_init = 0. # Time of training data collection
@@ -87,17 +101,54 @@ class Intertrain(object):
             'err_abs': 0.,
         }
 
-        self._t_init = time.time()
-
         self.f = f
         self.Y = Y
-
-        if self.f and self.Y is None and self.with_tt:
-            self.Y = self._coll_tt(self.f)
-        if self.f and self.Y is None and not self.with_tt:
-            self.Y = self._coll_np(self.f)
-
         self.A = None
+
+        if self.f is None or self.Y is not None:
+            return self
+
+        self._t_init = time.time()
+
+        if self.with_tt:
+            def func(ind):
+                self.crs_res['evals'] += ind.shape[0]
+                self._t_func = time.time()
+                Y = self.f(self.pois(ind.T))
+                self._t_func = (time.time() - self._t_func) / ind.shape[0]
+                return Y
+
+            log = open(fpath, 'w')
+            stdout0 = sys.stdout
+            sys.stdout = log
+
+            Y0 = tt.rand(self.n, self.n.shape[0], 1)
+            self.Y = rect_cross(
+                func,
+                Y0,
+                eps=self.eps,
+                nswp=200,
+                kickrank=1,
+                rf=2,
+                verbose=True
+            )
+
+            log.close()
+            sys.stdout = stdout0
+
+            log = open(fpath, 'r')
+            res = log.readlines()[-1].split('swp: ')[1]
+            self.crs_res['iters'] = int(res.split('/')[0])+1
+            res = res.split('er_rel = ')[1]
+            self.crs_res['err_rel'] = float(res.split('er_abs = ')[0])
+            res = res.split('er_abs = ')[1]
+            self.crs_res['err_abs'] = float(res.split('erank = ')[0])
+            res = res.split('erank = ')[1]
+            self.crs_res['erank'] = float(res.split('fun_eval')[0])
+
+        else:
+            self.Y = None
+            raise ValueError('Is not implemented.')
 
         self._t_init = time.time() - self._t_init
 
@@ -114,9 +165,27 @@ class Intertrain(object):
         self._t_prep = time.time()
 
         if self.with_tt:
-            self._prep_tt()
+            G = tt.tensor.to_list(self.Y)
+
+            for i in range(self.ns, self.Y.d):
+                sh = G[i].shape
+                G[i] = np.swapaxes(G[i], 0, 1)
+                G[i] = G[i].reshape((sh[1], -1))
+                G[i] = interpolate(G[i])
+                G[i] = G[i].reshape((sh[1], sh[0], sh[2]))
+                G[i] = np.swapaxes(G[i], 0, 1)
+
+            self.A = tt.tensor.from_list(G)
+            self.A = self.A.round(self.eps)
         else:
-            self._prep_np()
+            self.A = self.Y.copy()
+
+            for i in range(len(self.Y.shape)):
+                self.A = np.swapaxes(self.A, 0, i)
+                self.A = self.A.reshape((self.Y.shape[i], -1))
+                self.A = interpolate(self.A)
+                self.A = self.A.reshape(self.Y.shape)
+                self.A = np.swapaxes(self.A, i, 0)
 
         self._t_prep = time.time() - self._t_prep
 
@@ -146,9 +215,38 @@ class Intertrain(object):
         self._t_calc = time.time()
 
         if self.with_tt:
-            Y = self._calc_tt(X)
+            G = tt.tensor.to_list(self.A)
+            Y = np.zeros(X.shape[1])
+
+            for j in range(X.shape[1]):
+                i = 0
+
+                if i <= self.ns - 1:
+                    Q = G[i][:, int(X[i, j]), :]
+                else:
+                    T = self.polynomial_trans(X[i, j], G[i].shape[1], i)
+                    Q = np.tensordot(G[i], T, axes=([1], [0]))
+
+                for i in range(1, X.shape[0]):
+                    if i <= self.ns - 1:
+                        Q = np.dot(Q, G[i][:, int(X[i, j]), :])
+                        continue
+
+                    T = self.polynomial_trans(X[i, j], G[i].shape[1], i)
+                    Q = np.dot(Q, np.tensordot(G[i], T, axes=([1], [0])))
+
+                Y[j] = Q[0, 0]
         else:
-            Y = self._calc_np(X)
+            Y = np.zeros(X.shape[1])
+
+            for j in range(X.shape[1]):
+                A_tmp = self.A.copy()
+                T = (2.*X[:, j]-x_lim[:, 1]-x_lim[:, 0]) / (x_lim[:, 1]-x_lim[:, 0])
+
+                for i in range(X.shape[0]):
+                    Tch = ch_ut.polynomial(self.A.shape[i], T)
+                    A_tmp = np.tensordot(A_tmp, Tch[:,i], axes=([0], [0]))
+                Y[j] = A_tmp
 
         self._t_calc = (time.time() - self._t_calc) / X.shape[1]
 
@@ -310,17 +408,17 @@ class Intertrain(object):
         x += (self.l[:, 1] + self.l[:, 0]) / 2.
         return x
 
-    def points(self, i):
+    def pois(self, i):
         '''
         Get points of Chebyshev multidimensional (dim) grid
-        for given multi indeces i. Points for every axis k are calculated as
+        for given multi indices i. Points for every axis k are calculated as
         x = cos(i[k]*pi/(n[k]-1)), where n[k] is a total number of points
         for selected axis k, and then these points are scaled according to
         given limits l.
 
         INPUT:
 
-        i - multi index for the grid point
+        i - multi index for the grid points
         type: ndarray (or list) [dimensions, number of points] of int
 
         OUTPUT:
@@ -329,7 +427,8 @@ class Intertrain(object):
         type: ndarray [dimensions, number of points] of float
         '''
 
-        if not isinstance(i, np.ndarray): i = np.array(i)
+        if not isinstance(i, np.ndarray):
+            i = np.array(i)
 
         n = np.repeat(self.n.reshape((-1, 1)), i.shape[1], axis=1)
         l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), i.shape[1], axis=1)
@@ -412,36 +511,6 @@ class Intertrain(object):
 
         return T
 
-    def polynomial_der(self, X, m):
-        '''
-        Calculate Chebyshev polynomials' derivatives of order until m
-        in given points.
-
-        INPUT:
-
-        X - values of x variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        m - upper bound for order of polynomial (will calculate for 0, ..., m-1)
-        type: int
-
-        OUTPUT:
-
-        T - derivatives of Chebyshev polynomials of order 0, 1, ..., m-1
-        type: ndarray [m, X.shape] of float
-        '''
-
-        if not isinstance(X, np.ndarray): X = np.array(X)
-
-        T = np.zeros([m] + list(X.shape))
-        if m == 1: return T
-
-        Z = np.arccos(X)
-        for n in range(1, m):
-            T[n, ] = n * np.sin(n * Z) / np.sin(Z)
-
-        return T
-
     def polynomial_trans(self, x, m, n):
         '''
         Calculate Chebyshev polynomials of order until m
@@ -476,173 +545,6 @@ class Intertrain(object):
             T[n] = 2. * x * T[n-1] - T[n-2]
 
         return T
-
-    def _coll_tt(self, f, fpath = './tmp.txt'):
-        '''
-        Calculate function's values tensor on the multidimensional
-        Chebyshev mesh (for dimensions that are not skipped)
-        by cross approximation method in the tensor train (TT) format.
-
-        INPUT:
-
-        f - function that calculate tensor elements for given points
-        (if ns>0, then first ns dimensions should be simple integer indices)
-        type: function
-            inp type: ndarray [dimensions, number of points] of float
-            out type: ndarray [number of points] of float
-
-        fpath - (optional) file for output info
-        type: str
-
-        OUTPUT:
-
-        Y - approximated tensor of the function's values in given points
-        type: tt.tensor [n_1, n_2, ..., n_dim] of float
-        '''
-
-        def func(ind):
-            self.crs_res['evals'] += ind.shape[0]
-            self._t_func = time.time()
-            Y = self.f(self.points(ind.T))
-            self._t_func = (time.time() - self._t_func) / ind.shape[0]
-            return Y
-
-        log = open(fpath, 'w')
-        stdout0 = sys.stdout
-        sys.stdout = log
-
-        Y0 = tt.rand(self.n, self.n.shape[0], 1)
-        Y = rect_cross(
-            func,
-            Y0,
-            eps=self.eps,
-            nswp=200,
-            kickrank=1,
-            rf=2,
-            verbose=True
-        )
-
-        log.close()
-        sys.stdout = stdout0
-
-        log = open(fpath, 'r')
-        res = log.readlines()[-1].split('swp: ')[1]
-        self.crs_res['iters'] = int(res.split('/')[0])+1
-        res = res.split('er_rel = ')[1]
-        self.crs_res['err_rel'] = float(res.split('er_abs = ')[0])
-        res = res.split('er_abs = ')[1]
-        self.crs_res['err_abs'] = float(res.split('erank = ')[0])
-        res = res.split('erank = ')[1]
-        self.crs_res['erank'] = float(res.split('fun_eval')[0])
-
-        return Y
-
-    def _coll_np(self, f):
-        '''
-        Calculate function's values tensor on the multidimensional
-        Chebyshev mesh (for dimensions that are not skipped)
-        in the numpy format.
-
-        INPUT:
-
-        f - function that calculate tensor elements for given points
-        (if ns>0, then first ns dimensions should be simple integer indices)
-        type: function
-            inp type: ndarray [dimensions, number of points] of float
-            out type: ndarray [number of points] of float
-
-        OUTPUT:
-
-        Y - approximated tensor of the function's values in given points
-        type: np.ndarray [n_1, n_2, ..., n_dim] of float
-        '''
-
-        raise ValueError('Is not implemented.')
-
-    def _prep_tt(self):
-        '''
-        Build tensor of interpolation coefficients according to training data
-        in the tensor train format.
-        '''
-
-        G = tt.tensor.to_list(self.Y)
-
-        for i in range(self.ns, self.Y.d):
-            sh = G[i].shape
-            G[i] = np.swapaxes(G[i], 0, 1)
-            G[i] = G[i].reshape((sh[1], -1))
-            G[i] = interpolate(G[i])
-            G[i] = G[i].reshape((sh[1], sh[0], sh[2]))
-            G[i] = np.swapaxes(G[i], 0, 1)
-
-        self.A = tt.tensor.from_list(G)
-        self.A = self.A.round(self.eps)
-
-    def _prep_np(self):
-        '''
-        Build tensor of interpolation coefficients according to training data
-        in the numpy format.
-        '''
-
-        raise ValueError('Is not implemented.')
-
-    def _calc_tt(self, X):
-        '''
-        Calculate values of interpolated function in given X points.
-
-        INPUT:
-
-        X - values of x variable
-        type: ndarray [dimensions, number of points] of float
-
-        OUTPUT:
-
-        Y - approximated values of the function in given points
-        type: ndarray [number of points] of float
-
-        TODO: try to vectorize for each point
-        '''
-
-        G = tt.tensor.to_list(self.A)
-        Y = np.zeros(X.shape[1])
-
-        for j in range(X.shape[1]):
-            i = 0
-
-            if i <= self.ns - 1:
-                Q = G[i][:, int(X[i, j]), :]
-            else:
-                T = self.polynomial_trans(X[i, j], G[i].shape[1], i)
-                Q = np.tensordot(G[i], T, axes=([1], [0]))
-
-            for i in range(1, X.shape[0]):
-                if i <= self.ns - 1:
-                    Q = np.dot(Q, G[i][:, int(X[i, j]), :])
-                    continue
-
-                T = self.polynomial_trans(X[i, j], G[i].shape[1], i)
-                Q = np.dot(Q, np.tensordot(G[i], T, axes=([1], [0])))
-
-            Y[j] = Q[0, 0]
-
-        return Y
-
-    def _calc_np(self, X):
-        '''
-        Calculate values of interpolated function in given X points.
-
-        INPUT:
-
-        X - values of x variable
-        type: ndarray [dimensions, number of points] of float
-
-        OUTPUT:
-
-        Y - approximated values of the function in given points
-        type: ndarray [number of points] of float
-        '''
-
-        raise ValueError('Is not implemented.')
 
 def polynomials(X, m):
     '''
