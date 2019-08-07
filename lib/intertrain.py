@@ -237,12 +237,13 @@ class Intertrain(object):
             Y = np.zeros(X.shape[1])
             r = np.max(self.n-1)
             T = Intertrain.polynomials(X, r, self.l)
-
+            
             for j in range(X.shape[1]):
                 B = self.A.copy()
                 for i in range(X.shape[0]):
                     F = T[:B.shape[0], i, j]
                     B = np.tensordot(B, F, axes=([0], [0]))
+
                 Y[j] = B
 
         self._t_calc = (time.time() - self._t_calc) / X.shape[1]
