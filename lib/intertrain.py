@@ -70,9 +70,15 @@ class Intertrain(object):
 
         self.init()
 
-    def copy(self):
+    def copy(self, is_full=True):
         '''
         Create a copy of the class instance.
+
+        INPUT:
+
+        with_tt - (optional) flag; if true, then interpolation result
+        will be also copied
+        type: bool
 
         OUTPUT:
 
@@ -81,7 +87,29 @@ class Intertrain(object):
 
         '''
 
-        return Intertrain(self.n, self.l, self.ns, self.eps, self.log_path, self.with_tt)
+        IT = Intertrain(self.n, self.l, self.ns, self.eps, self.log_path, self.with_tt)
+
+        if not is_full:
+            return IT
+
+        IT._t_init = self._t_init
+        IT._t_prep = self._t_prep
+        IT._t_calc = self._t_calc
+        IT._t_func = self._t_func
+
+        IT.err = self.err.copy() if self.err is not None else None
+        IT.crs_res = self.crs_res.copy() if self.crs_res is not None else None
+
+        IT.opts = self.opts.copy()
+
+        IT.f = self.f
+        IT.Y = self.Y.copy() if self.Y is not None else None
+        IT.A = self.A.copy() if self.A is not None else None
+
+        IT.D1 = self.D1.copy() if self.D1 is not None else None
+        IT.D2 = self.D2.copy() if self.D2 is not None else None
+
+        return IT
 
     def init(self, f=None, Y=None, opts=None):
         '''
@@ -118,7 +146,7 @@ class Intertrain(object):
         self._t_calc = 0. # Average time of interpolation evaluation for 1 poi
         self._t_func = 0. # Average time of function evaluation for 1 poi
 
-        self.err = 0.
+        self.err = None
         self.crs_res = None
 
         self.opts = opts or {}
@@ -237,7 +265,7 @@ class Intertrain(object):
             Y = np.zeros(X.shape[1])
             r = np.max(self.n-1)
             T = Intertrain.polynomials(X, r, self.l)
-            
+
             for j in range(X.shape[1]):
                 B = self.A.copy()
                 for i in range(X.shape[0]):
