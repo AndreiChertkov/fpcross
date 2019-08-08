@@ -130,6 +130,7 @@ class Intertrain(object):
         type: ndarray or TT-tensor [n_1, n_2, ..., n_dim] of float
 
         opts - (optional) dictionary with optional parameters:
+            is_f_with_i - (default: False) if True, then while function call the second argument with points indices will be provided
             nswp - (default: 200) for cross approximation
             kickrank - (default: 1) for cross approximation
             rf - (default: 2) for cross approximation
@@ -169,8 +170,14 @@ class Intertrain(object):
             self._t_func = self.crs_res['t_func']
         else:
             self._t_func = time.time()
+            args = []
             X = self.grid()
-            self.Y = self.f(X).reshape(self.n, order='F')
+            if self.opts.get('is_f_with_i') == True:
+                I = self.grid(is_ind=True)
+                self.Y = self.f(X, I)
+            else:
+                self.Y = self.f(X)
+            self.Y = self.Y.reshape(self.n, order='F')
             self._t_func = (time.time() - self._t_func) / X.shape[1]
 
         self._t_init = time.time() - self._t_init
@@ -401,22 +408,35 @@ class Intertrain(object):
 
         return X
 
-    def grid(self):
+    def grid(self, is_ind=False):
         '''
         Get all points of flatten multidimensional Chebyshev grid
         (from max to min value).
 
+        INPUT:
+
+        is_ind - (optional) flag. If True, then indices of points will be
+        returned. If false, then spatial grid points will be returned
+
         OUTPUT:
+
+        if is_ind == True:
+
+        I - indices of grid points
+        type: ndarray [dimensions, number of n1 * n2 * ... * nd] of int
+
+        if is_ind == False (default):
 
         X - grid points
         type: ndarray [dimensions, number of n1 * n2 * ... * nd] of float
+
         '''
 
         I = [np.arange(self.n[d]).reshape(1, -1) for d in range(self.d)]
         I = np.meshgrid(*I)
         I = np.array(I).reshape((self.d, -1))
 
-        return self.pois(I)
+        return I if is_ind else self.pois(I)
 
     def dif1(self):
         '''
@@ -649,7 +669,7 @@ class Intertrain(object):
         def func(ind):
             X = f_pois(ind.T)
             t = time.time()
-            Y = f(X)
+            Y = f(X, ind.T) if opts.get('is_f_with_i') == True else f(X)
             crs_res['t_func'] += time.time() - t
             crs_res['evals'] += ind.shape[0]
             return Y
