@@ -31,10 +31,11 @@ class Solver(object):
         l_ = np.repeat(np.array(l).reshape(1, -1), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-    def set_funcs(self, func_f, func_f_der, func_r0):
+    def set_funcs(self, func_f, func_f_der, func_r0, func_r=None):
         self.func_f = func_f
         self.func_f_der = func_f_der
         self.func_r0 = func_r0
+        self.func_r = func_r
 
     def prep(self):
         self.IT0 = None # Interpolant from previous step
@@ -48,8 +49,8 @@ class Solver(object):
         self.J[-1, -1] = 0.
 
         self.D = self.IT.dif2()
-        #self.D = self.J@self.D
-        self.Z = np.exp(self.h) * expm(self.D) #@ self.J
+        self.D = self.J@self.D
+        self.Z = np.exp(self.h) * expm(self.D) @ self.J
 
     def step(self, X, I):
         f = self.func_f(X)
@@ -100,9 +101,13 @@ class Solver(object):
         x0 = Xg.reshape(-1)
         r1 = self.IT1.calc(Xg).reshape(-1)
         r2 = self.IT2.calc(Xg).reshape(-1)
+
         ax = fig.add_subplot(gs[0, 0])
         ax.plot(x0, r1, label='Initial')
         ax.plot(x0, r2, label='Final (calc)')
+        if self.func_r:
+            r2_real = self.func_r(Xg, self.t_max, Xg).reshape(-1)
+            ax.plot(x0, r2_real, label='Final (real)')
         ax.semilogy()
         ax.set_title('Probability density function')
         ax.set_xlabel('x')

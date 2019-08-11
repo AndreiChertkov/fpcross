@@ -222,7 +222,7 @@ class Intertrain(object):
             for i in range(len(self.Y.shape)):
                 self.A = np.swapaxes(self.A, 0, i)
                 self.A = self.A.reshape((self.Y.shape[i], -1))
-                self.A = Intertrain.interpolate(self.A)
+                self.A = Intertrain.interpolate(self.A, is_real=False)
                 self.A = self.A.reshape(self.Y.shape)
                 self.A = np.swapaxes(self.A, i, 0)
 
@@ -284,7 +284,7 @@ class Intertrain(object):
             T = Intertrain.polynomials(X, r, self.l)
 
             for j in range(X.shape[1]):
-                B = self.A.copy()
+                B = self.A.real.copy()
                 for i in range(X.shape[0]):
                     F = T[:B.shape[0], i, j]
                     B = np.tensordot(B, F, axes=([0], [0]))
@@ -294,6 +294,30 @@ class Intertrain(object):
         self._t_calc = (time.time() - self._t_calc) / X.shape[1]
 
         return Y
+
+    def calc_d1(self, X):
+        if self.A is None:
+            raise ValueError('Interpolation is not done. Call "prep" before.')
+
+        if not isinstance(X, np.ndarray):
+            X = np.array(X)
+
+        Y = np.zeros(X.shape[1])
+        r = np.max(self.n-1)
+        T = Intertrain.polynomials(X, r, self.l)
+
+        for j in range(X.shape[1]):
+            B = self.A.real.copy()
+            for i in range(X.shape[0]):
+                F = T[:B.shape[0], i, j]
+                B = np.tensordot(B, F, axes=([0], [0]))
+
+            Y[j] = B
+
+        return Y
+
+    def calc_d2(self, X):
+        return self.calc(X)
 
     def info(self, f=None, npoi=10, a=-1., b=1.):
         '''
@@ -541,7 +565,7 @@ class Intertrain(object):
         return T if len(X.shape) else T.reshape(-1)
 
     @staticmethod
-    def interpolate(Y):
+    def interpolate(Y, is_real=True):
         '''
         Find coefficients a_i for interpolation of 1D functions by Chebyshev
         polynomials f(x) = \sum_{i} (a_i * T_i(x)) using Fast Fourier Transform.
@@ -573,7 +597,9 @@ class Intertrain(object):
 
         n = Y.shape[0]
         V = np.vstack([Y, Y[n-2:0:-1, :]])
-        A = np.fft.fft(V, axis=0).real
+        A = np.fft.fft(V, axis=0)
+        if is_real:
+            A = A.real
         A = A[:n, :] / (n - 1)
         A[0, :] /= 2.
         A[n-1, :] /= 2.
