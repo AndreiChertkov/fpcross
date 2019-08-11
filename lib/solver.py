@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from numpy import kron as kron
 from scipy.linalg import expm as expm
@@ -38,9 +40,14 @@ class Solver(object):
         self.func_r = func_r
 
     def prep(self):
+        self._t_prep = None
+        self._t_calc = None
+
         self.IT0 = None # Interpolant from previous step
         self.IT1 = None # Initial interpolant
         self.IT2 = None # Final interpolant
+
+        self._t_prep = time.time()
 
         self.I = np.eye(self.n)
 
@@ -52,7 +59,25 @@ class Solver(object):
         self.D = self.J@self.D
         self.Z = np.exp(self.h) * expm(self.D) @ self.J
 
-    def step(self, X, I):
+        self.IT.init(self.func_r0).prep()
+
+        self._t_prep = (time.time() - self._t_prep)
+
+    def calc(self):
+        self._t_calc = time.time()
+
+
+        self.IT1 = self.IT.copy()
+
+        for i, t in enumerate(self.T[:-1]):
+            self.IT0 = self.IT.copy()
+            self.IT.init(self.step).prep()
+
+        self.IT2 = self.IT.copy()
+
+        self._t_calc = (time.time() - self._t_calc)
+
+    def step(self, X):
         f = self.func_f(X)
         g = self.func_f_der(X)
 
@@ -63,26 +88,25 @@ class Solver(object):
         r0 = self.IT0.calc(X0)
         r0[I1.reshape(-1)] = 0.
         r0[I2.reshape(-1)] = 0.
+
         w = (1. - self.h * np.trace(g)) * r0
+
         v = self.Z@w
-        # print('\r%-8.2e'%np.max(np.abs(v)))
+
         return v
-
-    def calc(self):
-        self.IT.init(self.func_r0).prep()
-        self.IT1 = self.IT.copy()
-
-        for i, t in enumerate(self.T[:-1]):
-            self.IT0 = self.IT.copy()
-            self.IT.init(self.step, opts={'is_f_with_i': True}).prep()
-            # if i>10: break
-
-        self.IT2 = self.IT.copy()
 
     def info(self):
         print('Info')
-        # print('Info from Intertrain')
-        # self.IT.info()
+        print('--- Time grid')
+        print('Time points : %d'%self.t_poi)
+        print('Time min    : %-8.2e'%self.t_min)
+        print('Time max    : %-8.2e'%self.t_max)
+        print('--- Time')
+        print('Prep        : %8.2e sec. '%self._t_prep)
+        print('Calc        : %8.2e sec. '%self._t_calc)
+
+        print('Info from Intertrain')
+        self.IT.info()
 
     def plot(self):
         if self.d == 1:
