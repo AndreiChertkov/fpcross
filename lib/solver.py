@@ -63,19 +63,26 @@ class Solver(object):
 
         self._t_prep = (time.time() - self._t_prep)
 
-    def calc(self):
-        self._t_calc = time.time()
+        self.X = self.IT.grid()
+        self.R = []
+        self.R.append(self.IT.calc(self.X))
 
+    def calc(self):
+        self._t_calc = 0.
 
         self.IT1 = self.IT.copy()
 
         for i, t in enumerate(self.T[:-1]):
+            _t = time.time()
+
             self.IT0 = self.IT.copy()
             self.IT.init(self.step).prep()
 
-        self.IT2 = self.IT.copy()
+            self._t_calc+= time.time() - _t
 
-        self._t_calc = (time.time() - self._t_calc)
+            self.R.append(self.IT.calc(self.X))
+
+        self.IT2 = self.IT.copy()
 
     def step(self, X):
         f = self.func_f(X)
@@ -110,11 +117,35 @@ class Solver(object):
 
     def plot(self):
         if self.d == 1:
-            return self.plot_1d()
+            return self._plot_1d()
 
         raise NotImplementedError('Dim %d is not supported for plot'%self.d)
 
-    def plot_1d(self):
+    def anim(self, delt=50, ffmpeg_path='./../tmp/ffmpeg'):
+        '''
+        Build animation for distribution vs time.
+        '''
+
+        fig = plt.figure(figsize=(7, 7))
+        ax = fig.add_subplot(111)
+
+        if self.d == 1:
+            run = self._anim_1d(ax)
+        elif self.d == 2:
+            run = self._anim_2d(ax)
+        else:
+            raise NotImplementedError('Dim %d is not supported for anim'%self.d)
+
+        from IPython.display import HTML
+
+        plt.rcParams['animation.ffmpeg_path'] = ffmpeg_path
+
+        anim = animation.FuncAnimation(
+            fig, run, frames=len(self.T), interval=delt, blit=False)
+
+        return HTML(anim.to_html5_video())
+
+    def _plot_1d(self):
         fig = plt.figure(figsize=(6, 6))
         gs = mpl.gridspec.GridSpec(
             ncols=1, nrows=1, left=0.01, right=0.99, top=0.99, bottom=0.01,
@@ -139,3 +170,37 @@ class Solver(object):
         ax.legend(loc='best')
 
         plt.show()
+
+    def _anim_1d(self, ax):
+        x1d = self.X[0, :self.n]
+        X1 = x1d
+
+        def run(i):
+            t = self.T[i]
+            r = self.R[i].reshape(self.n)
+
+            ax.clear()
+            ax.set_title('Spatial distribution (t=%f)'%t)
+            ax.set_xlabel('x')
+            ax.set_ylabel('r')
+            ct = ax.plot(X1, r)
+            return (ct,)
+
+        return run
+
+    def _anim_2d(self, ax):
+        x1d = self.X[0, :self.n]
+        X1, X2 = np.meshgrid(x1d, x1d)
+
+        def run(i):
+            t = self.T[i]
+            r = self.R[i].reshape((self.n, self.n))
+
+            ax.clear()
+            ax.set_title('Spatial distribution (t=%f)'%t)
+            ax.set_xlabel('x1')
+            ax.set_ylabel('x2')
+            ct = ax.contourf(X1, X2, r)
+            return (ct,)
+
+        return run
