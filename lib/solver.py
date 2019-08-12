@@ -57,7 +57,11 @@ class Solver(object):
 
         self.D = self.IT.dif2()
         self.D = self.J@self.D
-        self.Z = np.exp(self.h) * expm(self.D) @ self.J
+        D_expm = expm(self.D)
+        self.Z = D_expm.copy()
+        for d in range(self.d-1):
+            self.Z = kron(self.Z, D_expm)
+        self.Z = np.exp(self.h) * self.Z @ self.J
 
         self.IT.init(self.func_r0).prep()
 
@@ -93,8 +97,8 @@ class Solver(object):
         I2 = X0 > +3. # TODO! replace by real x_lim
 
         r0 = self.IT0.calc(X0)
-        r0[I1.reshape(-1)] = 0.
-        r0[I2.reshape(-1)] = 0.
+        #r0[I1.reshape(-1)] = 0.
+        #r0[I2.reshape(-1)] = 0.
 
         w = (1. - self.h * np.trace(g)) * r0
 
@@ -116,14 +120,20 @@ class Solver(object):
         self.IT.info()
 
     def plot(self):
+        '''
+        Plot distribution (initial and final) on spatial grid.
+        '''
+
         if self.d == 1:
             return self._plot_1d()
+        elif self.d == 2:
+            return self._plot_2d()
+        else:
+            raise NotImplementedError('Dim %d is not supported for plot'%self.d)
 
-        raise NotImplementedError('Dim %d is not supported for plot'%self.d)
-
-    def anim(self, delt=50, ffmpeg_path='./../tmp/ffmpeg'):
+    def anim(self, ffmpeg_path, delt=50):
         '''
-        Build animation for distribution vs time.
+        Build animation for solution vs time.
         '''
 
         fig = plt.figure(figsize=(7, 7))
@@ -146,20 +156,23 @@ class Solver(object):
         return HTML(anim.to_html5_video())
 
     def _plot_1d(self):
+
+        Xg = self.IT.grid()
+        x0 = Xg.reshape(-1)
+
         fig = plt.figure(figsize=(6, 6))
         gs = mpl.gridspec.GridSpec(
             ncols=1, nrows=1, left=0.01, right=0.99, top=0.99, bottom=0.01,
             wspace=0.4, hspace=0.3, width_ratios=[1], height_ratios=[1]
         )
 
-        Xg = self.IT.grid()
-        x0 = Xg.reshape(-1)
-        r1 = self.IT1.calc(Xg).reshape(-1)
-        r2 = self.IT2.calc(Xg).reshape(-1)
-
         ax = fig.add_subplot(gs[0, 0])
-        ax.plot(x0, r1, label='Initial')
-        ax.plot(x0, r2, label='Final (calc)')
+        if self.IT1:
+            r1 = self.IT1.calc(Xg).reshape(-1)
+            ax.plot(x0, r1, label='Initial')
+        if self.IT2:
+            r2 = self.IT2.calc(Xg).reshape(-1)
+            ax.plot(x0, r2, label='Final (calc)')
         if self.func_r:
             r2_real = self.func_r(Xg, self.t_max, Xg).reshape(-1)
             ax.plot(x0, r2_real, label='Final (real)')
@@ -168,6 +181,39 @@ class Solver(object):
         ax.set_xlabel('x')
         ax.set_ylabel('r')
         ax.legend(loc='best')
+
+        plt.show()
+
+    def _plot_2d(self):
+
+        x1d = self.X[0, :self.n]
+        X1, X2 = np.meshgrid(x1d, x1d)
+
+        fig = plt.figure(figsize=(10, 6))
+        gs = mpl.gridspec.GridSpec(
+            ncols=4, nrows=2, left=0.01, right=0.99, top=0.99, bottom=0.01,
+            wspace=0.4, hspace=0.3, width_ratios=[1, 1, 1, 1], height_ratios=[10, 1]
+        )
+
+        if self.IT1:
+            ax = fig.add_subplot(gs[0, :2])
+            ct1 = ax.contourf(X1, X2, self.R[0].reshape((self.n, self.n)))
+            ax.set_title('Initial PDF (t=%f)'%self.t_min)
+            ax.set_xlabel('x1')
+            ax.set_ylabel('x2')
+
+            ax = fig.add_subplot(gs[1, :2])
+            cb = plt.colorbar(ct1, cax=ax, orientation='horizontal')
+
+        if self.IT2:
+            ax = fig.add_subplot(gs[0, 2:])
+            ct2 = ax.contourf(X1, X2, self.R[-1].reshape((self.n, self.n)))
+            ax.set_title('Final PDF (t=%f)'%self.t_max)
+            ax.set_xlabel('x1')
+            ax.set_ylabel('x2')
+
+            ax = fig.add_subplot(gs[1, 2:])
+            cb = plt.colorbar(ct2, cax=ax, orientation='horizontal')
 
         plt.show()
 
