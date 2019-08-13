@@ -34,11 +34,11 @@ class Solver(object):
         l_ = np.repeat(np.array(l).reshape(1, -1), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-    def set_funcs(self, f, f_der, r0, r=None, rs=None):
+    def set_funcs(self, f, f_der, r0, rt=None, rs=None):
         self.func_f = f
         self.func_f_der = f_der
         self.func_r0 = r0
-        self.func_r = r
+        self.func_rt = rt
         self.func_rs = rs
 
     def prep(self):
@@ -74,6 +74,15 @@ class Solver(object):
         self.R.append(self.IT.calc(self.X))
 
     def calc(self):
+
+        def normalize():
+            X = np.linspace(-3., 3., 100)
+            h = X[1] - X[0]
+            X = (X + h/2)[:-1].reshape(1, -1)
+            Y = self.IT.calc(X)
+            r_int = np.sum(Y) * h
+            self.IT.A = self.IT.A / r_int
+
         self._t_calc = 0.
         tqdm_ = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=70)
 
@@ -85,12 +94,7 @@ class Solver(object):
             self.IT0 = self.IT.copy()
             self.IT.init(self.step).prep()
 
-            X = np.linspace(-3., 3., 100)
-            h = X[1] - X[0]
-            X = (X + h/2)[:-1].reshape(1, -1)
-            Y = self.IT.calc(X)
-            r_int = np.sum(Y) * h
-            self.IT.A = self.IT.A / r_int
+            normalize()
 
             self._t_calc+= time.time() - _t
             #tqdm_.set_postfix_str('Error %-8.2e'%0.02, refresh=True)
@@ -115,7 +119,7 @@ class Solver(object):
         r0[I1.reshape(-1)] = 0.
         r0[I2.reshape(-1)] = 0.
 
-        v = 0.5 * self.Z@r0
+        v = self.Z@r0
 
         w = (1. - self.h * np.trace(g)) * v
 
@@ -183,20 +187,21 @@ class Solver(object):
 
         ax = fig.add_subplot(gs[0, 0])
         if self.func_rs:
-            rs_real = self.func_rs(Xg).reshape(-1)
-            ax.plot(x0, rs_real, '--', label='Stationary',
-                color='orange')
+            r = self.func_rs(Xg)
+            ax.plot(x0, r, '--', label='Stationary',
+                linewidth=3, color='magenta')
         if self.IT1:
-            r1 = self.IT1.calc(Xg).reshape(-1)
-            ax.plot(x0, r1, label='Initial',
+            r = self.IT1.calc(Xg).reshape(-1)
+            ax.plot(x0, r, label='Initial',
                 color='tab:blue')
         if self.IT2:
-            r2 = self.IT2.calc(Xg).reshape(-1)
-            ax.plot(x0, r2, label='Final calculated',
+            r = self.IT2.calc(Xg).reshape(-1)
+            ax.plot(x0, r, label='Final calculated',
                 color='tab:green', marker='o', markersize=5, markerfacecolor='lightgreen', markeredgecolor='g')
-        if self.func_r:
-            r2_real = self.func_r(Xg, self.t_max, Xg).reshape(-1)
-            ax.plot(x0, r2_real, label='Final analytical')
+        if self.func_rt:
+            r = self.func_rt(Xg, self.t_max)
+            ax.plot(x0, r, label='Final analytic',
+                color='tab:orange', marker='o', markersize=5, markerfacecolor='orange', markeredgecolor='orange')
         ax.semilogy()
         ax.set_title('Probability density function')
         ax.set_xlabel('x')
