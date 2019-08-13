@@ -6,6 +6,7 @@ from scipy.linalg import expm as expm
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
+from tqdm import tqdm
 
 from intertrain import Intertrain
 
@@ -73,6 +74,7 @@ class Solver(object):
 
     def calc(self):
         self._t_calc = 0.
+        tqdm_ = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=70)
 
         self.IT1 = self.IT.copy()
 
@@ -82,11 +84,23 @@ class Solver(object):
             self.IT0 = self.IT.copy()
             self.IT.init(self.step).prep()
 
+            X = np.linspace(-3., 3., 100)
+            h = X[1] - X[0]
+            X = (X + h/2)[:-1].reshape(1, -1)
+            Y = self.IT.calc(X)
+            r_int = np.sum(Y) * h
+            self.IT.A = self.IT.A / r_int
+
             self._t_calc+= time.time() - _t
+            #tqdm_.set_postfix_str('Error %-8.2e'%0.02, refresh=True)
+            tqdm_.update(1)
 
             self.R.append(self.IT.calc(self.X))
 
+            #if i>2:break
+
         self.IT2 = self.IT.copy()
+        tqdm_.close()
 
     def step(self, X):
         f = self.func_f(X)
@@ -97,14 +111,14 @@ class Solver(object):
         I2 = X0 > +3. # TODO! replace by real x_lim
 
         r0 = self.IT0.calc(X0)
-        #r0[I1.reshape(-1)] = 0.
-        #r0[I2.reshape(-1)] = 0.
+        r0[I1.reshape(-1)] = 0.
+        r0[I2.reshape(-1)] = 0.
 
-        w = (1. - self.h * np.trace(g)) * r0
+        v = 0.5 * self.Z@r0
 
-        v = self.Z@w
+        w = (1. - self.h * np.trace(g)) * v
 
-        return v
+        return w
 
     def info(self):
         print('Info')
