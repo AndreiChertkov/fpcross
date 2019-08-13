@@ -34,11 +34,12 @@ class Solver(object):
         l_ = np.repeat(np.array(l).reshape(1, -1), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-    def set_funcs(self, func_f, func_f_der, func_r0, func_r=None):
-        self.func_f = func_f
-        self.func_f_der = func_f_der
-        self.func_r0 = func_r0
-        self.func_r = func_r
+    def set_funcs(self, f, f_der, r0, r=None, rs=None):
+        self.func_f = f
+        self.func_f_der = f_der
+        self.func_r0 = r0
+        self.func_r = r
+        self.func_rs = rs
 
     def prep(self):
         self._t_prep = None
@@ -181,15 +182,21 @@ class Solver(object):
         )
 
         ax = fig.add_subplot(gs[0, 0])
+        if self.func_rs:
+            rs_real = self.func_rs(Xg).reshape(-1)
+            ax.plot(x0, rs_real, '--', label='Stationary',
+                color='orange')
         if self.IT1:
             r1 = self.IT1.calc(Xg).reshape(-1)
-            ax.plot(x0, r1, label='Initial')
+            ax.plot(x0, r1, label='Initial',
+                color='tab:blue')
         if self.IT2:
             r2 = self.IT2.calc(Xg).reshape(-1)
-            ax.plot(x0, r2, label='Final (calc)')
+            ax.plot(x0, r2, label='Final calculated',
+                color='tab:green', marker='o', markersize=5, markerfacecolor='lightgreen', markeredgecolor='g')
         if self.func_r:
             r2_real = self.func_r(Xg, self.t_max, Xg).reshape(-1)
-            ax.plot(x0, r2_real, label='Final (real)')
+            ax.plot(x0, r2_real, label='Final analytical')
         ax.semilogy()
         ax.set_title('Probability density function')
         ax.set_xlabel('x')
