@@ -390,8 +390,8 @@ class Solver(object):
                 ax.plot(T, r, label='Calculated',
                     color='tab:green', marker='o', markersize=5, markerfacecolor='lightgreen', markeredgecolor='g')
             if self.func_rt:
-                r = [self.func_rt(x_, t)[0] for t in T]
-                ax.plot(T, r, label='Analytic',
+                r = [self.func_rt(x_, t)[0] for t in T[1:]]
+                ax.plot(T[1:], r, label='Analytic',
                     color='tab:orange', marker='o', markersize=5, markerfacecolor='orange', markeredgecolor='orange')
 
             ax.semilogy()
@@ -403,12 +403,12 @@ class Solver(object):
             if self.func_rt:
                 ax = fig.add_subplot(gs[0, 1])
 
-                R1 = np.array([r[i] for r in self.R])
-                R2 = np.array([self.func_rt(x_, t)[0] for t in T])
+                R1 = np.array([r[i] for r in self.R])[1:]
+                R2 = np.array([self.func_rt(x_, t)[0] for t in T])[1:]
                 e = np.abs(R2 - R1) / np.abs(R1)
 
                 ax.semilogy()
-                ax.plot(T, e)
+                ax.plot(T[1:], e)
                 ax.set_title('Error of PDF at x = %-8.4f'%x)
                 ax.set_xlabel('t')
                 ax.set_ylabel('Error')
