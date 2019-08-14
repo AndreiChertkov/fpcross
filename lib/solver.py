@@ -201,17 +201,11 @@ class Solver(object):
         Present info about the last computation.
         '''
 
-        print('Info')
-        print('--- Time grid')
-        print('Time points : %d'%self.t_poi)
-        print('Time min    : %-8.2e'%self.t_min)
-        print('Time max    : %-8.2e'%self.t_max)
-        print('--- Time')
-        print('Prep        : %8.2e sec. '%self._t_prep)
-        print('Calc        : %8.2e sec. '%self._t_calc)
-
-        print('Info from Intertrain')
-        self.IT.info()
+        print('---------- Solver')
+        print('Format   : %1dD, %s'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP'))
+        print('Grid x   : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
+        print('Grid t   : poi = %9d, min = %9.4f, max = %9.4f'%(self.t_poi, self.t_min, self.t_max))
+        print('Time sec : prep = %8.2e, calc = %8.2e'%(self._t_prep, self._t_calc))
 
     def anim(self, ffmpeg_path, delt=50):
         '''
