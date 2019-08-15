@@ -150,28 +150,24 @@ class Solver(object):
             r_int = np.sum(Y) * h
             self.IT.A = self.IT.A / r_int
 
-        self._t_calc = 0.
+        self._t_calc = time.time()
         _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=70)
 
         self.IT1 = self.IT.copy()
 
         for i, t in enumerate(self.T[1:]):
-            _t = time.time()
-
             self.t = t
             self.IT0 = self.IT.copy()
             self.IT.init(self.step).prep()
-
             normalize()
-
-            self._t_calc+= time.time() - _t
-            #tqdm_.set_postfix_str('Error %-8.2e'%0.02, refresh=True)
+            r = self.IT.calc(self.X)
+            self.R.append(r)
+            _tqdm.set_postfix_str('Norm %-8.2e'%np.linalg.norm(r), refresh=True)
             _tqdm.update(1)
-
-            self.R.append(self.IT.calc(self.X))
 
         self.IT2 = self.IT.copy()
 
+        self._t_calc = time.time() - self._t_calc
         _tqdm.close()
 
     def step(self, X):
@@ -183,8 +179,8 @@ class Solver(object):
         f1 = self.func_f1(X, self.t)
 
         X0 = X - self.h * f0
-        I1 = X0 < -3. # TODO! replace by real multidim x_min
-        I2 = X0 > +3. # TODO! replace by real multidim x_lim
+        I1 = X0 < self.x_min # TODO! replace by real multidim x_min
+        I2 = X0 > self.x_max # TODO! replace by real multidim x_lim
 
         r0 = self.IT0.calc(X0)
         r0[I1.reshape(-1)] = 0.
