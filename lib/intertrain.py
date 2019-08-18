@@ -228,25 +228,25 @@ class Intertrain(object):
         if self.with_tt:
             G = tt.tensor.to_list(self.Y)
 
-            for i in range(0, self.Y.d):
-                sh = G[i].shape
+            for i in range(self.d):
+                G_sh = G[i].shape
                 G[i] = np.swapaxes(G[i], 0, 1)
-                G[i] = G[i].reshape((sh[1], -1))
+                G[i] = G[i].reshape((G_sh[1], -1))
                 G[i] = Intertrain.interpolate(G[i])
-                G[i] = G[i].reshape((sh[1], sh[0], sh[2]))
+                G[i] = G[i].reshape((G_sh[1], G_sh[0], G_sh[2]))
                 G[i] = np.swapaxes(G[i], 0, 1)
 
             self.A = tt.tensor.from_list(G)
             self.A = self.A.round(self.eps)
         else:
-            sh = np.array(self.Y.shape)
             self.A = self.Y.copy()
-            for i in range(len(sh)):
-                sh_ = np.hstack([sh[i], sh[np.arange(len(sh))!=i]])
+            for i in range(self.d):
+                n_ = self.n.copy()
+                n_[[0, i]] = n_[[i, 0]]
                 self.A = np.swapaxes(self.A, 0, i)
-                self.A = self.A.reshape((sh[i], -1))
+                self.A = self.A.reshape((self.n[i], -1), order='F')
                 self.A = Intertrain.interpolate(self.A)
-                self.A = self.A.reshape(sh_)
+                self.A = self.A.reshape(n_, order='F')
                 self.A = np.swapaxes(self.A, 0, i)
 
         self._t_prep = time.time() - self._t_prep
@@ -344,7 +344,7 @@ class Intertrain(object):
 
         for i, [n, l] in enumerate(zip(self.n, self.l)):
             opts = (i+1, n, l[0], l[1])
-            print('Dim %-2d       : Poi %-3d | Min %-6.3f | Max %-6.3f |'%opts)
+            print('Dim %-2d           : Poi %-3d | Min %-6.3f | Max %-6.3f |'%opts)
 
         print('------------------ Time')
         print('Init             : %8.2e sec. '%self._t_init)
