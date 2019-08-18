@@ -464,8 +464,8 @@ class Intertrain(object):
         '''
 
         I = [np.arange(self.n[d]).reshape(1, -1) for d in range(self.d)]
-        I = np.meshgrid(*I)
-        I = np.array(I).reshape((self.d, -1))
+        I = np.meshgrid(*I, indexing='ij')
+        I = np.array(I).reshape((self.d, -1), order='F')
 
         return I if is_ind else self.pois(I)
 
