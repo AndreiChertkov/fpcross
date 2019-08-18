@@ -31,6 +31,8 @@ class Solver(object):
         self.eps = eps
         self.with_tt = with_tt
 
+        self.with_norm = True
+
     def set_grid_t(self, t_poi, t_min=0., t_max=1.):
         '''
         Set parameters of the uniform time grid.
@@ -121,9 +123,12 @@ class Solver(object):
         self.J[0, 0] = 0.
         self.J[-1, -1] = 0.
 
-        self.D = self.IT.dif2()
-        self.D = self.J@self.D
-        D_expm = expm(self.D)
+        self.IT.dif2()
+        self.D1 = self.IT.D1
+        self.D2 = self.IT.D2
+
+        D2_ = self.J@self.D2
+        D_expm = expm(D2_)
         self.Z = D_expm.copy()
         for d in range(self.d-1):
             self.Z = kron(self.Z, D_expm)
@@ -159,7 +164,8 @@ class Solver(object):
             self.t = t
             self.IT0 = self.IT.copy()
             self.IT.init(self.step).prep()
-            normalize()
+            if self.with_norm:
+                normalize()
             r = self.IT.calc(self.X)
             self.R.append(r)
             _tqdm.set_postfix_str('Norm %-8.2e'%np.linalg.norm(r), refresh=True)
@@ -259,7 +265,7 @@ class Solver(object):
         from IPython.display import HTML
         return HTML(anim.to_html5_video())
 
-    def plot_x(self, t=None):
+    def plot_x(self, t=None, is_log=True):
         '''
         Plot solution on the spatial grid at time t (by default at final time
         point). Initial value, analytical solution and stationary solution
@@ -298,7 +304,7 @@ class Solver(object):
                 ax.plot(x0, r, label='Analytic',
                     color='tab:orange', marker='o', markersize=5, markerfacecolor='orange', markeredgecolor='orange')
 
-            ax.semilogy()
+            if is_log: ax.semilogy()
             ax.set_title('PDF at t=%-8.4f'%t)
             ax.set_xlabel('x')
             ax.set_ylabel('r')
@@ -346,7 +352,7 @@ class Solver(object):
         else:
             raise NotImplementedError('Dim %d is not supported for plot'%self.d)
 
-    def plot_t(self, x):
+    def plot_t(self, x, is_log=True):
         '''
         Plot solution vs time at the spatial grid point x. Initial value,
         analytical solution and stationary solution are also presented.
@@ -384,7 +390,7 @@ class Solver(object):
                 ax.plot(T[1:], r, label='Analytic',
                     color='tab:orange', marker='o', markersize=5, markerfacecolor='orange', markeredgecolor='orange')
 
-            ax.semilogy()
+            if is_log: ax.semilogy()
             ax.set_title('PDF at x = %-8.4f'%x)
             ax.set_xlabel('t')
             ax.set_ylabel('r')
