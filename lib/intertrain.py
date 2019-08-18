@@ -284,6 +284,12 @@ class Intertrain(object):
             T = Intertrain.polynomials(X, r, self.l)
 
             for j in range(X.shape[1]):
+                is_out = False
+                for i in range(X.shape[0]):
+                    if X[i, j] < self.l[i, 0] or X[i, j] > self.l[i, 1]:
+                        is_out = True
+                if is_out: continue
+
                 B = self.A.real.copy()
                 for i in range(X.shape[0]):
                     F = T[:B.shape[0], i, j]
