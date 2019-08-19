@@ -85,14 +85,14 @@ class Solver(object):
         l_ = np.repeat(np.array([[x_min, x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-    def set_funcs(self, f0, f1, r0, rt=None, rs=None):
+    def set_funcs(self, f0, f1, r0, rt=None, rs=None, s0=1.):
         '''
         Set functions for equation
         d r / d t = Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
         where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
         r0(x) is initial condition, rt(x, t) is optional analytic solution
         and rs(x) is optional stationary solution.
-        * Functions f0 and f1 should return value of the same shape as x
+        * Functions f0, f1 and s0 should return value of the same shape as x
         * Functions r0, rt and rs should return 1D array of length x.shape[1]
         '''
 
@@ -101,6 +101,7 @@ class Solver(object):
         self.func_r0 = r0
         self.func_rt = rt
         self.func_rs = rs
+        self.func_s0 = s0
 
     def prep(self):
         '''
@@ -122,13 +123,16 @@ class Solver(object):
         self.D1 = self.IT.D1
         self.D2 = self.IT.D2
 
-        h = self.h ** (1./self.d)
-        J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
-        D = expm(h * J @ self.D2) @ J
+        if self.func_s0 is not None:
+            h = self.h ** (1./self.d)
+            J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
+            D = expm(h * J @ self.D2) @ J
 
-        self.Z = D.copy()
-        for d in range(self.d-1):
-            self.Z = kron(self.Z, D)
+            self.Z = D.copy()
+            for d in range(self.d-1):
+                self.Z = kron(self.Z, D)
+        else:
+            self.Z = np.eye(self.n**self.d)
 
         self._t_prep = (time.time() - self._t_prep)
 
