@@ -20,18 +20,17 @@ class Solver(object):
         type: int, >= 1
 
         eps - (optional) desired accuracy of the solution
-        type: float > 0
+        type: float, > 0
 
-        with_tt - (optional) if True then the TT-format will be used
-        instead of the dense (numpy) format
+        with_tt - (optional) flag:
+            True  - sparse (TT) format will be used
+            False - dense (numpy) format will be used
         type: bool
         '''
 
         self.d = d
         self.eps = eps
         self.with_tt = with_tt
-
-        self.with_norm = True
 
     def set_grid_t(self, t_poi, t_min=0., t_max=1.):
         '''
@@ -90,11 +89,11 @@ class Solver(object):
         '''
         Set functions for equation
         d r / d t = Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
-        where f0(x, t) is function f, f1(x, t) is its derivative d f / dx,
+        where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
         r0(x) is initial condition, rt(x, t) is optional analytic solution
         and rs(x) is optional stationary solution.
         * Functions f0 and f1 should return value of the same shape as x
-        * Functions r0, rt and rs should return 1D array of len x.shape[1]
+        * Functions r0, rt and rs should return 1D array of length x.shape[1]
         '''
 
         self.func_f0 = f0
@@ -117,24 +116,19 @@ class Solver(object):
 
         self._t_prep = time.time()
 
-        self.I = np.eye(self.n)
-
-        self.J = np.eye(self.n)
-        self.J[0, 0] = 0.
-        self.J[-1, -1] = 0.
+        self.IT.init(self.func_r0).prep()
 
         self.IT.dif2()
         self.D1 = self.IT.D1
         self.D2 = self.IT.D2
 
-        D2_ = self.J@self.D2
-        D_expm = expm(D2_)
-        self.Z = D_expm.copy()
-        for d in range(self.d-1):
-            self.Z = kron(self.Z, D_expm)
-        self.Z = np.exp(self.h) * self.Z @ self.J
+        h = self.h ** (1./self.d)
+        J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
+        D = expm(h * J @ self.D2) @ J
 
-        self.IT.init(self.func_r0).prep()
+        self.Z = D.copy()
+        for d in range(self.d-1):
+            self.Z = kron(self.Z, D)
 
         self._t_prep = (time.time() - self._t_prep)
 
@@ -147,14 +141,6 @@ class Solver(object):
         Calculate solution of the equation (call prep before!).
         '''
 
-        def normalize():
-            X = np.linspace(-3., 3., 100)
-            h = X[1] - X[0]
-            X = (X + h/2)[:-1].reshape(1, -1)
-            Y = self.IT.calc(X)
-            r_int = np.sum(Y) * h
-            self.IT.A = self.IT.A / r_int
-
         self._t_calc = time.time()
         _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=70)
 
@@ -162,12 +148,13 @@ class Solver(object):
 
         for i, t in enumerate(self.T[1:]):
             self.t = t
+
             self.IT0 = self.IT.copy()
             self.IT.init(self.step).prep()
-            if self.with_norm:
-                normalize()
+
             r = self.IT.calc(self.X)
             self.R.append(r)
+
             _tqdm.set_postfix_str('Norm %-8.2e'%np.linalg.norm(r), refresh=True)
             _tqdm.update(1)
 
@@ -182,21 +169,13 @@ class Solver(object):
         '''
 
         f0 = self.func_f0(X, self.t)
-        f1 = self.func_f1(X, self.t)
-
         X0 = X - self.h * f0
-        I1 = X0 < self.x_min # TODO! replace by real multidim x_min
-        I2 = X0 > self.x_max # TODO! replace by real multidim x_lim
-
+        f1 = self.func_f1(X0, self.t - self.h)
         r0 = self.IT0.calc(X0)
-        r0[I1.reshape(-1)] = 0.
-        r0[I2.reshape(-1)] = 0.
 
-        v = self.Z@r0
+        r = (1. - self.h * np.trace(f1)) * self.Z @ r0
 
-        w = (1. - self.h * np.trace(f1)) * v
-
-        return w
+        return r
 
     def info(self):
         '''
@@ -265,12 +244,17 @@ class Solver(object):
         from IPython.display import HTML
         return HTML(anim.to_html5_video())
 
-    def plot_x(self, t=None, is_log=True):
+    def plot_x(self, t=None, is_log=True, is_abs=False):
         '''
         Plot solution on the spatial grid at time t (by default at final time
         point). Initial value, analytical solution and stationary solution
         are also presented on the plot.
         '''
+
+        def _prep(r):
+            if not isinstance(r, np.ndarray):
+                r = np.array(r)
+            return np.abs(r) if is_abs else r
 
         def _plot_1d(t):
             i = -1 if t is None else (np.abs(self.T - t)).argmin()
@@ -289,23 +273,27 @@ class Solver(object):
 
             if self.func_rs:
                 r = self.func_rs(Xg)
-                ax.plot(x0, r, '--', label='Stationary',
+                ax.plot(x0, _prep(r), '--', label='Stationary',
                     linewidth=3, color='magenta')
             if self.IT1:
                 r = self.IT1.calc(Xg).reshape(-1)
-                ax.plot(x0, r, label='Initial',
+                ax.plot(x0, _prep(r), label='Initial',
                     color='tab:blue')
             if self.IT2:
                 r = self.IT2.calc(Xg).reshape(-1)
-                ax.plot(x0, r, label='Calculated',
+                ax.plot(x0, _prep(r), label='Calculated',
                     color='tab:green', marker='o', markersize=5, markerfacecolor='lightgreen', markeredgecolor='g')
             if self.func_rt:
                 r = self.func_rt(Xg, t)
-                ax.plot(x0, r, label='Analytic',
+                ax.plot(x0, _prep(r), label='Analytic',
                     color='tab:orange', marker='o', markersize=5, markerfacecolor='orange', markeredgecolor='orange')
 
-            if is_log: ax.semilogy()
-            ax.set_title('PDF at t=%-8.4f'%t)
+            if is_log:
+                ax.semilogy()
+            if is_abs:
+                ax.set_title('PDF at t=%-8.4f (abs. value)'%t)
+            else:
+                ax.set_title('PDF at t=%-8.4f'%t)
             ax.set_xlabel('x')
             ax.set_ylabel('r')
             ax.legend(loc='best')
@@ -352,11 +340,16 @@ class Solver(object):
         else:
             raise NotImplementedError('Dim %d is not supported for plot'%self.d)
 
-    def plot_t(self, x, is_log=True):
+    def plot_t(self, x, is_log=True, is_abs=False):
         '''
         Plot solution vs time at the spatial grid point x. Initial value,
         analytical solution and stationary solution are also presented.
         '''
+
+        def _prep(r):
+            if not isinstance(r, np.ndarray):
+                r = np.array(r)
+            return np.abs(r) if is_abs else r
 
         def _plot_1d(x):
             T = self.T
@@ -375,23 +368,27 @@ class Solver(object):
 
             if self.func_rs:
                 r = np.ones(len(T)) * self.func_rs(x_)[0]
-                ax.plot(T, r, '--', label='Stationary',
+                ax.plot(T, _prep(r), '--', label='Stationary',
                     linewidth=3, color='magenta')
             if self.IT1:
                 r = np.ones(len(T)) * self.IT1.calc(x_).reshape(-1)
-                ax.plot(T, r, label='Initial',
+                ax.plot(T, _prep(r), label='Initial',
                     color='tab:blue')
             if self.IT2:
                 r = [r[i] for r in self.R]
-                ax.plot(T, r, label='Calculated',
+                ax.plot(T, _prep(r), label='Calculated',
                     color='tab:green', marker='o', markersize=5, markerfacecolor='lightgreen', markeredgecolor='g')
             if self.func_rt:
                 r = [self.func_rt(x_, t)[0] for t in T[1:]]
-                ax.plot(T[1:], r, label='Analytic',
+                ax.plot(T[1:], _prep(r), label='Analytic',
                     color='tab:orange', marker='o', markersize=5, markerfacecolor='orange', markeredgecolor='orange')
 
-            if is_log: ax.semilogy()
-            ax.set_title('PDF at x = %-8.4f'%x)
+            if is_log:
+                ax.semilogy()
+            if is_abs:
+                ax.set_title('PDF at x = %-8.4f (abs. value)'%x)
+            else:
+                ax.set_title('PDF at x = %-8.4f'%x)
             ax.set_xlabel('t')
             ax.set_ylabel('r')
             ax.legend(loc='best')
