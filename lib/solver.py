@@ -318,30 +318,30 @@ class Solver(object):
 
             ax = fig.add_subplot(gs[0, 0])
 
-            if self.func_rs:
-                r = self.func_rs(self.X)
-                ax.plot(
-                    x0, _prep(r), '--', label='Stationary',
-                    linewidth=3, color='magenta'
-                )
             if self.IT1:
                 r = self.IT1.calc(self.X).reshape(-1)
                 ax.plot(
                     x0, _prep(r), '--', label='Initial',
                     linewidth=3, color='tab:blue'
                 )
-            if self.IT2:
-                r = self.R[i]
-                ax.plot(
-                    x0, _prep(r), label='Calculated',
-                    linewidth=0, color='tab:green', marker='o', markersize=7,
-                    markerfacecolor='lightgreen', markeredgecolor='g'
-                )
             if self.func_rt:
                 r = self.func_rt(self.X, t)
                 ax.plot(
                     x0, _prep(r), label='Analytic',
-                    linewidth=3, color='tab:orange'
+                    linewidth=3, color='black'
+                )
+            if self.func_rs:
+                r = self.func_rs(self.X)
+                ax.plot(
+                    x0, _prep(r), '--', label='Stationary',
+                    linewidth=2, color='magenta'
+                )
+            if self.IT2:
+                r = self.R[i]
+                ax.plot(
+                    x0, _prep(r), label='Calculated',
+                    linewidth=1, color='tab:green', marker='o', markersize=6,
+                    markerfacecolor='lightgreen', markeredgecolor='g'
                 )
 
             if is_log:
@@ -450,30 +450,30 @@ class Solver(object):
 
             ax = fig.add_subplot(gs[0, 0])
 
-            if self.func_rs:
-                r = np.ones(len(self.T)) * self.func_rs(x_)[0]
-                ax.plot(
-                    self.T, _prep(r), '--', label='Stationary',
-                    linewidth=3, color='magenta'
-                )
             if self.IT1:
                 r = np.ones(len(self.T)) * self.IT1.calc(x_)[0]
                 ax.plot(
                     self.T, _prep(r), '--', label='Initial',
                     linewidth=3, color='tab:blue'
                 )
-            if self.IT2:
-                r = [r[i] for r in self.R]
-                ax.plot(
-                    self.T, _prep(r), label='Calculated',
-                    linewidth=0, color='tab:green', marker='o', markersize=7,
-                    markerfacecolor='lightgreen', markeredgecolor='g'
-                )
             if self.func_rt:
                 r = [self.func_rt(x_, t)[0] for t in self.T[1:]]
                 ax.plot(
                     self.T[1:], _prep(r), label='Analytic',
-                    linewidth=3, color='tab:orange'
+                    linewidth=3, color='black'
+                )
+            if self.func_rs:
+                r = np.ones(len(self.T)) * self.func_rs(x_)[0]
+                ax.plot(
+                    self.T, _prep(r), '--', label='Stationary',
+                    linewidth=2, color='magenta'
+                )
+            if self.IT2:
+                r = [r[i] for r in self.R]
+                ax.plot(
+                    self.T, _prep(r), label='Calculated',
+                    linewidth=1, color='tab:green', marker='o', markersize=6,
+                    markerfacecolor='lightgreen', markeredgecolor='g'
                 )
 
             if is_log:
