@@ -23,8 +23,8 @@ class Solver(object):
         type: float, > 0
 
         with_tt - (optional) flag:
-            True  - sparse (TT) format will be used
-            False - dense (numpy) format will be used
+            True  - sparse (tensor train, TT) format will be used
+            False - dense (numpy, NP) format will be used
         type: bool
         '''
 
@@ -48,6 +48,14 @@ class Solver(object):
         type: float, > t_min
         '''
 
+        if t_poi < 2:
+            s = 'Invalid number of time points (should be at least 2).'
+            raise ValueError(s)
+
+        if t_min >= t_max:
+            s = 'Ivalid time limits (min should be less of max).'
+            raise ValueError(s)
+
         self.t_poi = t_poi
         self.t_min = t_min
         self.t_max = t_max
@@ -57,11 +65,10 @@ class Solver(object):
 
         self.T = np.linspace(t_min, t_max, t_poi)
 
-        self.t = self.t_min # Current time
-
     def set_grid_x(self, x_poi, x_min=-3., x_max=3.):
         '''
         Set parameters of the Chebyshev spatial grid.
+        * For each dimension the same number of points and limits are used.
 
         INPUT:
 
@@ -74,6 +81,14 @@ class Solver(object):
         x_max - (optional) max value of the spatial variable for each dimension
         type: float, > x_min
         '''
+
+        if x_poi < 2:
+            s = 'Invalid number of spatial points (should be at least 2).'
+            raise ValueError(s)
+
+        if x_min >= x_max:
+            s = 'Ivalid spatial limits (min should be less of max).'
+            raise ValueError(s)
 
         self.x_poi = x_poi
         self.x_min = x_min
@@ -105,7 +120,8 @@ class Solver(object):
 
     def prep(self):
         '''
-        Prepare calculation parameters and interpolation of initial condition.
+        Init calculation parameters, prepare interpolation of
+        the initial condition and calculate special matrices.
         '''
 
         self._t_prep = None
@@ -114,6 +130,9 @@ class Solver(object):
         self.IT0 = None # Interpolant from the previous step
         self.IT1 = None # Initial interpolant
         self.IT2 = None # Final interpolant
+
+        self.k = 0          # Current time step
+        self.t = self.t_min # Current time value
 
         self._t_prep = time.time()
 
@@ -151,6 +170,7 @@ class Solver(object):
         self.IT1 = self.IT.copy()
 
         for i, t in enumerate(self.T[1:]):
+            self.k+= 1
             self.t = t
 
             self.IT0 = self.IT.copy()
@@ -194,7 +214,15 @@ class Solver(object):
 
     def anim(self, ffmpeg_path, delt=50):
         '''
-        Build animation for solution vs time.
+        Build animation for solution on the spatial grid vs time.
+
+        INPUT:
+
+        ffmpeg_path - path to the ffmpeg executable
+        type: str
+
+        delt - (optional) number of frames per second
+        type: int, > 0
         '''
 
         def _anim_1d(ax):
@@ -215,6 +243,7 @@ class Solver(object):
             return run
 
         def _anim_2d(ax):
+            return # DRAFT
             x1d = self.X[0, :self.n]
             X1, X2 = np.meshgrid(x1d, x1d)
 
@@ -236,23 +265,37 @@ class Solver(object):
 
         if self.d == 1:
             run = _anim_1d(ax)
-        #elif self.d == 2:
-        #    run = _anim_2d(ax)
         else:
-            raise NotImplementedError('Dim %d is not supported for anim'%self.d)
+            s = 'Dimension number %d is not supported for animation.'%self.d
+            raise NotImplementedError(s)
 
         plt.rcParams['animation.ffmpeg_path'] = ffmpeg_path
         anim = animation.FuncAnimation(
-            fig, run, frames=len(self.T), interval=delt, blit=False)
+            fig, run, frames=len(self.T), interval=delt, blit=False
+        )
 
         from IPython.display import HTML
         return HTML(anim.to_html5_video())
 
-    def plot_x(self, t=None, is_log=True, is_abs=False):
+    def plot_x(self, t=None, is_log=False, is_abs=False):
         '''
         Plot solution on the spatial grid at time t (by default at final time
         point). Initial value, analytical solution and stationary solution
         are also presented on the plot.
+        * For the given t it finds the closest point on the time grid.
+
+        INPUT:
+
+        t - time point for plot
+        type: float
+
+        is_log - (optional) flag:
+            True  - log y-axis will be used for PDF values
+            False - simple y-axis will be used for PDF values
+
+        is_abs - (optional) flag:
+            True  - absolute values will be presented for PDF
+            False - original values will be presented for PDF
         '''
 
         def _prep(r):
@@ -264,7 +307,7 @@ class Solver(object):
             i = -1 if t is None else (np.abs(self.T - t)).argmin()
             t = self.T[i]
 
-            Xg = self.IT.grid()
+            Xg = self.X
             x0 = Xg.reshape(-1)
 
             fig = plt.figure(figsize=(10, 5))
@@ -276,21 +319,31 @@ class Solver(object):
             ax = fig.add_subplot(gs[0, 0])
 
             if self.func_rs:
-                r = self.func_rs(Xg)
-                ax.plot(x0, _prep(r), '--', label='Stationary',
-                    linewidth=3, color='magenta')
+                r = self.func_rs(self.X)
+                ax.plot(
+                    x0, _prep(r), '--', label='Stationary',
+                    linewidth=3, color='magenta'
+                )
             if self.IT1:
-                r = self.IT1.calc(Xg).reshape(-1)
-                ax.plot(x0, _prep(r), label='Initial',
-                    color='tab:blue')
+                r = self.IT1.calc(self.X).reshape(-1)
+                ax.plot(
+                    x0, _prep(r), label='Initial',
+                    color='tab:blue'
+                )
             if self.IT2:
-                r = self.IT2.calc(Xg).reshape(-1)
-                ax.plot(x0, _prep(r), label='Calculated',
-                    color='tab:green', marker='o', markersize=5, markerfacecolor='lightgreen', markeredgecolor='g')
+                r = self.IT2.calc(self.X).reshape(-1)
+                ax.plot(
+                    x0, _prep(r), label='Calculated',
+                    color='tab:green', marker='o', markersize=5,
+                    markerfacecolor='lightgreen', markeredgecolor='g'
+                )
             if self.func_rt:
-                r = self.func_rt(Xg, t)
-                ax.plot(x0, _prep(r), label='Analytic',
-                    color='tab:orange', marker='o', markersize=5, markerfacecolor='orange', markeredgecolor='orange')
+                r = self.func_rt(self.X, t)
+                ax.plot(
+                    x0, _prep(r), label='Analytic',
+                    color='tab:orange', marker='o', markersize=5,
+                    markerfacecolor='orange', markeredgecolor='orange'
+                )
 
             if is_log:
                 ax.semilogy()
@@ -305,7 +358,7 @@ class Solver(object):
             plt.show()
 
         def _plot_2d(t):
-
+            return # DRAFT
             x1d = self.X[0, :self.n]
             X1, X2 = np.meshgrid(x1d, x1d)
 
@@ -339,15 +392,29 @@ class Solver(object):
 
         if self.d == 1:
             return _plot_1d(t)
-        #elif self.d == 2:
-        #    return _plot_2d(t)
         else:
-            raise NotImplementedError('Dim %d is not supported for plot'%self.d)
+            s = 'Dimension number %d is not supported for plot.'%self.d
+            raise NotImplementedError(s)
 
-    def plot_t(self, x, is_log=True, is_abs=False):
+    def plot_t(self, x, is_log=False, is_abs=False):
         '''
         Plot solution vs time at the spatial grid point x. Initial value,
         analytical solution and stationary solution are also presented.
+        * For the given x it finds the closest point on the spatial grid.
+
+        INPUT:
+
+        x - spatial point for plot
+        type: ndarray (or list) [dimensions] of float
+        * In the case of 1D it may be float
+
+        is_log - (optional) flag:
+            True  - log y-axis will be used for PDF values
+            False - simple y-axis will be used for PDF values
+
+        is_abs - (optional) flag:
+            True  - absolute values will be presented for PDF
+            False - original values will be presented for PDF
         '''
 
         def _prep(r):
@@ -356,10 +423,10 @@ class Solver(object):
             return np.abs(r) if is_abs else r
 
         def _plot_1d(x):
-            T = self.T
-            X = self.IT.grid()
-            i = (np.abs(X.reshape(-1) - x)).argmin()
-            x = X.reshape(-1)[i]
+            if isinstance(x, (list, np.ndarray)):
+                x = x[0]
+            i = (np.abs(self.X.reshape(-1) - x)).argmin()
+            x = self.X.reshape(-1)[i]
             x_ = np.array([[x]])
 
             fig = plt.figure(figsize=(10, 5))
@@ -371,21 +438,31 @@ class Solver(object):
             ax = fig.add_subplot(gs[0, 0])
 
             if self.func_rs:
-                r = np.ones(len(T)) * self.func_rs(x_)[0]
-                ax.plot(T, _prep(r), '--', label='Stationary',
-                    linewidth=3, color='magenta')
+                r = np.ones(len(self.T)) * self.func_rs(x_)[0]
+                ax.plot(
+                    self.T, _prep(r), '--', label='Stationary',
+                    linewidth=3, color='magenta'
+                )
             if self.IT1:
-                r = np.ones(len(T)) * self.IT1.calc(x_).reshape(-1)
-                ax.plot(T, _prep(r), label='Initial',
-                    color='tab:blue')
+                r = np.ones(len(self.T)) * self.IT1.calc(x_)[0]
+                ax.plot(
+                    self.T, _prep(r), label='Initial',
+                    color='tab:blue'
+                )
             if self.IT2:
                 r = [r[i] for r in self.R]
-                ax.plot(T, _prep(r), label='Calculated',
-                    color='tab:green', marker='o', markersize=5, markerfacecolor='lightgreen', markeredgecolor='g')
+                ax.plot(
+                    self.T, _prep(r), label='Calculated',
+                    color='tab:green', marker='o', markersize=5,
+                    markerfacecolor='lightgreen', markeredgecolor='g'
+                )
             if self.func_rt:
-                r = [self.func_rt(x_, t)[0] for t in T[1:]]
-                ax.plot(T[1:], _prep(r), label='Analytic',
-                    color='tab:orange', marker='o', markersize=5, markerfacecolor='orange', markeredgecolor='orange')
+                r = [self.func_rt(x_, t)[0] for t in self.T[1:]]
+                ax.plot(
+                    self.T[1:], _prep(r), label='Analytic',
+                    color='tab:orange', marker='o', markersize=5,
+                    markerfacecolor='orange', markeredgecolor='orange'
+                )
 
             if is_log:
                 ax.semilogy()
@@ -401,11 +478,12 @@ class Solver(object):
                 ax = fig.add_subplot(gs[0, 1])
 
                 R1 = np.array([r[i] for r in self.R])[1:]
-                R2 = np.array([self.func_rt(x_, t)[0] for t in T])[1:]
+                R2 = np.array([self.func_rt(x_, t)[0] for t in self.T[1:]])
                 e = np.abs(R2 - R1) / np.abs(R1)
 
+                ax.plot(self.T[1:], e)
+
                 ax.semilogy()
-                ax.plot(T[1:], e)
                 ax.set_title('Error of PDF at x = %-8.4f'%x)
                 ax.set_xlabel('t')
                 ax.set_ylabel('Error')
@@ -415,4 +493,5 @@ class Solver(object):
         if self.d == 1:
             return _plot_1d(x)
         else:
-            raise NotImplementedError('Dim %d is not supported for plot'%self.d)
+            s = 'Dimension number %d is not supported for plot.'%self.d
+            raise NotImplementedError(s)
