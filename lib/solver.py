@@ -327,22 +327,21 @@ class Solver(object):
             if self.IT1:
                 r = self.IT1.calc(self.X).reshape(-1)
                 ax.plot(
-                    x0, _prep(r), label='Initial',
-                    color='tab:blue'
+                    x0, _prep(r), '--', label='Initial',
+                    linewidth=3, color='tab:blue'
                 )
             if self.IT2:
-                r = self.IT2.calc(self.X).reshape(-1)
+                r = self.R[i]
                 ax.plot(
                     x0, _prep(r), label='Calculated',
-                    color='tab:green', marker='o', markersize=5,
+                    linewidth=0, color='tab:green', marker='o', markersize=7,
                     markerfacecolor='lightgreen', markeredgecolor='g'
                 )
             if self.func_rt:
                 r = self.func_rt(self.X, t)
                 ax.plot(
                     x0, _prep(r), label='Analytic',
-                    color='tab:orange', marker='o', markersize=5,
-                    markerfacecolor='orange', markeredgecolor='orange'
+                    linewidth=3, color='tab:orange'
                 )
 
             if is_log:
@@ -354,6 +353,20 @@ class Solver(object):
             ax.set_xlabel('x')
             ax.set_ylabel('r')
             ax.legend(loc='best')
+
+            if self.func_rt:
+                ax = fig.add_subplot(gs[0, 1])
+
+                R1 = self.R[i]
+                R2 = self.func_rt(self.X, t)
+                e = np.abs(R2 - R1) / np.abs(R1)
+
+                ax.plot(x0, e)
+
+                ax.semilogy()
+                ax.set_title('Error of PDF at t = %-8.4f'%t)
+                ax.set_xlabel('t')
+                ax.set_ylabel('Error')
 
             plt.show()
 
@@ -446,22 +459,21 @@ class Solver(object):
             if self.IT1:
                 r = np.ones(len(self.T)) * self.IT1.calc(x_)[0]
                 ax.plot(
-                    self.T, _prep(r), label='Initial',
-                    color='tab:blue'
+                    self.T, _prep(r), '--', label='Initial',
+                    linewidth=3, color='tab:blue'
                 )
             if self.IT2:
                 r = [r[i] for r in self.R]
                 ax.plot(
                     self.T, _prep(r), label='Calculated',
-                    color='tab:green', marker='o', markersize=5,
+                    linewidth=0, color='tab:green', marker='o', markersize=7,
                     markerfacecolor='lightgreen', markeredgecolor='g'
                 )
             if self.func_rt:
                 r = [self.func_rt(x_, t)[0] for t in self.T[1:]]
                 ax.plot(
                     self.T[1:], _prep(r), label='Analytic',
-                    color='tab:orange', marker='o', markersize=5,
-                    markerfacecolor='orange', markeredgecolor='orange'
+                    linewidth=3, color='tab:orange'
                 )
 
             if is_log:
