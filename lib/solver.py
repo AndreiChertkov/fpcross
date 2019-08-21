@@ -124,6 +124,8 @@ class Solver(object):
         the initial condition and calculate special matrices.
         '''
 
+        _t = []
+
         self._t_prep = None
         self._t_calc = None
 
@@ -134,7 +136,8 @@ class Solver(object):
         self.k = 0          # Current time step
         self.t = self.t_min # Current time value
 
-        self._t_prep = time.time()
+
+        _t.append(time.time())
 
         self.IT.init(self.func_r0).prep()
 
@@ -153,23 +156,28 @@ class Solver(object):
         else:
             self.Z = np.eye(self.n**self.d)
 
-        self._t_prep = (time.time() - self._t_prep)
+        _t[-1] = time.time() - _t[-1]
+
+        self._t_prep = sum(_t)
 
         self.X = self.IT.grid()
         self.R = []
         self.R.append(self.IT.calc(self.X))
+
+        self.IT1 = self.IT.copy()
 
     def calc(self):
         '''
         Calculate solution of the equation (call prep before!).
         '''
 
-        self._t_calc = time.time()
+        _t = []
+
         _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=70)
 
-        self.IT1 = self.IT.copy()
-
         for i, t in enumerate(self.T[1:]):
+            _t.append(time.time())
+
             self.k+= 1
             self.t = t
 
@@ -177,15 +185,19 @@ class Solver(object):
             self.IT.init(self.step).prep()
 
             r = self.IT.calc(self.X)
+
+            _t[-1] = time.time() - _t[-1]
+
             self.R.append(r)
 
             _tqdm.set_postfix_str('Norm %-8.2e'%np.linalg.norm(r), refresh=True)
             _tqdm.update(1)
 
+        _tqdm.close()
+
         self.IT2 = self.IT.copy()
 
-        self._t_calc = time.time() - self._t_calc
-        _tqdm.close()
+        self._t_calc = sum(_t)
 
     def step(self, X):
         '''
@@ -194,9 +206,10 @@ class Solver(object):
 
         f0 = self.func_f0(X, self.t)
         X0 = X - self.h * f0
-        f1 = self.func_f1(X0, self.t - self.h)
+
         r0 = self.IT0.calc(X0)
 
+        f1 = self.func_f1(X0, self.t - self.h)
         r = (1. - self.h * np.trace(f1)) * self.Z @ r0
 
         return r
@@ -277,7 +290,7 @@ class Solver(object):
         from IPython.display import HTML
         return HTML(anim.to_html5_video())
 
-    def plot_x(self, t=None, is_log=False, is_abs=False):
+    def plot_x(self, t=None, is_log=False, is_abs=False, is_err_abs=False):
         '''
         Plot solution on the spatial grid at time t (by default at final time
         point). Initial value, analytical solution and stationary solution
@@ -296,6 +309,12 @@ class Solver(object):
         is_abs - (optional) flag:
             True  - absolute values will be presented for PDF
             False - original values will be presented for PDF
+
+        is_err_abs - (optional) flag:
+            True  - absolute error will be plotted
+            * err = abs(u_real - u_calc)
+            False - relative error will be plotted
+            * err = abs(u_real - u_calc) / abs(u_real)
         '''
 
         def _prep(r):
@@ -359,12 +378,17 @@ class Solver(object):
 
                 R1 = self.R[i]
                 R2 = self.func_rt(self.X, t)
-                e = np.abs(R2 - R1) / np.abs(R1)
+                e = np.abs(R2 - R1)
+                if not is_err_abs:
+                    e/= np.abs(R1)
 
                 ax.plot(x0, e)
 
                 ax.semilogy()
-                ax.set_title('Error of PDF at t = %-8.4f'%t)
+                if is_err_abs:
+                    ax.set_title('Absolute error of PDF at t = %-8.4f'%t)
+                else:
+                    ax.set_title('Relative error of PDF at t = %-8.4f'%t)
                 ax.set_xlabel('t')
                 ax.set_ylabel('Error')
 
@@ -409,7 +433,7 @@ class Solver(object):
             s = 'Dimension number %d is not supported for plot.'%self.d
             raise NotImplementedError(s)
 
-    def plot_t(self, x, is_log=False, is_abs=False):
+    def plot_t(self, x, is_log=False, is_abs=False, is_err_abs=False):
         '''
         Plot solution vs time at the spatial grid point x. Initial value,
         analytical solution and stationary solution are also presented.
@@ -428,6 +452,12 @@ class Solver(object):
         is_abs - (optional) flag:
             True  - absolute values will be presented for PDF
             False - original values will be presented for PDF
+
+        is_err_abs - (optional) flag:
+            True  - absolute error will be plotted
+            * err = abs(u_real - u_calc)
+            False - relative error will be plotted
+            * err = abs(u_real - u_calc) / abs(u_real)
         '''
 
         def _prep(r):
@@ -491,12 +521,17 @@ class Solver(object):
 
                 R1 = np.array([r[i] for r in self.R])[1:]
                 R2 = np.array([self.func_rt(x_, t)[0] for t in self.T[1:]])
-                e = np.abs(R2 - R1) / np.abs(R1)
+                e = np.abs(R2 - R1)
+                if not is_err_abs:
+                    e/= np.abs(R1)
 
                 ax.plot(self.T[1:], e)
 
                 ax.semilogy()
-                ax.set_title('Error of PDF at x = %-8.4f'%x)
+                if is_err_abs:
+                    ax.set_title('Absolute error of PDF at x = %-8.4f'%x)
+                else:
+                    ax.set_title('Relative error of PDF at x = %-8.4f'%x)
                 ax.set_xlabel('t')
                 ax.set_ylabel('Error')
 
