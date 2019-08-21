@@ -209,8 +209,12 @@ class Solver(object):
 
         r0 = self.IT0.calc(X0)
 
+        r1 = self.Z @ r0
+
         f1 = self.func_f1(X0, self.t - self.h)
-        r = (1. - self.h * np.trace(f1)) * self.Z @ r0
+        r2 = (1. - self.h * np.trace(f1)) * r1
+
+        r = r2
 
         return r
 
