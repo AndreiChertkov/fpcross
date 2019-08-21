@@ -343,6 +343,13 @@ class Solver(object):
                     x0, _prep(r), '--', label='Initial',
                     linewidth=3, color='tab:blue'
                 )
+            if self.IT2:
+                r = self.R[i]
+                ax.plot(
+                    x0, _prep(r), label='Calculated',
+                    linewidth=1, color='tab:green', marker='o', markersize=7,
+                    markerfacecolor='lightgreen', markeredgecolor='g'
+                )
             if self.func_rt:
                 r = self.func_rt(self.X, t)
                 ax.plot(
@@ -354,13 +361,6 @@ class Solver(object):
                 ax.plot(
                     x0, _prep(r), '--', label='Stationary',
                     linewidth=2, color='magenta'
-                )
-            if self.IT2:
-                r = self.R[i]
-                ax.plot(
-                    x0, _prep(r), label='Calculated',
-                    linewidth=1, color='tab:green', marker='o', markersize=6,
-                    markerfacecolor='lightgreen', markeredgecolor='g'
                 )
 
             if is_log:
@@ -486,6 +486,13 @@ class Solver(object):
                     self.T, _prep(r), '--', label='Initial',
                     linewidth=3, color='tab:blue'
                 )
+            if self.IT2:
+                r = [r[i] for r in self.R]
+                ax.plot(
+                    self.T, _prep(r), label='Calculated',
+                    linewidth=1, color='tab:green', marker='o', markersize=7,
+                    markerfacecolor='lightgreen', markeredgecolor='g'
+                )
             if self.func_rt:
                 r = [self.func_rt(x_, t)[0] for t in self.T[1:]]
                 ax.plot(
@@ -497,13 +504,6 @@ class Solver(object):
                 ax.plot(
                     self.T, _prep(r), '--', label='Stationary',
                     linewidth=2, color='magenta'
-                )
-            if self.IT2:
-                r = [r[i] for r in self.R]
-                ax.plot(
-                    self.T, _prep(r), label='Calculated',
-                    linewidth=1, color='tab:green', marker='o', markersize=6,
-                    markerfacecolor='lightgreen', markeredgecolor='g'
                 )
 
             if is_log:
