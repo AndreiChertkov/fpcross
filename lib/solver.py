@@ -3,6 +3,7 @@ import time
 import numpy as np
 from numpy import kron as kron
 from scipy.linalg import expm as expm
+from scipy.integrate import solve_ivp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
@@ -12,7 +13,7 @@ from intertrain import Intertrain
 
 class Solver(object):
 
-    def __init__(self, d, eps=1.E-6, with_tt=True):
+    def __init__(self, d, eps=1.E-6, acc=1, with_tt=True):
         '''
         INPUT:
 
@@ -22,6 +23,9 @@ class Solver(object):
         eps - (optional) desired accuracy of the solution
         type: float, > 0
 
+        acc - (optional) desired order of approximation
+        type: int, 1 or 2
+
         with_tt - (optional) flag:
             True  - sparse (tensor train, TT) format will be used
             False - dense (numpy, NP) format will be used
@@ -30,6 +34,7 @@ class Solver(object):
 
         self.d = d
         self.eps = eps
+        self.acc = acc
         self.with_tt = with_tt
 
     def set_grid_t(self, t_poi, t_min=0., t_max=1.):
@@ -146,7 +151,12 @@ class Solver(object):
         self.D2 = self.IT.D2
 
         if self.func_s0 is not None:
-            h = self.h ** (1./self.d)
+            if self.acc == 1:
+                h = (self.h) ** (1./self.d)
+            if self.acc == 2:
+                h = (self.h/2) ** (1./self.d)
+            if self.acc == 3:
+                h = (self.h) ** (1./self.d)
             J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
             D = expm(h * J @ self.D2) @ J
 
@@ -182,7 +192,13 @@ class Solver(object):
             self.t = t
 
             self.IT0 = self.IT.copy()
-            self.IT.init(self.step).prep()
+
+            if self.acc == 1:
+                self.IT.init(self.step1).prep()
+            if self.acc == 2:
+                self.IT.init(self.step2).prep()
+            if self.acc == 3:
+                self.IT.init(self.step_xxx).prep()
 
             r = self.IT.calc(self.X)
 
@@ -199,9 +215,100 @@ class Solver(object):
 
         self._t_calc = sum(_t)
 
-    def step(self, X):
+    def step_xxx(self, X):
+        return (self.step_xxx_1(X) + self.step_xxx_2(X)) / 2.
+
+    def step_xxx_1(self, X):
+
+        def func_x(t, v):
+            x = v.reshape(self.d, -1)
+            f0 = self.func_f0(x, t)
+            res = f0
+            return res
+
+        def func_r(t, v):
+            x = v[:-1].reshape(self.d, -1)
+            r = v[-1]
+            f0 = self.func_f0(x, t)
+            f1 = self.func_f1(x, t)
+            res = [
+                *list(f0.reshape(-1)),
+                -np.trace(f1) * r
+            ]
+            return res
+
+        X0 = X.copy()
+        for j in range(X.shape[1]):
+            v1 = X[:, j]
+            v2 = solve_ivp(func_x, [self.t, self.t - self.h], v1).y[:, -1]
+            X0[:, j] = v2
+
+        r0 = self.IT0.calc(X0)
+
+        r1 = r0.copy()
+        for j in range(X.shape[1]):
+            v1 = [*list(X0[:, j]), r1[j]]
+            v2 = solve_ivp(func_r, [self.t-self.h, self.t], v1).y[:, -1]
+            r1[j] = v2[-1]
+
+        r2 = self.Z @ r1
+
+        r = r2
+
+        return r.reshape(-1)
+
+    def step_xxx_2(self, X):
+
+        def func_x(t, v):
+            x = v.reshape(self.d, -1)
+            f0 = self.func_f0(x, t)
+            res = f0
+            return res
+
+        def func_r(t, v):
+            x = v[:-1].reshape(self.d, -1)
+            r = v[-1]
+            f0 = self.func_f0(x, t)
+            f1 = self.func_f1(x, t)
+            res = [
+                *list(f0.reshape(-1)),
+                -np.trace(f1) * r
+            ]
+            return res
+
+        X0 = X.copy()
+        for j in range(X.shape[1]):
+            v1 = X[:, j]
+            v2 = solve_ivp(func_x, [self.t, self.t - self.h], v1).y[:, -1]
+            X0[:, j] = v2
+
+        r0 = self.IT0.calc(X0)
+
+        r1 = self.Z @ r0
+
+        r2 = r0.copy()
+        for j in range(X.shape[1]):
+            v1 = [*list(X0[:, j]), r1[j]]
+            v2 = solve_ivp(func_r, [self.t-self.h, self.t], v1).y[:, -1]
+            r2[j] = v2[-1]
+
+        r = r2
+
+        return r.reshape(-1)
+
+    def step1(self, X):
         '''
-        One computation step.
+        One computation step for the first order approximation.
+
+        INPUT:
+
+        X - values of spatial variable
+        type: ndarray [dimensions, number of points]
+
+        OUTPUT:
+
+        r - approximated values of the solution in given points
+        type: ndarray [number of points] of float
         '''
 
         f0 = self.func_f0(X, self.t)
@@ -217,6 +324,60 @@ class Solver(object):
         r = r2
 
         return r
+
+    def step2(self, X):
+        '''
+        One computation step for the second order approximation.
+
+        INPUT:
+
+        X - values of spatial variable
+        type: ndarray [dimensions, number of points]
+
+        OUTPUT:
+
+        r - approximated values of the solution in given points
+        type: ndarray [number of points] of float
+        '''
+
+        def func_x(t, v):
+            x = v.reshape(self.d, -1)
+            f0 = self.func_f0(x, t)
+            res = f0
+            return res
+
+        def func_r(t, v):
+            x = v[:-1].reshape(self.d, -1)
+            r = v[-1]
+            f0 = self.func_f0(x, t)
+            f1 = self.func_f1(x, t)
+            res = [
+                *list(f0.reshape(-1)),
+                -np.trace(f1) * r
+            ]
+            return res
+
+        X0 = X.copy()
+        for j in range(X.shape[1]):
+            v1 = X[:, j]
+            v2 = solve_ivp(func_x, [self.t, self.t - self.h], v1).y[:, -1]
+            X0[:, j] = v2
+
+        r0 = self.IT0.calc(X0)
+
+        r1 = self.Z @ r0
+
+        r2 = r1.copy()
+        for j in range(X.shape[1]):
+            v1 = [*list(X0[:, j]), r1[j]]
+            v2 = solve_ivp(func_r, [self.t-self.h, self.t], v1).y[:, -1]
+            r2[j] = v2[-1]
+
+        r3 = self.Z @ r2
+
+        r = r3
+
+        return r.reshape(-1)
 
     def info(self):
         '''
