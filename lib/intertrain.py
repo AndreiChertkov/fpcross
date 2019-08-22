@@ -5,7 +5,7 @@ import numpy as np
 from scipy.linalg import toeplitz
 
 import tt
-from tt.cross.rectcross import cross as rect_cross
+from tt.cross.rectcross import cross as tt_cross
 
 class Intertrain(object):
     '''
@@ -38,11 +38,11 @@ class Intertrain(object):
         type: ndarray (or list) [dimensions] of int, >= 2
 
         l - min-max values of variable for each dimension
-        type: ndarray (or list) [dimensions, 2] of float
-        * [:, 0] are min and [:, 1] are the max values for each dimension
+        * [:, 0] are min and [:, 1] are max values for each dimension
+        type: ndarray (or list) [dimensions, 2] of float, [:, 0] < [:, 1]
 
         eps - (optional) is the desired accuracy of the approximation
-        (is used in tt-round and cross approximation operations)
+        * Is used in tt-round and cross approximation operations
         type: float, > 0
 
         log_path - (optional) file for output of the computation info
@@ -57,7 +57,6 @@ class Intertrain(object):
 
         self.n = n if isinstance(n, np.ndarray) else np.array(n)
         self.l = l if isinstance(l, np.ndarray) else np.array(l)
-        self.d = self.l.shape[0]
         self.eps = eps
         self.log_path = log_path
         self.with_tt = with_tt
@@ -65,6 +64,8 @@ class Intertrain(object):
         if self.n.shape[0] != self.l.shape[0]:
             s = 'Shape mismatch for n and l params.'
             raise IndexError(s)
+
+        self.d = self.l.shape[0]
 
         self.init()
 
@@ -85,7 +86,9 @@ class Intertrain(object):
         type: Intertrain
         '''
 
-        IT = Intertrain(self.n, self.l, self.eps, self.log_path, self.with_tt)
+        n = self.n.copy()
+        l = self.l.copy()
+        IT = Intertrain(n, l, self.eps, self.log_path, self.with_tt)
 
         if not is_full:
             return IT
@@ -167,12 +170,11 @@ class Intertrain(object):
         self.err = None
         self.crs_res = None
 
-        if opts is None: opts = {}
         self.opts = {
-            'is_f_with_i': opts.get('is_f_with_i', False),
-            'nswp': opts.get('nswp', 200),
-            'kickrank': opts.get('kickrank', 1),
-            'rf': opts.get('rf', 2),
+            'is_f_with_i': (opts or {}).get('is_f_with_i', False),
+            'nswp': (opts or {}).get('nswp', 200),
+            'kickrank': (opts or {}).get('kickrank', 1),
+            'rf': (opts or {}).get('rf', 2),
         }
 
         self.f = f
@@ -189,14 +191,15 @@ class Intertrain(object):
 
         if self.with_tt:
             self.Y, self.crs_res = Intertrain.cross(
-                self.f, self.pois, self.n, self.eps, self.opts, self.log_path)
+                self.f, self.pois, self.n, self.eps, self.opts, self.log_path
+            )
 
             self._t_func = self.crs_res['t_func']
         else:
             self._t_func = time.time()
 
             X = self.grid()
-            if self.opts.get('is_f_with_i') == True:
+            if self.opts['is_f_with_i']:
                 I = self.grid(is_ind=True)
                 self.Y = self.f(X, I)
             else:
@@ -253,7 +256,7 @@ class Intertrain(object):
 
         return self
 
-    def calc(self, X):
+    def calc(self, X, z=0.):
         '''
         Calculate values of interpolated function in given X points.
 
@@ -262,13 +265,16 @@ class Intertrain(object):
         X - values of x variable
         type: ndarray (or list) [dimensions, number of points] of float
 
+        z - (optional) value for points outside the interpolation limits
+        type: float
+
         OUTPUT:
 
         Y - approximated values of the function in given points
         type: ndarray [number of points] of float
 
-        TODO! Vectorize calculations for points vector
-        TODO! Add more accurate check for outer points
+        TODO! Vectorize calculations for points vector.
+        TODO! Add more accurate check for outer points.
         '''
 
         if self.A is None:
@@ -278,20 +284,22 @@ class Intertrain(object):
         if not isinstance(X, np.ndarray):
             X = np.array(X)
 
+        def is_out(j):
+            for i in range(X.shape[0]):
+                if X[i, j] < self.l[i, 0] or X[i, j] > self.l[i, 1]:
+                    return True
+            return False
+
         self._t_calc = time.time()
 
         if self.with_tt:
-            Y = np.zeros(X.shape[1])
+            Y = np.ones(X.shape[1]) * z
             G = tt.tensor.to_list(self.A)
             r = max([G_.shape[1] for G_ in G])
-            T = Intertrain.polynomials(X, r, self.l)
+            T = Intertrain.polynomials(X, r-1, self.l)
 
             for j in range(X.shape[1]):
-                is_out = False
-                for i in range(X.shape[0]):
-                    if X[i, j] < self.l[i, 0] or X[i, j] > self.l[i, 1]:
-                        is_out = True
-                if is_out: continue
+                if is_out(j): continue
 
                 i = 0
                 F = T[:G[i].shape[1], i, j]
@@ -303,18 +311,15 @@ class Intertrain(object):
 
                 Y[j] = Q[0, 0]
         else:
-            Y = np.zeros(X.shape[1])
-            r = np.max(self.n-1)
-            T = Intertrain.polynomials(X, r, self.l)
+            Y = np.ones(X.shape[1]) * z
+            r = np.max(self.n)
+            T = Intertrain.polynomials(X, r-1, self.l)
 
             for j in range(X.shape[1]):
-                is_out = False
-                for i in range(X.shape[0]):
-                    if X[i, j] < self.l[i, 0] or X[i, j] > self.l[i, 1]:
-                        is_out = True
-                if is_out: continue
+                if is_out(j): continue
 
-                B = self.A.real.copy()
+                B = self.A.copy()
+
                 for i in range(X.shape[0]):
                     F = T[:B.shape[0], i, j]
                     B = np.tensordot(B, F, axes=([0], [0]))
@@ -332,7 +337,7 @@ class Intertrain(object):
         INPUT:
 
         test_poi - (optional) number of points for error check
-        * if set (is not None and is greater then zero) and interp. is ready,
+        * if set (is not None and is greater than zero) and interp. is ready,
         interpolation result will be checked on a set of random points from the
         uniform distribution with a proper limits.
         type: None or int, >= 0
@@ -343,8 +348,7 @@ class Intertrain(object):
         print('Format           : %1dD, %s'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP'))
 
         for i, [n, l] in enumerate(zip(self.n, self.l)):
-            opts = (i+1, n, l[0], l[1])
-            print('Dim %-2d           : Poi %-3d | Min %-6.3f | Max %-6.3f |'%opts)
+            print('Dim %-2d           : Poi %-3d | Min %-6.3f | Max %-6.3f |'%(i+1, n, l[0], l[1]))
 
         print('------------------ Time')
         print('Init             : %8.2e sec. '%self._t_init)
@@ -366,14 +370,14 @@ class Intertrain(object):
             print('Cross err (rel)  : %8.2e'%self.crs_res['err_rel'])
             print('Cross err (abs)  : %8.2e'%self.crs_res['err_abs'])
 
-        if self.A is not None and self.f is not None:
-            if test_poi is not None and test_poi>0:
-                self.test(test_poi)
-                print('------------------ Test for uniform random points)')
-                print('Number of points : %d'%test_poi)
-                print('Error (max)      : %8.2e '%np.max(self.err))
-                print('Error (mean)     : %8.2e '%np.mean(self.err))
-                print('Error (min)      : %8.2e '%np.min(self.err))
+        test_poi = test_poi if test_poi is not None else -1
+        if self.A is not None and self.f is not None and test_poi > 0:
+            self.test(test_poi)
+            print('------------------ Test for uniform random points)')
+            print('Number of points : %8d'%test_poi)
+            print('Error (max)      : %8.2e'%np.max(self.err))
+            print('Error (mean)     : %8.2e'%np.mean(self.err))
+            print('Error (min)      : %8.2e'%np.min(self.err))
 
         print('------------------')
 
@@ -385,7 +389,7 @@ class Intertrain(object):
         INPUT:
 
         test_poi - (optional) number of points for error check
-        * if set (is not None and is greater then zero) and interp. is ready,
+        * if set (is not None and is greater than zero) and interp. is ready,
         interpolation result will be checked on a set of random points from the
         uniform distribution with a proper limits.
         type: None or int, >= 0
@@ -394,10 +398,16 @@ class Intertrain(object):
 
         err - absolute value of relative error in generated random points
         type: np.ndarray [test_poi] of float
+
+        TODO! Add support for absolute error.
         '''
 
         if self.f is None:
             s = 'Function for interpolation is not set. Can not test'
+            raise ValueError(s)
+
+        if self.opts['is_f_with_i']:
+            s = 'Function for interpolation requires indices. Can not test'
             raise ValueError(s)
 
         l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), test_poi, axis=1)
@@ -416,7 +426,7 @@ class Intertrain(object):
         for given multi indices I. Points for every axis k are calculated as
         x = cos(i[k]*pi/(n[k]-1)), where n[k] is a total number of points
         for selected axis k, and then these points are scaled according to
-        given limits l.
+        the given limits l.
 
         INPUT:
 
@@ -432,9 +442,10 @@ class Intertrain(object):
         if not isinstance(I, np.ndarray):
             I = np.array(I)
 
-        n = np.repeat(self.n.reshape((-1, 1)), I.shape[1], axis=1)
-        l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), I.shape[1], axis=1)
-        l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), I.shape[1], axis=1)
+        m = I.shape[1]
+        n = np.repeat(self.n.reshape((-1, 1)), m, axis=1)
+        l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), m, axis=1)
+        l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), m, axis=1)
 
         t = np.cos(np.pi * I / (n - 1))
         X = t * (l2 - l1) / 2.
@@ -461,6 +472,8 @@ class Intertrain(object):
 
         X - (if is_ind == False) grid points
         type: ndarray [dimensions, n1 * n2 * ... * nd] of float
+
+        TODO! Check np.arange generation as list.
         '''
 
         I = [np.arange(self.n[d]).reshape(1, -1) for d in range(self.d)]
@@ -477,7 +490,7 @@ class Intertrain(object):
         OUTPUT:
 
         D1 - first order differentiation matrix
-        type: ndarray [number of points, number of points] of float
+        type: ndarray [n[0], n[0]] of float
 
         TODO! Add (check) support for custom limits.
         '''
@@ -493,7 +506,7 @@ class Intertrain(object):
         OUTPUT:
 
         D2 - second order differentiation matrix
-        type: ndarray [number of points, number of points] of float
+        type: ndarray [n[0], n[0]] of float
 
         TODO! Add (check) support for custom limits.
         '''
@@ -511,7 +524,7 @@ class Intertrain(object):
         X - values of x variable
         type: ndarray (or list) [dimensions, number of points] of float
         * in case of 1D, it may be ndarray (or list) [number of points]
-        * in case of one point in 1D, it may be float
+        * in case of only one point in 1D, it may be float
 
         m - max order of polynomial (function will calculate for 0, 1, ..., m)
         type: int, >= 0
@@ -534,27 +547,28 @@ class Intertrain(object):
         if l is not None:
             if not isinstance(l, np.ndarray):
                 l = np.array(l)
+
             if len(X.shape) > 1:
                 l1 = np.repeat(l[:, 0].reshape((-1, 1)), X.shape[-1], axis=1)
                 l2 = np.repeat(l[:, 1].reshape((-1, 1)), X.shape[-1], axis=1)
             elif len(X.shape) == 1:
                 l1 = np.repeat(l[0, 0], X.shape[0], axis=0)
-                l2 = np.repeat(l[:, 1], X.shape[0], axis=0)
+                l2 = np.repeat(l[0, 1], X.shape[0], axis=0)
             else:
                 l1 = l[0, 0]
                 l2 = l[0, 1]
-            X = (2. * X - l2 - l1)
-            X/= (l2 - l1)
+
+            X = (2. * X - l2 - l1) / (l2 - l1)
 
         if len(X.shape):
-            T = np.ones([m+1] + list(X.shape))
+            T = np.ones([m + 1] + list(X.shape))
         else:
-            T = np.ones([m+1, 1])
+            T = np.ones([m + 1, 1])
 
         if m > 0:
-            T[1,] = X.copy()
-            for k in range(2, m+1):
-                T[k, ] = 2. * X * T[k-1, ] - T[k-2, ]
+            T[1, ] = X.copy()
+            for k in range(2, m + 1):
+                T[k, ] = 2. * X * T[k - 1, ] - T[k - 2, ]
 
         return T if len(X.shape) else T.reshape(-1)
 
@@ -570,9 +584,10 @@ class Intertrain(object):
         INPUT:
 
         Y - values of function at the nodes of the Chebyshev grid
-        x_j=cos(\pi j/N), j = 0, 1, ..., N (N = number of points - 1)
+        x_j=cos(\pi j / N), j = 0, 1, ..., N (where N = number of points - 1)
         type: ndarray (or list) [number of points, number of functions] of float
-        * in case of one function, it may be ndarray (or list) [number of points]
+        * in case of one function, it may be
+        * ndarray (or list) [number of points]
 
         OUTPUT:
 
@@ -591,11 +606,11 @@ class Intertrain(object):
 
         n = Y.shape[0]
         V = np.vstack([Y, Y[n-2:0:-1, :]])
-        A = np.fft.fft(V, axis=0)
-        A = A.real
+        A = np.fft.fft(V, axis=0).real
         A = A[:n, :] / (n - 1)
         A[0, :] /= 2.
         A[n-1, :] /= 2.
+
         return A
 
     @staticmethod
@@ -621,27 +636,27 @@ class Intertrain(object):
         n1 = np.int(np.floor(n / 2))
         n2 = np.int(np.ceil(n / 2))
         k = np.arange(n)
-        th = k * np.pi / (n-1)
+        th = k * np.pi / (n - 1)
 
         T = np.tile(th/2, (n, 1))
-        DX = 2*np.sin(T.T+T)*np.sin(T.T-T)
+        DX = 2. * np.sin(T.T + T) * np.sin(T.T - T)
         DX[n1:, :] = -np.flipud(np.fliplr(DX[0:n2, :]))
         DX[range(n), range(n)] = 1.
         DX = DX.T
 
-        Z = 1 / DX
+        Z = 1. / DX
         Z[range(n), range(n)] = 0.
 
         C = toeplitz((-1.)**k)
-        C[+0, :] *= 2
-        C[-1, :] *= 2
-        C[:, +0] *= 0.5
-        C[:, -1] *= 0.5
+        C[+0, :]*= 2
+        C[-1, :]*= 2
+        C[:, +0]*= 0.5
+        C[:, -1]*= 0.5
 
         D_list = []
         D = np.eye(n)
-        for ell in range(2):
-            D = (ell + 1) * Z * (C * np.tile(np.diag(D), (n, 1)).T - D)
+        for i in range(m):
+            D = (i + 1) * Z * (C * np.tile(np.diag(D), (n, 1)).T - D)
             D[range(n), range(n)] = -np.sum(D, axis=1)
             D_list.append(D)
 
@@ -651,14 +666,7 @@ class Intertrain(object):
     def cross(f, f_pois, n, eps=1.E-6, opts=None, fpath='./tmp.txt'):
         '''
         Construct tensor of function values on given tensor product
-        grid by the cross approximation method in the TT-format .
-
-        INPUT:
-
-
-        Init main calculation parameters and training data, using
-        given function f (cross approximation will be applied if TT-format
-        is used) or given tensor Y (in numpy or TT-format) of data.
+        grid by the cross approximation method in the TT-format.
 
         INPUT:
 
@@ -679,7 +687,7 @@ class Intertrain(object):
                 I - indices of X points
                 type: ndarray [dimensions, number of points] of int
             out:
-                X - points for calculation
+                X - the corresponding grid points
                 type: ndarray [dimensions, number of points] of float
 
         n - total number of points for each dimension
@@ -713,29 +721,39 @@ class Intertrain(object):
         fpath - (optional) file path for output cross approximation native info
         type: str
 
-        OUTPUT:
+        OUTPUT: /tuple/
 
         Y - tensor of function values on given tensor product grid
         type: TT-tensor [*n] of float
 
         crs_res - dictionary with calculation details
-        * evals, iters, err_rel, err_abs, erank, t_func
+        * Fields: evals (int), iters (int), err_rel (float), err_abs (float),
+        erank (float), t_func (float)
         type: dict
+
+        TODO! Add option for initial guess.
         '''
 
         if not isinstance(n, np.ndarray): n = np.array(n)
-        if opts is None: opts = {}
 
-        crs_res = {}
-        crs_res['evals'] = 0
-        crs_res['t_func'] = 0.
+        opts = {
+            'is_f_with_i': (opts or {}).get('is_f_with_i', False),
+            'nswp': (opts or {}).get('nswp', 200),
+            'kickrank': (opts or {}).get('kickrank', 1),
+            'rf': (opts or {}).get('rf', 2),
+        }
+
+        crs_res = {
+            'evals': 0,
+            't_func': 0.,
+        }
 
         def func(ind):
             X = f_pois(ind.T)
             t = time.time()
-            Y = f(X, ind.T) if opts.get('is_f_with_i') == True else f(X)
-            crs_res['t_func'] += time.time() - t
-            crs_res['evals'] += ind.shape[0]
+            Y = f(X, ind.T) if opts['is_f_with_i'] else f(X)
+            crs_res['t_func']+= time.time() - t
+            crs_res['evals']+= ind.shape[0]
             return Y
 
         log = open(fpath, 'w')
@@ -743,15 +761,11 @@ class Intertrain(object):
         sys.stdout = log
 
         Z = tt.rand(n, n.shape[0], 1)
-        Y = rect_cross(
-            func,
-            Z,
-            eps=eps,
-            nswp=opts.get('nswp', 200),
-            kickrank=opts.get('kickrank', 1),
-            rf=opts.get('rf', 2),
-            verbose=True
+        Y = tt_cross(
+            func, Z, eps=eps, nswp=opts['nswp'], kickrank=opts['kickrank'],
+            rf=opts['rf'], verbose=True
         )
+
         log.close()
         sys.stdout = stdout0
 
