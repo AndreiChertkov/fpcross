@@ -373,7 +373,7 @@ class Intertrain(object):
         test_poi = test_poi if test_poi is not None else -1
         if self.A is not None and self.f is not None and test_poi > 0:
             self.test(test_poi)
-            print('------------------ Test for uniform random points)')
+            print('------------------ Test for uniform random points')
             print('Number of points : %8d'%test_poi)
             print('Error (max)      : %8.2e'%np.max(self.err))
             print('Error (mean)     : %8.2e'%np.mean(self.err))
@@ -485,33 +485,31 @@ class Intertrain(object):
     def dif1(self):
         '''
         Construct first order differentiation matrix on Chebyshev grid
-        on interval [-1, 1].
+        on interval of the first spatial variable.
 
         OUTPUT:
 
         D1 - first order differentiation matrix
         type: ndarray [n[0], n[0]] of float
-
-        TODO! Add (check) support for custom limits.
         '''
 
-        self.D1 = Intertrain.chdiv(self.n[0], 1)[0]
+        l_min, l_max = self.l[0, 0], self.l[0, 1]
+        self.D1 = Intertrain.chdiv(self.n[0], 1, l_min, l_max)[0]
         return self.D1
 
     def dif2(self):
         '''
         Construct second order differentiation matrix on Chebyshev grid
-        on interval [-1, 1].
+        on interval of the first spatial variable.
 
         OUTPUT:
 
         D2 - second order differentiation matrix
         type: ndarray [n[0], n[0]] of float
-
-        TODO! Add (check) support for custom limits.
         '''
 
-        self.D1, self.D2 = Intertrain.chdiv(self.n[0], 2)
+        l_min, l_max = self.l[0, 0], self.l[0, 1]
+        self.D1, self.D2 = Intertrain.chdiv(self.n[0], 2, l_min, l_max)
         return self.D2
 
     @staticmethod
@@ -614,10 +612,10 @@ class Intertrain(object):
         return A
 
     @staticmethod
-    def chdiv(n, m):
+    def chdiv(n, m, l_min=-1., l_max=+1.):
         '''
         Construct differentiation matrices on Chebyshev grid
-        of order 1, 2, ..., m and size n x n on interval [-1, 1].
+        of order 1, 2, ..., m and size n x n on interval [l_min, l_max].
 
         INPUT:
 
@@ -626,6 +624,12 @@ class Intertrain(object):
 
         m - maximum matrix order (will construct for 1, 2, ..., m)
         type: int, >= 1
+
+        l_min - (optional) min value of variable
+        type: float, < l_max
+
+        l_max - (optional) max value of variable
+        type: float, > l_min
 
         OUTPUT:
 
@@ -655,10 +659,12 @@ class Intertrain(object):
 
         D_list = []
         D = np.eye(n)
+        l = 2. / (l_max - l_min)
         for i in range(m):
             D = (i + 1) * Z * (C * np.tile(np.diag(D), (n, 1)).T - D)
             D[range(n), range(n)] = -np.sum(D, axis=1)
-            D_list.append(D)
+            D_list.append(D * l)
+            l = l * l
 
         return tuple(D_list)
 
