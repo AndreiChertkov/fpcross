@@ -64,6 +64,27 @@ div {
   color: #485536;
 }
 
+.head3 {
+  margin-top: 5px;
+  padding: 3px 40px 3px;
+  border-left: 2px dotted #485536;
+}
+.head3__name {
+  display: inline-block;
+  max-width: 70%;
+  padding: 2px 10px;
+  font-size: 20px;
+  font-weight: bold;
+  color: #145929;
+  border-bottom: 2px dotted #485536;
+}
+.head3__note {
+  padding: 2px 10px 0px;
+  font-size: 12px;
+  font-style: italic;
+  color: #485536;
+}
+
 .warn {
   background-color: #fcf2f2;
   border-color: #dfb5b4;
