@@ -33,6 +33,8 @@ class Solver(object):
         self.eps = eps
         self.with_tt = with_tt
 
+        self.set_coefs()
+
     def set_grid_t(self, t_poi, t_min=0., t_max=1.):
         '''
         Set parameters of the uniform time grid.
@@ -101,7 +103,7 @@ class Solver(object):
         l_ = np.repeat(np.array([[x_min, x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-    def set_funcs(self, f0, f1, r0, rt=None, rs=None, s0=1.):
+    def set_funcs(self, f0, f1, r0, rt=None, rs=None):
         '''
         Set functions for equation
         d r / d t = Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
@@ -117,7 +119,32 @@ class Solver(object):
         self.func_r0 = r0
         self.func_rt = rt
         self.func_rs = rs
-        self.func_s0 = s0
+
+    def set_coefs(self, dc=None):
+        '''
+        Set coefficients for equation.
+
+        INPUT:
+
+        dc - (optional) diffusion coefficient
+        type: float
+        default: 1.
+
+        TODO! Replace dc by
+        dc - (optional) diffusion coefficient
+        type: ndarray [dim, dim] of float
+        * may be float for 1d case
+        default: identity matrix
+        '''
+
+        self.dc = dc if dc is not None else 1.
+        return
+
+        if dc is None:
+            dc = np.eye(self.d)
+        if isinstance(dc (int, float)):
+            dc = np.array([[float(dc)]])
+        self.dc = dc
 
     def prep(self):
         '''
@@ -145,15 +172,15 @@ class Solver(object):
         self.D1 = self.IT.D1
         self.D2 = self.IT.D2
 
-        if self.func_s0 is not None:
+        if np.abs(self.dc) > 1.E-16:
             h = (self.h) ** (1./self.d)
             J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
-            D = expm(h * J @ self.D2) @ J
+            D = expm(self.dc * h * J @ self.D2) @ J
 
             self.Z = D.copy()
             for d in range(self.d-1):
                 self.Z = kron(self.Z, D)
-        else:
+        else: # zero diffusion
             self.Z = np.eye(self.n**self.d)
 
         _t[-1] = time.time() - _t[-1]
