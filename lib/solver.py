@@ -13,7 +13,7 @@ from intertrain import Intertrain
 
 class Solver(object):
 
-    def __init__(self, d, eps=1.E-6, with_tt=True):
+    def __init__(self, d, eps=1.E-6, ord=1, with_tt=True):
         '''
         INPUT:
 
@@ -23,6 +23,9 @@ class Solver(object):
         eps - (optional) desired accuracy of the solution
         type: float, > 0
 
+        ord - (optional) order of approximation
+        type: int, = 1, 2
+
         with_tt - (optional) flag:
             True  - sparse (tensor train, TT) format will be used
             False - dense (numpy, NP) format will be used
@@ -31,11 +34,12 @@ class Solver(object):
 
         self.d = d
         self.eps = eps
+        self.ord = ord
         self.with_tt = with_tt
 
         self.set_coefs()
 
-    def set_grid_t(self, t_poi, t_min=0., t_max=1.):
+    def set_grid_t(self, t_poi, t_min=0., t_max=1., t_poi_hst=0):
         '''
         Set parameters of the uniform time grid.
 
@@ -49,6 +53,10 @@ class Solver(object):
 
         t_max - (optional) max value of the time variable
         type: float, > t_min
+
+        t_poi_hst - (optional) total number of points for history
+        * solution at this pints will be saved to history for further analysis
+        type: int, >= 0, <= t_poi
         '''
 
         if t_poi < 2:
@@ -59,9 +67,14 @@ class Solver(object):
             s = 'Ivalid time limits (min should be less of max).'
             raise ValueError(s)
 
+        if t_poi_hst > t_poi:
+            s = 'Invalid number of history time points (should be <= t_poi).'
+            raise ValueError(s)
+
         self.t_poi = t_poi
         self.t_min = t_min
         self.t_max = t_max
+        self.t_poi_hst = t_poi_hst
 
         self.m = t_poi
         self.h = (t_max - t_min) / (t_poi - 1)
@@ -152,20 +165,14 @@ class Solver(object):
         the initial condition and calculate special matrices.
         '''
 
-        _t = []
+        _t = time.time()
 
         self._t_prep = None
         self._t_calc = None
 
-        self.IT0 = None # Interpolant from the previous step
-        self.IT1 = None # Initial interpolant
-        self.IT2 = None # Final interpolant
-
-        self.k = 0          # Current time step
         self.t = self.t_min # Current time value
 
-        _t.append(time.time())
-
+        self.IT0 = None # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
 
         self.IT.dif2()
@@ -183,51 +190,62 @@ class Solver(object):
         else: # zero diffusion
             self.Z = np.eye(self.n**self.d)
 
-        _t[-1] = time.time() - _t[-1]
+        self._t_prep = time.time() - _t
 
-        self._t_prep = sum(_t)
-
-        self.X = self.IT.grid()
-        self.R = []
-        self.R.append(self.IT.calc(self.X))
-
-        self.IT1 = self.IT.copy()
+        self.X_hst = self.IT.grid()
+        self.T_hst = []
+        self.R_hst = []
+        self.E_hst = []
 
     def calc(self):
         '''
         Calculate solution of the equation (call prep before!).
         '''
 
-        _t = []
+        self._t_calc = 0.
 
-        _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=70)
+        _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=80)
 
-        for i, t in enumerate(self.T[1:]):
-            _t.append(time.time())
+        for i, t in enumerate(self.T):
+            if i == 0: continue
 
-            self.k+= 1
+            _t = time.time()
+
             self.t = t
 
             self.IT0 = self.IT.copy()
             self.IT.init(self.step).prep()
-            r = self.IT.calc(self.X)
 
-            _t[-1] = time.time() - _t[-1]
+            self._t_calc+= time.time() - _t
 
-            self.R.append(r)
+            t_hst = int(self.t_poi / self.t_poi_hst) if self.t_poi_hst else 0
+            if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
+                r = self.IT.calc(self.X_hst)
 
-            _tqdm.set_postfix_str('Norm %-8.2e'%np.linalg.norm(r), refresh=True)
+                self.T_hst.append(t)
+                self.R_hst.append(r)
+
+                _msg = '| At T = %-8.2e :'%self.t
+
+                if self.func_rt:
+                    r_calc = r
+                    r_real = self.func_rt(self.X_hst, t)
+                    e = np.linalg.norm(r_real - r_calc) / np.linalg.norm(r_real)
+                    self.E_hst.append(e)
+
+                    _msg+= ' err=%-8.2e'%e
+                else:
+                    _msg+= ' norm=%-8.2e'%np.linalg.norm(r)
+
+                _tqdm.set_postfix_str(_msg, refresh=True)
+
             _tqdm.update(1)
 
         _tqdm.close()
 
-        self.IT2 = self.IT.copy()
-
-        self._t_calc = sum(_t)
-
     def step(self, X):
         '''
-        One computation step for the first order approximation.
+        One computation step for solver.
 
         INPUT:
 
