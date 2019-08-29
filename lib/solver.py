@@ -226,9 +226,9 @@ class Solver(object):
                     e = np.linalg.norm(r_real - r_calc) / np.linalg.norm(r_real)
                     self.E_hst.append(e)
 
-                    _msg+= ' error=%-8.2e'%e
+                    _msg+= ' error = %-8.2e'%e
                 else:
-                    _msg+= ' norm=%-8.2e'%np.linalg.norm(r)
+                    _msg+= ' norm = %-8.2e'%np.linalg.norm(r)
 
                 _tqdm.set_postfix_str(_msg, refresh=True)
 
