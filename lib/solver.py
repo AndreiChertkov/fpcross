@@ -13,7 +13,7 @@ from intertrain import Intertrain
 
 class Solver(object):
 
-    def __init__(self, d, eps=1.E-6, ord=1, with_tt=True):
+    def __init__(self, d, eps=1.E-6, ord=1, with_tt=False):
         '''
         INPUT:
 
@@ -119,12 +119,14 @@ class Solver(object):
     def set_funcs(self, f0, f1, r0, rt=None, rs=None):
         '''
         Set functions for equation
-        d r / d t = Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
+        d r / d t = D Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
         where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
         r0(x) is initial condition, rt(x, t) is optional analytic solution
         and rs(x) is optional stationary solution.
-        * Functions f0, f1 and s0 should return value of the same shape as x
-        * Functions r0, rt and rs should return 1D array of length x.shape[1]
+        * All functions should accept the same input X
+        * of type ndarray [d, n_pooi] of float.
+        * Functions f0, f1 and s0 should return value of the same shape as X
+        * Functions r0, rt and rs should return 1D array of length X.shape[1]
         '''
 
         self.func_f0 = f0
@@ -135,7 +137,8 @@ class Solver(object):
 
     def set_coefs(self, dc=None):
         '''
-        Set coefficients for equation.
+        Set coefficients for equation
+        d r / d t = D Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
 
         INPUT:
 
@@ -143,26 +146,18 @@ class Solver(object):
         type: float
         default: 1.
 
-        TODO! Replace dc by
-        dc - (optional) diffusion coefficient
-        type: ndarray [dim, dim] of float
-        * may be float for 1d case
-        default: identity matrix
+        TODO! Replace dc by tensor.
         '''
 
         self.dc = dc if dc is not None else 1.
-        return
-
-        if dc is None:
-            dc = np.eye(self.d)
-        if isinstance(dc (int, float)):
-            dc = np.array([[float(dc)]])
-        self.dc = dc
 
     def prep(self):
         '''
         Init calculation parameters, prepare interpolation of
         the initial condition and calculate special matrices.
+
+        TODO! Check usage of J matrix.
+        TODO! Replace X_hst by partial grid.
         '''
 
         _t = time.time()
@@ -170,25 +165,22 @@ class Solver(object):
         self._t_prep = None
         self._t_calc = None
 
-        self.t = self.t_min # Current time value
+        self.t = self.t_min # Current value of time variable
 
-        self.IT0 = None # Interpolant from the previous step
+        self.IT0 = None     # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
 
-        self.IT.dif2()
+        self.IT.dif2()      # Chebyshev diff. matrices
         self.D1 = self.IT.D1
         self.D2 = self.IT.D2
 
-        if np.abs(self.dc) > 1.E-16:
-            h = (self.h) ** (1./self.d)
-            J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
-            D = expm(self.dc * h * J @ self.D2) @ J
+        h = (self.h) ** (1./self.d)
+        J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
+        D = expm(self.dc * h * J @ self.D2) @ J
 
-            self.Z = D.copy()
-            for d in range(self.d-1):
-                self.Z = kron(self.Z, D)
-        else: # zero diffusion
-            self.Z = np.eye(self.n**self.d)
+        self.Z = D.copy()
+        for d in range(self.d-1):
+            self.Z = kron(self.Z, D)
 
         self._t_prep = time.time() - _t
 
@@ -199,7 +191,7 @@ class Solver(object):
 
     def calc(self):
         '''
-        Calculate solution of the equation (call prep before!).
+        Calculate solution of the equation.
         '''
 
         self._t_calc = 0.
@@ -233,7 +225,7 @@ class Solver(object):
                     e = np.linalg.norm(r_real - r_calc) / np.linalg.norm(r_real)
                     self.E_hst.append(e)
 
-                    _msg+= ' err=%-8.2e'%e
+                    _msg+= ' error=%-8.2e'%e
                 else:
                     _msg+= ' norm=%-8.2e'%np.linalg.norm(r)
 
@@ -249,7 +241,7 @@ class Solver(object):
 
         INPUT:
 
-        X - values of spatial variable
+        X - values of the spatial variable
         type: ndarray [dimensions, number of points]
 
         OUTPUT:
@@ -278,7 +270,7 @@ class Solver(object):
         '''
 
         print('---------- Solver')
-        print('Format   : %1dD, %s'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP'))
+        print('Format   : %1dD, %s [order=%d]'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
         print('Grid x   : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
         print('Grid t   : poi = %9d, min = %9.4f, max = %9.4f'%(self.t_poi, self.t_min, self.t_max))
         print('Time sec : prep = %8.2e, calc = %8.2e'%(self._t_prep, self._t_calc))
@@ -295,6 +287,9 @@ class Solver(object):
         delt - (optional) number of frames per second
         type: int, > 0
         '''
+
+        s = 'Is draft.'
+        raise NotImplementedError(s)
 
         def _anim_1d(ax):
             x1d = self.X[0, :self.n]
@@ -353,7 +348,7 @@ class Solver(object):
         Plot solution on the spatial grid at time t (by default at final time
         point). Initial value, analytical solution and stationary solution
         are also presented on the plot.
-        * For the given t it finds the closest point on the time grid.
+        * For the given t it finds the closest point on the time history grid.
 
         INPUT:
 
