@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib import animation, rc
 from tqdm import tqdm
 
+from config import config
 from intertrain import Intertrain
 
 class Solver(object):
@@ -235,6 +236,10 @@ class Solver(object):
 
         _tqdm.close()
 
+        self.T_hst = np.array(self.T_hst)
+        self.R_hst = np.array(self.R_hst)
+        self.E_hst = np.array(self.E_hst)
+
     def step(self, X):
         '''
         One computation step for solver.
@@ -376,74 +381,53 @@ class Solver(object):
             return np.abs(r) if is_abs else r
 
         def _plot_1d(t):
-            i = -1 if t is None else (np.abs(self.T - t)).argmin()
-            t = self.T[i]
+            i = -1 if t is None else (np.abs(self.T_hst - t)).argmin()
+            t = self.T_hst[i]
+            X = self.X_hst
+            x = X.reshape(-1)
 
-            Xg = self.X
-            x0 = Xg.reshape(-1)
+            fig = plt.figure(**config['plot']['fig']['base_1_2'])
+            grd = mpl.gridspec.GridSpec(**config['plot']['grid']['base_1_2'])
+            ax1 = fig.add_subplot(grd[0, 0])
+            ax2 = fig.add_subplot(grd[0, 1])
 
-            fig = plt.figure(figsize=(10, 5))
-            gs = mpl.gridspec.GridSpec(
-                ncols=2, nrows=1, left=0.01, right=0.99, top=0.99, bottom=0.01,
-                wspace=0.2, hspace=0.1, width_ratios=[1, 1], height_ratios=[1]
-            )
+            r_init = self.func_r0(X) if self.func_r0 else None
+            ax1.plot(x, _prep(r_init), **config['plot']['line']['init'])
 
-            ax = fig.add_subplot(gs[0, 0])
+            r_calc = self.R_hst[i]
+            ax1.plot(x, _prep(r_calc), **config['plot']['line']['calc'])
 
-            if self.IT1:
-                r = self.IT1.calc(self.X).reshape(-1)
-                ax.plot(
-                    x0, _prep(r), '--', label='Initial',
-                    linewidth=3, color='tab:blue'
-                )
-            if self.IT2:
-                r = self.R[i]
-                ax.plot(
-                    x0, _prep(r), label='Calculated',
-                    linewidth=1, color='tab:green', marker='o', markersize=7,
-                    markerfacecolor='lightgreen', markeredgecolor='g'
-                )
             if self.func_rt:
-                r = self.func_rt(self.X, t)
-                ax.plot(
-                    x0, _prep(r), label='Analytic',
-                    linewidth=3, color='black'
-                )
+                r_real = self.func_rt(X, t) if self.func_rt else None
+
+                e = np.abs(r_real - r_calc)
+                if is_err_abs:
+                    e = e / np.abs(r_real)
+
+                ax1.plot(x, _prep(r_real), **config['plot']['line']['real'])
+                ax2.plot(x, e, **config['plot']['line']['errs'])
+
             if self.func_rs:
-                r = self.func_rs(self.X)
-                ax.plot(
-                    x0, _prep(r), '--', label='Stationary',
-                    linewidth=2, color='magenta'
-                )
+                r_stat = self.func_rs(X)
+                ax1.plot(x, _prep(r_stat), **config['plot']['line']['stat'])
 
             if is_log:
-                ax.semilogy()
+                ax1.semilogy()
             if is_abs:
-                ax.set_title('PDF at t=%-8.4f (abs. value)'%t)
+                ax1.set_title('PDF at t=%-8.4f (abs. value)'%t)
             else:
-                ax.set_title('PDF at t=%-8.4f'%t)
-            ax.set_xlabel('x')
-            ax.set_ylabel('r')
-            ax.legend(loc='best')
+                ax1.set_title('PDF at t=%-8.4f'%t)
+            ax1.set_xlabel('x')
+            ax1.set_ylabel('r')
+            ax1.legend(loc='best')
 
-            if self.func_rt:
-                ax = fig.add_subplot(gs[0, 1])
-
-                R1 = self.R[i]
-                R2 = self.func_rt(self.X, t)
-                e = np.abs(R2 - R1)
-                if not is_err_abs:
-                    e/= np.abs(R1)
-
-                ax.plot(x0, e)
-
-                ax.semilogy()
-                if is_err_abs:
-                    ax.set_title('Absolute error of PDF at t = %-8.4f'%t)
-                else:
-                    ax.set_title('Relative error of PDF at t = %-8.4f'%t)
-                ax.set_xlabel('t')
-                ax.set_ylabel('Error')
+            ax2.semilogy()
+            if is_err_abs:
+                ax2.set_title('Absolute error of PDF at t = %-8.4f'%t)
+            else:
+                ax2.set_title('Relative error of PDF at t = %-8.4f'%t)
+            ax2.set_xlabel('x')
+            ax2.set_ylabel('Error')
 
             plt.show()
 
@@ -519,74 +503,55 @@ class Solver(object):
             return np.abs(r) if is_abs else r
 
         def _plot_1d(x):
-            if isinstance(x, (list, np.ndarray)):
-                x = x[0]
-            i = (np.abs(self.X.reshape(-1) - x)).argmin()
-            x = self.X.reshape(-1)[i]
-            x_ = np.array([[x]])
+            if isinstance(x, (list, np.ndarray)): x = x[0]
+            i = (np.abs(self.X_hst.reshape(-1) - x)).argmin()
+            x = self.X_hst.reshape(-1)[i]
+            X = np.array([[x]])
+            t = self.T_hst
+            v = np.ones(t.shape[0])
 
-            fig = plt.figure(figsize=(10, 5))
-            gs = mpl.gridspec.GridSpec(
-                ncols=2, nrows=1, left=0.01, right=0.99, top=0.99, bottom=0.01,
-                wspace=0.2, hspace=0.1, width_ratios=[1, 1], height_ratios=[1]
-            )
+            fig = plt.figure(**config['plot']['fig']['base_1_2'])
+            grd = mpl.gridspec.GridSpec(**config['plot']['grid']['base_1_2'])
+            ax1 = fig.add_subplot(grd[0, 0])
+            ax2 = fig.add_subplot(grd[0, 1])
 
-            ax = fig.add_subplot(gs[0, 0])
+            r_init = v * self.func_r0(X)[0]
+            ax1.plot(t, _prep(r_init), **config['plot']['line']['init'])
 
-            if self.IT1:
-                r = np.ones(len(self.T)) * self.IT1.calc(x_)[0]
-                ax.plot(
-                    self.T, _prep(r), '--', label='Initial',
-                    linewidth=3, color='tab:blue'
-                )
-            if self.IT2:
-                r = [r[i] for r in self.R]
-                ax.plot(
-                    self.T, _prep(r), label='Calculated',
-                    linewidth=1, color='tab:green', marker='o', markersize=7,
-                    markerfacecolor='lightgreen', markeredgecolor='g'
-                )
+            r_calc = np.array([r[i] for r in self.R_hst])
+            ax1.plot(t, _prep(r_calc), **config['plot']['line']['calc'])
+
             if self.func_rt:
-                r = [self.func_rt(x_, t)[0] for t in self.T[1:]]
-                ax.plot(
-                    self.T[1:], _prep(r), label='Analytic',
-                    linewidth=3, color='black'
-                )
+                r_real = np.array([self.func_rt(X, q)[0] for q in t])
+
+                e = np.abs(r_real - r_calc)
+                if is_err_abs:
+                    e = e / np.abs(r_real)
+
+                ax1.plot(t, _prep(r_real), **config['plot']['line']['real'])
+                ax2.plot(t, e, **config['plot']['line']['errs'])
+
             if self.func_rs:
-                r = np.ones(len(self.T)) * self.func_rs(x_)[0]
-                ax.plot(
-                    self.T, _prep(r), '--', label='Stationary',
-                    linewidth=2, color='magenta'
-                )
+                r_stat = v * self.func_rs(X)[0] if self.func_rs else None
+                ax1.plot(t, _prep(r_stat), **config['plot']['line']['stat'])
 
             if is_log:
-                ax.semilogy()
+                ax1.semilogy()
             if is_abs:
-                ax.set_title('PDF at x = %-8.4f (abs. value)'%x)
+                ax1.set_title('PDF at x = %-8.4f (abs. value)'%x)
             else:
-                ax.set_title('PDF at x = %-8.4f'%x)
-            ax.set_xlabel('t')
-            ax.set_ylabel('r')
-            ax.legend(loc='best')
+                ax1.set_title('PDF at x = %-8.4f'%x)
+            ax1.set_xlabel('t')
+            ax1.set_ylabel('r')
+            ax1.legend(loc='best')
 
-            if self.func_rt:
-                ax = fig.add_subplot(gs[0, 1])
-
-                R1 = np.array([r[i] for r in self.R])[1:]
-                R2 = np.array([self.func_rt(x_, t)[0] for t in self.T[1:]])
-                e = np.abs(R2 - R1)
-                if not is_err_abs:
-                    e/= np.abs(R1)
-
-                ax.plot(self.T[1:], e)
-
-                ax.semilogy()
-                if is_err_abs:
-                    ax.set_title('Absolute error of PDF at x = %-8.4f'%x)
-                else:
-                    ax.set_title('Relative error of PDF at x = %-8.4f'%x)
-                ax.set_xlabel('t')
-                ax.set_ylabel('Error')
+            ax2.semilogy()
+            if is_err_abs:
+                ax2.set_title('Absolute error of PDF at x = %-8.4f'%x)
+            else:
+                ax2.set_title('Relative error of PDF at x = %-8.4f'%x)
+            ax2.set_xlabel('t')
+            ax2.set_ylabel('Error')
 
             plt.show()
 
