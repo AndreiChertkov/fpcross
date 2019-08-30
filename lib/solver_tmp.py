@@ -46,7 +46,7 @@ class SolverTmp(Solver):
                 f1 = self.func_f1(x, t)
                 res = [
                     *list(f0.reshape(-1)),
-                    -np.trace(f1)
+                    -np.trace(f1) * r
                 ]
                 return res
 
@@ -54,9 +54,10 @@ class SolverTmp(Solver):
             for j in range(X.shape[1]):
                 if w0[j] < 1.E-30: # Zero
                     continue
-                y1 = [*list(X[:, j]), np.log(w0[j])]
+
+                y1 = [*list(X[:, j]), w0[j]]
                 y2 = solve_ivp(func_r, [self.t-self.h, self.t], y1).y[:, -1]
-                w[j] = np.exp(y2[-1])
+                w[j] = y2[-1]
 
             return w
 
