@@ -40,7 +40,7 @@ class Solver(object):
 
         self.set_coefs()
 
-    def set_grid_t(self, t_poi, t_min=0., t_max=1., t_poi_hst=0):
+    def set_grid_t(self, t_poi, t_min=0., t_max=1., t_hst=0):
         '''
         Set parameters of the uniform time grid.
 
@@ -55,7 +55,7 @@ class Solver(object):
         t_max - (optional) max value of the time variable
         type: float, > t_min
 
-        t_poi_hst - (optional) total number of points for history
+        t_hst - (optional) total number of points for history
         * solution at this pints will be saved to history for further analysis
         type: int, >= 0, <= t_poi
         '''
@@ -68,14 +68,14 @@ class Solver(object):
             s = 'Ivalid time limits (min should be less of max).'
             raise ValueError(s)
 
-        if t_poi_hst > t_poi:
+        if t_hst > t_poi:
             s = 'Invalid number of history time points (should be <= t_poi).'
             raise ValueError(s)
 
         self.t_poi = t_poi
         self.t_min = t_min
         self.t_max = t_max
-        self.t_poi_hst = t_poi_hst
+        self.t_hst = t_hst
 
         self.m = t_poi
         self.h = (t_max - t_min) / (t_poi - 1)
@@ -84,8 +84,9 @@ class Solver(object):
 
     def set_grid_x(self, x_poi, x_min=-3., x_max=3.):
         '''
-        Set parameters of the Chebyshev spatial grid.
+        Set parameters of the spatial grid.
         * For each dimension the same number of points and limits are used.
+        * Chebyshev spatial grid is used.
 
         INPUT:
 
@@ -124,10 +125,10 @@ class Solver(object):
         where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
         r0(x) is initial condition, rt(x, t) is optional analytic solution
         and rs(x) is optional stationary solution.
-        * All functions should accept the same input X
+        * All functions should support input X
         * of type ndarray [d, n_pooi] of float.
-        * Functions f0, f1 and s0 should return value of the same shape as X
-        * Functions r0, rt and rs should return 1D array of length X.shape[1]
+        * Functions f0, f1 should return value of the same shape as X.
+        * Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
         '''
 
         self.func_f0 = f0
@@ -136,21 +137,21 @@ class Solver(object):
         self.func_rt = rt
         self.func_rs = rs
 
-    def set_coefs(self, dc=None):
+    def set_coefs(self, Dc=None):
         '''
         Set coefficients for equation
         d r / d t = D Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
 
         INPUT:
 
-        dc - (optional) diffusion coefficient
+        Dc - (optional) diffusion coefficient
         type: float
         default: 1.
 
-        TODO! Replace dc by tensor.
+        TODO! Replace Dc by tensor.
         '''
 
-        self.dc = dc if dc is not None else 1.
+        self.Dc = Dc if Dc is not None else 1.
 
     def prep(self):
         '''
@@ -158,27 +159,28 @@ class Solver(object):
         the initial condition and calculate special matrices.
 
         TODO! Check usage of J matrix.
-        TODO! Replace X_hst by partial grid.
+        TODO! Extend J matrix to > 1D case.
+        TODO! Replace X_hst by partial grid (in selected x points).
         '''
 
         _t = time.time()
 
+        self._err = None
         self._t_prep = None
         self._t_calc = None
+        self._t_spec = None
 
-        self.t = self.t_min # Current value of time variable
+        self.t = self.t_min   # Current value of time variable
+        self.IT.dif2()        # Chebyshev diff. matrices
+        self.D1 = self.IT.D1  # d / dx
+        self.D2 = self.IT.D2  # d2 / dx2
 
         self.IT0 = None     # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
 
-        self.IT.dif2()      # Chebyshev diff. matrices
-        self.D1 = self.IT.D1
-        self.D2 = self.IT.D2
-
-        h = (self.h) ** (1./self.d)
+        h = (self.Dc * self.h) ** (1./self.d)
         J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
-        D = expm(self.dc * h * J @ self.D2) @ J
-
+        D = expm(h * J @ self.D2) @ J
         self.Z = D.copy()
         for d in range(self.d-1):
             self.Z = kron(self.Z, D)
@@ -193,25 +195,26 @@ class Solver(object):
     def calc(self):
         '''
         Calculate solution of the equation.
+
+        TODO! Maybe move interpolation of init. cond. from prep func here.
         '''
 
         self._t_calc = 0.
+        self._t_spec = time.time()
 
         _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=80)
 
         for i, t in enumerate(self.T):
-            if i == 0: continue
+            self.t = t
+            if i == 0: # First iteration is the initial condition
+                continue
 
             _t = time.time()
-
-            self.t = t
-
             self.IT0 = self.IT.copy()
             self.IT.init(self.step).prep()
-
             self._t_calc+= time.time() - _t
 
-            t_hst = int(self.t_poi / self.t_poi_hst) if self.t_poi_hst else 0
+            t_hst = int(self.t_poi / self.t_hst) if self.t_hst else 0
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
                 r = self.IT.calc(self.X_hst)
 
@@ -225,6 +228,7 @@ class Solver(object):
                     r_real = self.func_rt(self.X_hst, t)
                     e = np.linalg.norm(r_real - r_calc) / np.linalg.norm(r_real)
                     self.E_hst.append(e)
+                    self._err = e
 
                     _msg+= ' error = %-8.2e'%e
                 else:
@@ -239,6 +243,8 @@ class Solver(object):
         self.T_hst = np.array(self.T_hst)
         self.R_hst = np.array(self.R_hst)
         self.E_hst = np.array(self.E_hst)
+
+        self._t_spec+= time.time() - self._t_spec - self._t_calc
 
     def step(self, X):
         '''
@@ -274,11 +280,13 @@ class Solver(object):
         Present info about the last computation.
         '''
 
-        print('---------- Solver')
-        print('Format   : %1dD, %s [order=%d]'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
-        print('Grid x   : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
-        print('Grid t   : poi = %9d, min = %9.4f, max = %9.4f'%(self.t_poi, self.t_min, self.t_max))
-        print('Time sec : prep = %8.2e, calc = %8.2e'%(self._t_prep, self._t_calc))
+        print('----------- Solver')
+        print('Format    : %1dD, %s [order=%d]'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
+        print('Grid x    : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
+        print('Grid t    : poi = %9d, min = %9.4f, max = %9.4f , hst = %9d'%(self.t_poi, self.t_min, self.t_max, self.t_hst))
+        print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self._t_prep, self._t_calc, self._t_spec))
+        if self._err:
+            print('Rel.err.  : %8.2e'%(self._err))
 
     def anim(self, ffmpeg_path, delt=50):
         '''
@@ -391,14 +399,14 @@ class Solver(object):
             ax1 = fig.add_subplot(grd[0, 0])
             ax2 = fig.add_subplot(grd[0, 1])
 
-            r_init = self.func_r0(X) if self.func_r0 else None
+            r_init = self.func_r0(X)
             ax1.plot(x, _prep(r_init), **config['plot']['line']['init'])
 
             r_calc = self.R_hst[i]
             ax1.plot(x, _prep(r_calc), **config['plot']['line']['calc'])
 
             if self.func_rt:
-                r_real = self.func_rt(X, t) if self.func_rt else None
+                r_real = self.func_rt(X, t)
 
                 e = np.abs(r_real - r_calc)
                 if is_err_abs:
@@ -495,6 +503,8 @@ class Solver(object):
             * err = abs(u_real - u_calc)
             False - relative error will be plotted
             * err = abs(u_real - u_calc) / abs(u_real)
+
+        TODO! Replace full spatial grid by several selected points.
         '''
 
         def _prep(r):
@@ -504,8 +514,8 @@ class Solver(object):
 
         def _plot_1d(x):
             if isinstance(x, (list, np.ndarray)): x = x[0]
-            i = (np.abs(self.X_hst.reshape(-1) - x)).argmin()
-            x = self.X_hst.reshape(-1)[i]
+            i = (np.abs(self.X_hst[0, :] - x)).argmin()
+            x = self.X_hst[0, i]
             X = np.array([[x]])
             t = self.T_hst
             v = np.ones(t.shape[0])
@@ -522,7 +532,7 @@ class Solver(object):
             ax1.plot(t, _prep(r_calc), **config['plot']['line']['calc'])
 
             if self.func_rt:
-                r_real = np.array([self.func_rt(X, q)[0] for q in t])
+                r_real = np.array([self.func_rt(X, t_)[0] for t_ in t])
 
                 e = np.abs(r_real - r_calc)
                 if is_err_abs:
@@ -532,7 +542,7 @@ class Solver(object):
                 ax2.plot(t, e, **config['plot']['line']['errs'])
 
             if self.func_rs:
-                r_stat = v * self.func_rs(X)[0] if self.func_rs else None
+                r_stat = v * self.func_rs(X)[0]
                 ax1.plot(t, _prep(r_stat), **config['plot']['line']['stat'])
 
             if is_log:
