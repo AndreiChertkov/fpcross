@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from intertrain import Intertrain
 from solver import Solver
+from utils import rk4
 
 class SolverTmp2(Solver):
 
@@ -18,18 +19,7 @@ class SolverTmp2(Solver):
 
         def step_x(X):
 
-            def func_x(t, v):
-                x = v.reshape(self.d, -1)
-                f0 = self.func_f0(x, t)
-                res = f0
-                return res
-
-            X0 = X.copy()
-            for j in range(X.shape[1]):
-                y1 = X[:, j]
-                y2 = solve_ivp(func_x, [self.t, self.t - self.h], y1).y[:, -1]
-                X0[:, j] = y2
-
+            X0 = rk4(self.func_f0, X, self.t, self.t - self.h, t_poi=2)
             return X0
 
         def step_i(X):
@@ -39,31 +29,22 @@ class SolverTmp2(Solver):
 
         def step_w(X, w0):
 
-            def func_r(t, v):
-                x = v[:-1].reshape(self.d, -1)
-                r = v[-1]
+            def func(v, t):
+                x = v[:-1, :]
+                r = v[-1, :]
+
                 f0 = self.func_f0(x, t)
                 f1 = self.func_f1(x, t)
-                res = [
-                    *list(f0.reshape(-1)),
-                    -np.trace(f1) * r
-                ]
-                return res
 
-            w = w0.copy()
-            for j in range(X.shape[1]):
-                if w0[j] < 1.E-30: # Zero
-                    continue
+                return np.vstack([f0, -np.trace(f1) * r])
 
-                y1 = [*list(X[:, j]), w0[j]]
-                y2 = solve_ivp(func_r, [self.t-self.h, self.t], y1).y[:, -1]
-                w[j] = y2[-1]
-
+            v0 = np.vstack([X, w0])
+            v1 = rk4(func, v0, self.t - self.h, self.t, t_poi=2)
+            w = v1[-1, :]
             return w
 
         def step_v(X, v0):
             v = self.Z @ v0
-
             return v
 
         X0 = step_x(X)
