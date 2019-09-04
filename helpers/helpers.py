@@ -18,7 +18,7 @@ def init_jupyter():
     print('-'*37)
 
     from IPython.core.display import HTML
-    HTML('<style>%s</style>' %style)
+    return HTML('<style>%s</style>' %style)
 
 def save_mnet(fpath, DATA, ord, M, N, E, T, opts={}):
     DATA['ord%d'%ord] = {
