@@ -509,7 +509,7 @@ class Solver(object):
         from IPython.display import HTML
         return HTML(anim.to_html5_video())
 
-    def plot_x(self, t=None, is_log=False, is_abs=False, is_err_abs=False):
+    def plot_x(self, t=None, opts={}):
         '''
         Plot solution on the spatial grid at time t (by default at final time
         point). Initial value, analytical solution and stationary solution
@@ -521,76 +521,129 @@ class Solver(object):
         t - time point for plot
         type: float
 
-        is_log - (optional) flag:
-            True  - log y-axis will be used for PDF values
-            False - simple y-axis will be used for PDF values
+        opts - (optional) dictionary with optional parameters
+        type: dict with fields:
 
-        is_abs - (optional) flag:
-            True  - absolute values will be presented for PDF
-            False - original values will be presented for PDF
+            is_log - flag:
+                True  - log y-axis will be used for PDF values
+                False - linear y-axis will be used for PDF values
+            default: False
+            type: bool
 
-        is_err_abs - (optional) flag:
-            True  - absolute error will be plotted
-            * err = abs(u_real - u_calc)
-            False - relative error will be plotted
-            * err = abs(u_real - u_calc) / abs(u_real)
+            is_abs - flag:
+                True  - absolute values will be presented for PDF
+                False - original values will be presented for PDF
+            default: False
+            type: bool
+
+            is_err_abs - flag:
+                True  - absolute error will be presented on the plot
+                * err = abs(r_real(stat) - r_calc)
+                False - relative error will be presented on the plot
+                * err = abs(r_real(stat) - r_calc) / abs(r_real(stat))
+            default: False
+            type: bool
+
+            with_err_stat - flag:
+                True  - error vs stationary solution will be presented
+                False - error vs stationary solution will not be presented
+            default: False
+            type: bool
         '''
 
-        def _prep(r):
-            if not isinstance(r, np.ndarray):
-                r = np.array(r)
-            return np.abs(r) if is_abs else r
+        conf = config['opts']['plot']
+        sett = config['plot']['spatial']
 
-        def _plot_1d(t):
-            i = -1 if t is None else (np.abs(self.T_hst - t)).argmin()
-            t = self.T_hst[i]
-            X = self.X_hst
-            x = X.reshape(-1)
+        i = -1 if t is None else (np.abs(self.T_hst - t)).argmin()
+        t = self.T_hst[i]
+        x = self.X_hst
+        if self.d == 1:
+            xg = x.reshape(-1)
+        else:
+            xg = np.arange(x.shape[1])
 
-            fig = plt.figure(**config['plot']['fig']['base_1_2'])
-            grd = mpl.gridspec.GridSpec(**config['plot']['grid']['base_1_2'])
-            ax1 = fig.add_subplot(grd[0, 0])
-            ax2 = fig.add_subplot(grd[0, 1])
-
-            r_init = self.func_r0(X)
-            ax1.plot(x, _prep(r_init), **config['plot']['line']['init'])
-
+        r_init, r_stat, r_real, r_calc = None, None, None, None
+        if self.func_r0:
+            r_init = self.func_r0(x)
+        if self.func_rs:
+            r_stat = self.func_rs(x)
+        if self.func_rt:
+            r_real = self.func_rt(x, t)
+        if self.R_hst is not None:
             r_calc = self.R_hst[i]
-            ax1.plot(x, _prep(r_calc), **config['plot']['line']['calc'])
 
-            if self.func_rt:
-                r_real = self.func_rt(X, t)
+        e, e_stat = None, None
+        if r_real is not None and r_calc is not None:
+            e = np.abs(r_real - r_calc)
+            if opts.get('is_err_abs'):
+                e = e / np.abs(r_real)
+        if r_real is not None and r_stat is not None:
+            e_stat = np.abs(r_stat - r_calc)
+            if opts.get('is_err_abs'):
+                e_stat = e_stat / np.abs(r_stat)
+            if not opts.get('with_err_stat'):
+                e_stat = None
 
-                e = np.abs(r_real - r_calc)
-                if is_err_abs:
-                    e = e / np.abs(r_real)
+        sx = ' at t = %8.1e'%t
 
-                ax1.plot(x, _prep(r_real), **config['plot']['line']['real'])
-                ax2.plot(x, e, **config['plot']['line']['errs'])
+        fig = plt.figure(**conf['fig'][sett['fig']])
+        grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
 
-            if self.func_rs:
-                r_stat = self.func_rs(X)
-                ax1.plot(x, _prep(r_stat), **config['plot']['line']['stat'])
+        def _prep(r):
+            if not isinstance(r, np.ndarray): r = np.array(r)
+            return np.abs(r) if opts.get('is_abs') else r
 
-            if is_log:
-                ax1.semilogy()
-            if is_abs:
-                ax1.set_title('PDF at t=%-8.4f (abs. value)'%t)
-            else:
-                ax1.set_title('PDF at t=%-8.4f'%t)
-            ax1.set_xlabel('x')
-            ax1.set_ylabel('r')
-            ax1.legend(loc='best')
+        ax1 = fig.add_subplot(grd[0, 0])
 
-            ax2.semilogy()
-            if is_err_abs:
-                ax2.set_title('Absolute error of PDF at t = %-8.4f'%t)
-            else:
-                ax2.set_title('Relative error of PDF at t = %-8.4f'%t)
-            ax2.set_xlabel('x')
-            ax2.set_ylabel('Error')
+        if r_init is not None:
+            ax1.plot(xg, _prep(r_init), **{
+                'label': sett['label-init'],
+                **conf['line'][sett['line-init']]
+            })
+        if r_calc is not None:
+            ax1.plot(xg, _prep(r_calc), **{
+                'label': sett['label-calc'],
+                **conf['line'][sett['line-calc']]
+            })
+        if r_real is not None:
+            ax1.plot(xg, _prep(r_real), **{
+                'label': sett['label-real'],
+                **conf['line'][sett['line-real']]
+            })
+        if r_stat is not None:
+            ax1.plot(xg, _prep(r_stat), **{
+                'label': sett['label-stat'],
+                **conf['line'][sett['line-stat']]
+            })
 
-            plt.show()
+        if opts.get('is_log'): ax1.semilogy()
+        ss = ' (abs.)' if opts.get('is_abs') else ''
+        ax1.set_title('%s%s%s'%(sett['title'], ss, sx))
+        ax1.set_xlabel(sett['label-x'])
+        ax1.set_ylabel(sett['label-y'])
+        ax1.legend(loc='best')
+
+        ax2 = fig.add_subplot(grd[0, 1])
+
+        if e is not None:
+            ax2.plot(xg, e, **{
+                'label': sett['label-err-real'],
+                **conf['line'][sett['line-err-real']]
+            })
+        if e_stat is not None:
+            ax2.plot(xg, e_stat, **{
+                'label': sett['label-err-stat'],
+                **conf['line'][sett['line-err-stat']]
+            })
+
+        ax2.semilogy()
+        ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
+        ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
+        ax2.set_xlabel(sett['label-err-x'])
+        ax2.set_ylabel(sett['label-err-y'])
+        ax2.legend(loc='best')
+
+        plt.show()
 
         def _plot_2d(t):
             return # DRAFT
@@ -624,12 +677,6 @@ class Solver(object):
                 cb = plt.colorbar(ct2, cax=ax, orientation='horizontal')
 
             plt.show()
-
-        if self.d == 1:
-            return _plot_1d(t)
-        else:
-            s = 'Dimension number %d is not supported for plot.'%self.d
-            raise NotImplementedError(s)
 
     def plot_t(self, x, opts={}):
         '''

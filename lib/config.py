@@ -24,7 +24,32 @@ config = {
             'line-err-real': 'l5',
             'label-err-stat': 'Error vs stationary',
             'line-err-stat': 'l6',
-        }
+        },
+        'spatial': {
+            'fig': 'base_1_2',
+
+            'grid': 'base_1_2',
+
+            'title': 'Solution',
+            'label-x': 'Time',
+            'label-y': 'Point',
+            'label-init': 'Initial',
+            'line-init': 'l1',
+            'label-calc': 'Calculated',
+            'line-calc': 'l2',
+            'label-real': 'Analytic',
+            'line-real': 'l3',
+            'label-stat': 'Stationary',
+            'line-stat': 'l4',
+
+            'title-err': 'Error',
+            'label-err-x': 'Point',
+            'label-err-y': 'Error',
+            'label-err-real': 'Error vs analytic',
+            'line-err-real': 'l5',
+            'label-err-stat': 'Error vs stationary',
+            'line-err-stat': 'l6',
+        },
     },
     'opts': {
         'plot': {
