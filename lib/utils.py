@@ -1,3 +1,6 @@
+# TODO! Rename module name and create the sorresponding class (solverODE) ?
+# TODO! Add scipy ivp solver method for multiple initial conditions.
+
 def eul(f, r0, t_min, t_max, t_poi=2):
     h = (t_max - t_min) / (t_poi - 1)
     t = t_min

@@ -222,6 +222,7 @@ class Solver(object):
         self._t_spec = time.time()
 
         _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=80)
+        t_hst = int(self.t_poi / self.t_hst) if self.t_hst else 0
 
         for i, t in enumerate(self.T):
             self.t = t
@@ -233,34 +234,17 @@ class Solver(object):
             self.IT.init(self.step).prep()
             self._t_calc+= time.time() - _t
 
-            t_hst = int(self.t_poi / self.t_hst) if self.t_hst else 0
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
-                r = self.IT.calc(self.X_hst)
-
+                r = self.comp()
+                self.comp_real(r_calc=r)
+                self.comp_stat(r_calc=r)
                 self.T_hst.append(t)
                 self.R_hst.append(r)
 
-                _msg = '| At T = %-8.2e :'%self.t
-
-                if self.func_rt:
-                    r_calc = r
-                    r_real = self.func_rt(self.X_hst, t)
-                    e = np.linalg.norm(r_real - r_calc) / np.linalg.norm(r_real)
-                    self.E_hst.append(e)
-                    self._err = e
-
-                    _msg+= ' error = %-8.2e'%e
-                elif self.func_rs:
-                    r_calc = r
-                    r_real = self.func_rs(self.X_hst)
-                    e = np.linalg.norm(r_real - r_calc) / np.linalg.norm(r_real)
-                    self.E_hst_stat.append(e)
-                    self._err_stat = e
-
-                    _msg+= ' error stat = %-8.2e'%e
-                else:
-                    _msg+= ' norm = %-8.2e'%np.linalg.norm(r)
-
+                _msg = '| At T=%-8.2e :'%self.t
+                _msg+= ' n=%-8.2e'%np.linalg.norm(r)
+                if self._err: _msg+= ' e=%-8.2e'%self._err
+                if self._err_stat: _msg+= ' es=%-8.2e'%self._err_stat
                 _tqdm.set_postfix_str(_msg, refresh=True)
 
             _tqdm.update(1)
@@ -307,18 +291,18 @@ class Solver(object):
                 f1 = self.func_f1(X, self.t - self.h)
                 w = (1. - self.h * np.trace(f1)) * w0
             else:
-                def func(v, t):
-                    x = v[:-1, :]
-                    r = v[-1, :]
+                def func(y, t):
+                    x = y[:-1, :]
+                    r = y[-1, :]
 
                     f0 = self.func_f0(x, t)
                     f1 = self.func_f1(x, t)
 
                     return np.vstack([f0, -np.trace(f1) * r])
 
-                v0 = np.vstack([X, w0])
-                v1 = rk4(func, v0, self.t - self.h, self.t, t_poi=2)
-                w = v1[-1, :]
+                y0 = np.vstack([X, w0])
+                y1 = rk4(func, y0, self.t - self.h, self.t, t_poi=2)
+                w = y1[-1, :]
 
             return w
 
@@ -345,6 +329,102 @@ class Solver(object):
             return step_ord1(X)
         if self.ord == 2:
             return step_ord2(X)
+
+    def comp(self, X=None):
+        '''
+        Compute calculated solution at given spatial points X
+        (on the history grid if is None).
+
+        INPUT:
+
+        X - (optional) values of the spatial variable
+        type: ndarray [dimensions, number of points]
+
+        OUTPUT:
+
+        r - calculated solution in the given points
+        type: ndarray [number of points] of float
+        '''
+
+        if X is None:
+            X = self.X_hst
+
+        if X is None or not X.shape[1]:
+            r = None
+        else:
+            r = self.IT.calc(X)
+
+        return r
+
+    def comp_real(self, X=None, r_calc=None):
+        '''
+        Compute real (analytic) solution r(x, t) at given spatial points X
+        (on the history grid if is None) and the corresponding error vs r_calc.
+        * Current time (t) is used for computation.
+
+        INPUT:
+
+        X - (optional) values of the spatial variable
+        type: ndarray [dimensions, number of points]
+        r_calc - (optional) calculated solution in the given points
+        type: ndarray [number of points] of float
+
+        OUTPUT:
+
+        r - analytic solution in the given points
+        type: ndarray [number of points] of float
+        '''
+
+        if X is None:
+            X = self.X_hst
+
+        if X is None or not X.shape[1] or not self.func_rt:
+            r = None
+            if r_calc is not None:
+                self._err = None
+                self.E_hst.append(self._err)
+        else:
+            r = self.func_rt(X, self.t)
+            if r_calc is not None:
+                self._err = np.linalg.norm(r - r_calc) / np.linalg.norm(r)
+                self.E_hst.append(self._err)
+
+        return r
+
+    def comp_stat(self, X=None, r_calc=None):
+        '''
+        Compute stationary (analytic) solution rs(x) at given spatial points X
+        (on the history grid if is None) and the corresponding error vs r_calc.
+        * Current time (t) is used for computation.
+
+        INPUT:
+
+        X - (optional) values of the spatial variable
+        type: ndarray [dimensions, number of points]
+        r_calc - (optional) calculated solution in the given points
+        type: ndarray [number of points] of float
+
+        OUTPUT:
+
+        r - stationary solution in the given points
+        type: ndarray [number of points] of float
+        '''
+
+        if X is None:
+            X = self.X_hst
+
+        if X is None or not X.shape[1] or not self.func_rt:
+            r = None
+            if r_calc is not None:
+                self._err_stat = None
+                self.E_hst_stat.append(self._err_stat)
+        else:
+            r = self.func_rt(X, self.t)
+            if r_calc is not None:
+                self._err_stat = np.linalg.norm(r - r_calc) / np.linalg.norm(r)
+                self.E_hst_stat.append(self._err_stat)
+
+        return r
 
     def info(self):
         '''
