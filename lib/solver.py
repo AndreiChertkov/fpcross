@@ -631,7 +631,7 @@ class Solver(object):
             s = 'Dimension number %d is not supported for plot.'%self.d
             raise NotImplementedError(s)
 
-    def plot_t(self, x, is_log=False, is_abs=False, is_err_abs=False, with_err_stat=False):
+    def plot_t(self, x, opts={}):
         '''
         Plot solution vs time at the spatial grid point x. Initial value,
         analytical solution and stationary solution are also presented.
@@ -643,95 +643,137 @@ class Solver(object):
         type: ndarray (or list) [dimensions] of float
         * In the case of 1D it may be float
 
-        is_log - (optional) flag:
-            True  - log y-axis will be used for PDF values
-            False - simple y-axis will be used for PDF values
+        opts - (optional) dictionary with optional parameters
+        type: dict with fields:
 
-        is_abs - (optional) flag:
-            True  - absolute values will be presented for PDF
-            False - original values will be presented for PDF
+            is_log - flag:
+                True  - log y-axis will be used for PDF values
+                False - linear y-axis will be used for PDF values
+            default: False
+            type: bool
 
-        is_err_abs - (optional) flag:
-            True  - absolute error will be plotted
-            * err = abs(u_real - u_calc)
-            False - relative error will be plotted
-            * err = abs(u_real - u_calc) / abs(u_real)
+            is_abs - flag:
+                True  - absolute values will be presented for PDF
+                False - original values will be presented for PDF
+            default: False
+            type: bool
 
-        with_err_stat - (optional) flag:
-            True  - error vs stationary solution will be plotted if available
-            False - error vs stationary solution will not be plotted
+            is_err_abs - flag:
+                True  - absolute error will be presented on the plot
+                * err = abs(r_real(stat) - r_calc)
+                False - relative error will be presented on the plot
+                * err = abs(r_real(stat) - r_calc) / abs(r_real(stat))
+            default: False
+            type: bool
+
+            with_err_stat - flag:
+                True  - error vs stationary solution will be presented
+                False - error vs stationary solution will not be presented
+            default: False
+            type: bool
 
         TODO! Replace full spatial grid by several selected points.
         '''
 
-        def _prep(r):
-            if not isinstance(r, np.ndarray):
-                r = np.array(r)
-            return np.abs(r) if is_abs else r
+        if isinstance(x, (int, float)):
+            x = np.array([float(x)])
+        if isinstance(x, list):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray) or x.shape[0] != self.d:
+            s = 'Invalid spatial point.'
+            raise ValueError(s)
 
-        def _plot_1d(x):
-            if isinstance(x, (list, np.ndarray)): x = x[0]
-            i = (np.abs(self.X_hst[0, :] - x)).argmin()
-            x = self.X_hst[0, i]
-            X = np.array([[x]])
-            t = self.T_hst
-            v = np.ones(t.shape[0])
+        conf = config['opts']['plot']
+        sett = config['plot']['time']
 
-            fig = plt.figure(**config['plot']['fig']['base_1_2'])
-            grd = mpl.gridspec.GridSpec(**config['plot']['grid']['base_1_2'])
-            ax1 = fig.add_subplot(grd[0, 0])
-            ax2 = fig.add_subplot(grd[0, 1])
+        x = np.repeat(x.reshape(-1, 1), self.X_hst.shape[1], axis=1)
+        i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
+        x = self.X_hst[:, i].reshape(-1, 1)
+        t = self.T_hst
+        v = np.ones(t.shape[0])
 
-            r_init = v * self.func_r0(X)[0]
-            ax1.plot(t, _prep(r_init), **config['plot']['line']['init'])
-
+        r_init, r_stat, r_real, r_calc = None, None, None, None
+        if self.func_r0:
+            r_init = v * self.func_r0(x)[0]
+        if self.func_rs:
+            r_stat = v * self.func_rs(x)[0]
+        if self.func_rt:
+            r_real = np.array([self.func_rt(x, t_)[0] for t_ in t])
+        if self.R_hst is not None:
             r_calc = np.array([r[i] for r in self.R_hst])
-            ax1.plot(t, _prep(r_calc), **config['plot']['line']['calc'])
 
-            if self.func_rt:
-                r_real = np.array([self.func_rt(X, t_)[0] for t_ in t])
+        e, e_stat = None, None
+        if r_real is not None and r_calc is not None:
+            e = np.abs(r_real - r_calc)
+            if opts.get('is_err_abs'):
+                e = e / np.abs(r_real)
+        if r_real is not None and r_stat is not None:
+            e_stat = np.abs(r_stat - r_calc)
+            if opts.get('is_err_abs'):
+                e_stat = e_stat / np.abs(r_stat)
+            if not opts.get('with_err_stat'):
+                e_stat = None
 
-                e = np.abs(r_real - r_calc)
-                if is_err_abs:
-                    e = e / np.abs(r_real)
+        sx = ','.join(['%8.1e'%x_ for x_ in list(x.reshape(-1))])
+        print('--- Solution at spatial point')
+        print('X = [%s]'%sx)
+        sx = ' at x = [%s]'%sx if self.d < 4 else ''
 
-                ax1.plot(t, _prep(r_real), **config['plot']['line']['real'])
-                ax2.plot(t, e, **config['plot']['line']['errs'])
+        fig = plt.figure(**conf['fig'][sett['fig']])
+        grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
 
-            if self.func_rs:
-                r_stat = v * self.func_rs(X)[0]
-                ax1.plot(t, _prep(r_stat), **config['plot']['line']['stat'])
+        def _prep(r):
+            if not isinstance(r, np.ndarray): r = np.array(r)
+            return np.abs(r) if opts.get('is_abs') else r
 
-                if with_err_stat:
-                    e = np.abs(r_stat - r_calc)
-                    if is_err_abs:
-                        e = e / np.abs(r_stat)
+        ax1 = fig.add_subplot(grd[0, 0])
 
-                    ax2.plot(t, e, **config['plot']['line']['errs2'])
+        if r_init is not None:
+            ax1.plot(t, _prep(r_init), **{
+                'label': sett['label-init'],
+                **conf['line'][sett['line-init']]
+            })
+        if r_calc is not None:
+            ax1.plot(t, _prep(r_calc), **{
+                'label': sett['label-calc'],
+                **conf['line'][sett['line-calc']]
+            })
+        if r_real is not None:
+            ax1.plot(t, _prep(r_real), **{
+                'label': sett['label-real'],
+                **conf['line'][sett['line-real']]
+            })
+        if r_stat is not None:
+            ax1.plot(t, _prep(r_stat), **{
+                'label': sett['label-stat'],
+                **conf['line'][sett['line-stat']]
+            })
 
-            if is_log:
-                ax1.semilogy()
-            if is_abs:
-                ax1.set_title('PDF at x = %-8.4f (abs. value)'%x)
-            else:
-                ax1.set_title('PDF at x = %-8.4f'%x)
-            ax1.set_xlabel('t')
-            ax1.set_ylabel('r')
-            ax1.legend(loc='best')
+        if opts.get('is_log'): ax1.semilogy()
+        ss = ' (abs.)' if opts.get('is_abs') else ''
+        ax1.set_title('%s%s%s'%(sett['title'], ss, sx))
+        ax1.set_xlabel(sett['label-x'])
+        ax1.set_ylabel(sett['label-y'])
+        ax1.legend(loc='best')
 
-            ax2.semilogy()
-            if is_err_abs:
-                ax2.set_title('Absolute error of PDF at x = %-8.4f'%x)
-            else:
-                ax2.set_title('Relative error of PDF at x = %-8.4f'%x)
-            ax2.set_xlabel('t')
-            ax2.set_ylabel('Error')
-            ax2.legend(loc='best')
+        ax2 = fig.add_subplot(grd[0, 1])
 
-            plt.show()
+        if e is not None:
+            ax2.plot(t, e, **{
+                'label': sett['label-err-real'],
+                **conf['line'][sett['line-err-real']]
+            })
+        if e_stat is not None:
+            ax2.plot(t, e_stat, **{
+                'label': sett['label-err-stat'],
+                **conf['line'][sett['line-err-stat']]
+            })
 
-        if self.d == 1:
-            return _plot_1d(x)
-        else:
-            s = 'Dimension number %d is not supported for plot.'%self.d
-            raise NotImplementedError(s)
+        ax2.semilogy()
+        ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
+        ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
+        ax2.set_xlabel(sett['label-err-x'])
+        ax2.set_ylabel(sett['label-err-y'])
+        ax2.legend(loc='best')
+
+        plt.show()
