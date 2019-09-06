@@ -31,8 +31,8 @@ config = {
             'grid': 'base_1_2',
 
             'title': 'Solution',
-            'label-x': 'Time',
-            'label-y': 'Point',
+            'label-x': 'Point',
+            'label-y': 'Solution',
             'label-init': 'Initial',
             'line-init': 'l1',
             'label-calc': 'Calculated',

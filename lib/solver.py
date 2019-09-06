@@ -619,7 +619,8 @@ class Solver(object):
         if opts.get('is_log'): ax1.semilogy()
         ss = ' (abs.)' if opts.get('is_abs') else ''
         ax1.set_title('%s%s%s'%(sett['title'], ss, sx))
-        ax1.set_xlabel(sett['label-x'])
+        ss = ' (number)' if self.d > 1 else ' coordinate'
+        ax1.set_xlabel(sett['label-x'] + ss)
         ax1.set_ylabel(sett['label-y'])
         ax1.legend(loc='best')
 
