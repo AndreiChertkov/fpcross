@@ -288,6 +288,9 @@ class Solver(object):
 
         r - approximated values of the solution in the given points
         type: ndarray [number of points] of float
+
+        TODO! Cross approximation requests only part of grid points and
+              indices (for expm) are required!
         '''
 
         def step_x(X):
