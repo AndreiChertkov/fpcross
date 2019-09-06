@@ -14,9 +14,26 @@ from intertrain import Intertrain
 
 class Solver(object):
     '''
-    Solve d-dimensional Fokker-Planck equation
-    d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
-    r(x, 0) = r0(x), r(x, +infinity) = rs(x).
+    Class with fast solver of d-dimensional Fokker-Planck equation
+    d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ), r(x,0) = r0(x),
+    with known f(x,t), r0(x) and scalar coefficient D.
+    Full (numpy, NP) of sparse (tensor train, TT with cross approximation)
+    format may be used.
+
+    Basic usage:
+     1 Initialize class instance with dimension, format and accuracy parameters.
+     2 Call "set_grid_t" to set time grid parameters.
+     3 Call "set_grid_x" to set spatial grid parameters.
+     4 Call "set_funcs" to set functions in PDE and analytic solution if known.
+     5 Call "set_coefs" to set coefficients in PDE.
+     6 Call "prep" for initialization of the solver.
+     7 Call "calc" for calculation process.
+     8 Call "info" for demonstration of calculation results.
+     9 Call "plot_x" for plot of solution and error at selected time moment.
+    10 Call "plot_t" for plot of solution and error at selected spatial point.
+
+    Advanced usage:
+     - Call "comp" to obtain final solution at given spatial point.
     '''
 
     def __init__(self, d, eps=1.E-6, ord=2, with_tt=False):
