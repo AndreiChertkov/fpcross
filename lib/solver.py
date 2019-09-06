@@ -13,8 +13,13 @@ from utils import rk4, eul
 from intertrain import Intertrain
 
 class Solver(object):
+    '''
+    Solve d-dimensional Fokker-Planck equation
+    d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
+    r(x, 0) = r0(x), r(x, +infinity) = rs(x).
+    '''
 
-    def __init__(self, d, eps=1.E-6, ord=1, with_tt=False):
+    def __init__(self, d, eps=1.E-6, ord=2, with_tt=False):
         '''
         INPUT:
 
@@ -25,6 +30,8 @@ class Solver(object):
         type: float, > 0
 
         ord - (optional) order of approximation
+        * If = 1, then 1th order splitting and euler ode solver are used
+        * If = 2, then 2th order splitting and Runge-Kutta ode solver are used
         type: int, = 1, 2
 
         with_tt - (optional) flag:
@@ -56,7 +63,7 @@ class Solver(object):
         type: float, > t_min
 
         t_hst - (optional) total number of points for history
-        * solution at this pints will be saved to history for further analysis
+        * solution at this points will be saved to history for further analysis
         type: int, >= 0, <= t_poi
         '''
 
@@ -121,13 +128,13 @@ class Solver(object):
     def set_funcs(self, f0, f1, r0, rt=None, rs=None):
         '''
         Set functions for equation
-        d r / d t = D Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
+        d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
+        r(x, 0) = r0(x), r(x, +infinity) = rs(x),
         where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
         r0(x) is initial condition, rt(x, t) is optional analytic solution
         and rs(x) is optional stationary solution.
-        * All functions should support input X
-        * of type ndarray [d, n_pooi] of float.
-        * Functions f0, f1 should return value of the same shape as X.
+        * Functions input is X of type ndarray [dimensions, number of points].
+        * Functions f0, f1 should return 2D ndarray of the same shape as X.
         * Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
         '''
 
@@ -140,7 +147,8 @@ class Solver(object):
     def set_coefs(self, Dc=None):
         '''
         Set coefficients for equation
-        d r / d t = D Nabla( r ) - div( f(x, t) r ), r(x, 0) = r0,
+        d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
+        r(x, 0) = r0(x), r(x, +infinity) = rs(x).
 
         INPUT:
 
@@ -148,7 +156,7 @@ class Solver(object):
         type: float
         default: 1.
 
-        TODO! Replace Dc by tensor.
+        TODO! Replace Dc by matrix.
         '''
 
         self.Dc = Dc if Dc is not None else 1.
@@ -165,25 +173,35 @@ class Solver(object):
 
         _t = time.time()
 
-        self._err = None
         self._t_prep = None
         self._t_calc = None
         self._t_spec = None
 
         self.t = self.t_min   # Current value of time variable
+        self._err = None      # Current error calc vs real
+        self._err_stat = None # Current error calc vs stat
         self.IT.dif2()        # Chebyshev diff. matrices
         self.D1 = self.IT.D1  # d / dx
         self.D2 = self.IT.D2  # d2 / dx2
 
-        self.IT0 = None     # Interpolant from the previous step
+        self.IT0 = None       # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
 
-        h = (self.Dc * self.h) ** (1./self.d)
+        if self.ord == 1:
+            h = (self.Dc * self.h) ** (1./self.d)
+        else:
+            h = (self.Dc * self.h / 2.) ** (1./self.d)
+
         J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
-        D = expm(h * J @ self.D2) @ J
+        self.J = J.copy()
+        for d in range(self.d-1):
+            self.J = kron(self.J, J)
+
+        D = expm(h * J @ self.D2)
         self.Z = D.copy()
         for d in range(self.d-1):
             self.Z = kron(self.Z, D)
+        self.Z = self.Z @ self.J
 
         self._t_prep = time.time() - _t
 
@@ -191,12 +209,13 @@ class Solver(object):
         self.T_hst = []
         self.R_hst = []
         self.E_hst = []
+        self.E_hst_stat = []
 
     def calc(self):
         '''
         Calculate solution of the equation.
 
-        TODO! Maybe move interpolation of init. cond. from prep func here.
+        TODO! Maybe move here interpolation of init. cond. from prep func.
         '''
 
         self._t_calc = 0.
@@ -231,6 +250,14 @@ class Solver(object):
                     self._err = e
 
                     _msg+= ' error = %-8.2e'%e
+                elif self.func_rs:
+                    r_calc = r
+                    r_real = self.func_rs(self.X_hst)
+                    e = np.linalg.norm(r_real - r_calc) / np.linalg.norm(r_real)
+                    self.E_hst_stat.append(e)
+                    self._err_stat = e
+
+                    _msg+= ' error stat = %-8.2e'%e
                 else:
                     _msg+= ' norm = %-8.2e'%np.linalg.norm(r)
 
@@ -243,12 +270,13 @@ class Solver(object):
         self.T_hst = np.array(self.T_hst)
         self.R_hst = np.array(self.R_hst)
         self.E_hst = np.array(self.E_hst)
+        self.E_hst_stat = np.array(self.E_hst_stat)
 
         self._t_spec+= time.time() - self._t_spec - self._t_calc
 
     def step(self, X):
         '''
-        One computation step for solver.
+        One computation step for the solver.
 
         INPUT:
 
@@ -257,7 +285,7 @@ class Solver(object):
 
         OUTPUT:
 
-        r - approximated values of the solution in given points
+        r - approximated values of the solution in the given points
         type: ndarray [number of points] of float
         '''
 
@@ -298,20 +326,25 @@ class Solver(object):
             v = self.Z @ v0
             return v
 
-        X0 = step_x(X)
-        r0 = step_i(X0)
-        w1 = step_w(X0, r0)
-        v1 = step_v(X0, w1)
-        r1 = v1.copy()
+        def step_ord1(X):
+            X0 = step_x(X)
+            r0 = step_i(X0)
+            v1 = step_v(X0, r0)
+            w1 = step_w(X0, v1)
+            return w1
+
+        def step_ord2(X):
+            X0 = step_x(X)
+            r0 = step_i(X0)
+            v1 = step_v(X0, r0)
+            w1 = step_w(X0, v1)
+            v2 = step_v(X0, w1)
+            return v2
 
         if self.ord == 1:
-            return r1
-
-        v1 = step_v(X0, r0)
-        w1 = step_w(X0, v1)
-        r2 = w1.copy()
-
-        return (r1 + r2) / 2.
+            return step_ord1(X)
+        if self.ord == 2:
+            return step_ord2(X)
 
     def info(self):
         '''
@@ -324,7 +357,9 @@ class Solver(object):
         print('Grid t    : poi = %9d, min = %9.4f, max = %9.4f , hst = %9d'%(self.t_poi, self.t_min, self.t_max, self.t_hst))
         print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self._t_prep, self._t_calc, self._t_spec))
         if self._err:
-            print('Rel.err.  : %8.2e'%(self._err))
+            print('Err calc  : %8.2e'%(self._err))
+        if self._err_stat:
+            print('Err stat  : %8.2e'%(self._err_stat))
 
     def anim(self, ffmpeg_path, delt=50):
         '''
@@ -516,7 +551,7 @@ class Solver(object):
             s = 'Dimension number %d is not supported for plot.'%self.d
             raise NotImplementedError(s)
 
-    def plot_t(self, x, is_log=False, is_abs=False, is_err_abs=False):
+    def plot_t(self, x, is_log=False, is_abs=False, is_err_abs=False, with_err_stat=False):
         '''
         Plot solution vs time at the spatial grid point x. Initial value,
         analytical solution and stationary solution are also presented.
@@ -541,6 +576,10 @@ class Solver(object):
             * err = abs(u_real - u_calc)
             False - relative error will be plotted
             * err = abs(u_real - u_calc) / abs(u_real)
+
+        with_err_stat - (optional) flag:
+            True  - error vs stationary solution will be plotted if available
+            False - error vs stationary solution will not be plotted
 
         TODO! Replace full spatial grid by several selected points.
         '''
@@ -583,6 +622,13 @@ class Solver(object):
                 r_stat = v * self.func_rs(X)[0]
                 ax1.plot(t, _prep(r_stat), **config['plot']['line']['stat'])
 
+                if with_err_stat:
+                    e = np.abs(r_stat - r_calc)
+                    if is_err_abs:
+                        e = e / np.abs(r_stat)
+
+                    ax2.plot(t, e, **config['plot']['line']['errs2'])
+
             if is_log:
                 ax1.semilogy()
             if is_abs:
@@ -600,6 +646,7 @@ class Solver(object):
                 ax2.set_title('Relative error of PDF at x = %-8.4f'%x)
             ax2.set_xlabel('t')
             ax2.set_ylabel('Error')
+            ax2.legend(loc='best')
 
             plt.show()
 
