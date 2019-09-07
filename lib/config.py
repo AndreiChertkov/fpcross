@@ -28,12 +28,31 @@ config = {
             'line-err-real': ['l5', 'Error vs analytic'],
             'line-err-stat': ['l6', 'Error vs stationary'],
         },
+        'conv-spatial': {
+            'fig': 'base_1_3',
+            'grid': 'base_1_3',
+            'title-err': 'Error vs analytic',
+            'title-err-stat': 'Error vs stationary',
+            'title-time': 'Computation time',
+            'label-err': ['Number of spatial points', ''],
+            'label-err-stat': ['Number of spatial points', ''],
+            'label-time': ['Number of spatial points', ''],
+            'line-sol-init': ['l1', 'Initial'],
+            'line-sol-calc': ['l2', 'Calculated'],
+            'line-sol-real': ['l3', 'Analytic'],
+            'line-sol-stat': ['l4', 'Stationary'],
+            'line-err-real': ['l5', 'Error vs analytic'],
+            'line-err-stat': ['l6', 'Error vs stationary'],
+        },
     },
     'opts': {
         'plot': {
             'fig': {
                 'base_1_2': {
                     'figsize': (10, 5),
+                },
+                'base_1_3': {
+                    'figsize': (12, 5),
                 },
             },
             'grid': {
@@ -47,6 +66,18 @@ config = {
                     'wspace': 0.2,
                     'hspace': 0.1,
                     'width_ratios': [1, 1],
+                    'height_ratios': [1],
+                },
+                'base_1_3': {
+                    'ncols': 3,
+                    'nrows': 1,
+                    'left': 0.,
+                    'right': 1.,
+                    'top': 1.,
+                    'bottom': 0.,
+                    'wspace': 0.2,
+                    'hspace': 0.,
+                    'width_ratios': [1, 1, 1],
                     'height_ratios': [1],
                 },
             },
