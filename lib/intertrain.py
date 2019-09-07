@@ -742,6 +742,7 @@ class Intertrain(object):
         crs_res = { 'evals': 0, 't_func': 0. }
 
         def func(ind):
+            ind = ind.astype(int)
             X = f_pois(ind.T)
             t = time.time()
             Y = f(X, ind.T) if opts['is_f_with_i'] else f(X)

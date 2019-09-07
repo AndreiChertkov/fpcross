@@ -248,7 +248,7 @@ class Solver(object):
 
             _t = time.time()
             self.IT0 = self.IT.copy()
-            self.IT.init(self.step).prep()
+            self.IT.init(self.step, opts={ 'is_f_with_i': self.with_tt }).prep()
             self._t_calc+= time.time() - _t
 
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
@@ -275,14 +275,17 @@ class Solver(object):
 
         self._t_spec+= time.time() - self._t_spec - self._t_calc
 
-    def step(self, X):
+    def step(self, X, I=None):
         '''
         One computation step for the solver.
 
         INPUT:
 
         X - values of the spatial variable
-        type: ndarray [dimensions, number of points]
+        type: ndarray [dimensions, number of points] of float
+
+        I - (optional) grid indices of the spatial variable
+        type: ndarray [dimensions, number of points] of int
 
         OUTPUT:
 
@@ -326,23 +329,27 @@ class Solver(object):
 
             return w
 
-        def step_v(X, v0):
-            v = self.Z @ v0
+        def step_v(X, v0, I=None):
+            Z = self.Z
+            if I is not None:
+                I = np.ravel_multi_index(I, self.IT.n, order='F')
+                Z = self.Z[np.ix_(I, I)]
+            v = Z @ v0
             return v
 
         def step_ord1(X):
             X0 = step_x(X)
             r0 = step_i(X0)
-            v1 = step_v(X0, r0)
+            v1 = step_v(X0, r0, I)
             w1 = step_w(X0, v1)
             return w1
 
         def step_ord2(X):
             X0 = step_x(X)
             r0 = step_i(X0)
-            v1 = step_v(X0, r0)
+            v1 = step_v(X0, r0, I)
             w1 = step_w(X0, v1)
-            v2 = step_v(X0, w1)
+            v2 = step_v(X0, w1, I)
             return v2
 
         if self.ord == 1:
