@@ -624,51 +624,51 @@ class Solver(object):
 
         if r_init is not None:
             ax1.plot(xg, _prep(r_init), **{
-                'label': sett['label-init'],
-                **conf['line'][sett['line-init']]
+                'label': sett['line-sol-init'][1],
+                **conf['line'][sett['line-sol-init'][0]]
             })
         if r_calc is not None:
             ax1.plot(xg, _prep(r_calc), **{
-                'label': sett['label-calc'],
-                **conf['line'][sett['line-calc']]
+                'label': sett['line-sol-calc'][1],
+                **conf['line'][sett['line-sol-calc'][0]]
             })
         if r_real is not None:
             ax1.plot(xg, _prep(r_real), **{
-                'label': sett['label-real'],
-                **conf['line'][sett['line-real']]
+                'label': sett['line-sol-real'][1],
+                **conf['line'][sett['line-sol-real'][0]]
             })
         if r_stat is not None:
             ax1.plot(xg, _prep(r_stat), **{
-                'label': sett['label-stat'],
-                **conf['line'][sett['line-stat']]
+                'label': sett['line-sol-stat'][1],
+                **conf['line'][sett['line-sol-stat'][0]]
             })
 
         if opts.get('is_log'): ax1.semilogy()
         ss = ' (abs.)' if opts.get('is_abs') else ''
-        ax1.set_title('%s%s%s'%(sett['title'], ss, sx))
+        ax1.set_title('%s%s%s'%(sett['title-sol'], ss, sx))
         ss = ' (number)' if self.d > 1 else ' coordinate'
-        ax1.set_xlabel(sett['label-x'] + ss)
-        ax1.set_ylabel(sett['label-y'])
+        ax1.set_xlabel(sett['label-sol'][0] + ss)
+        ax1.set_ylabel(sett['label-sol'][1])
         ax1.legend(loc='best')
 
         ax2 = fig.add_subplot(grd[0, 1])
 
         if e is not None:
             ax2.plot(xg, e, **{
-                'label': sett['label-err-real'],
-                **conf['line'][sett['line-err-real']]
+                'label': sett['line-err-real'][1],
+                **conf['line'][sett['line-err-real'][0]]
             })
         if e_stat is not None:
             ax2.plot(xg, e_stat, **{
-                'label': sett['label-err-stat'],
-                **conf['line'][sett['line-err-stat']]
+                'label': sett['line-err-stat'][1],
+                **conf['line'][sett['line-err-stat'][0]]
             })
 
         ax2.semilogy()
         ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
         ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
-        ax2.set_xlabel(sett['label-err-x'])
-        ax2.set_ylabel(sett['label-err-y'])
+        ax2.set_xlabel(sett['label-err'][0])
+        ax2.set_ylabel(sett['label-err'][1])
         ax2.legend(loc='best')
 
         plt.show()
@@ -805,50 +805,50 @@ class Solver(object):
 
         if r_init is not None:
             ax1.plot(t, _prep(r_init), **{
-                'label': sett['label-init'],
-                **conf['line'][sett['line-init']]
+                'label': sett['line-sol-init'][1],
+                **conf['line'][sett['line-sol-init'][0]]
             })
         if r_calc is not None:
             ax1.plot(t, _prep(r_calc), **{
-                'label': sett['label-calc'],
-                **conf['line'][sett['line-calc']]
+                'label': sett['line-sol-calc'][1],
+                **conf['line'][sett['line-sol-calc'][0]]
             })
         if r_real is not None:
             ax1.plot(t, _prep(r_real), **{
-                'label': sett['label-real'],
-                **conf['line'][sett['line-real']]
+                'label': sett['line-sol-real'][1],
+                **conf['line'][sett['line-sol-real'][0]]
             })
         if r_stat is not None:
             ax1.plot(t, _prep(r_stat), **{
-                'label': sett['label-stat'],
-                **conf['line'][sett['line-stat']]
+                'label': sett['line-sol-stat'][1],
+                **conf['line'][sett['line-sol-stat'][0]]
             })
 
         if opts.get('is_log'): ax1.semilogy()
         ss = ' (abs.)' if opts.get('is_abs') else ''
-        ax1.set_title('%s%s%s'%(sett['title'], ss, sx))
-        ax1.set_xlabel(sett['label-x'])
-        ax1.set_ylabel(sett['label-y'])
+        ax1.set_title('%s%s%s'%(sett['title-sol'], ss, sx))
+        ax1.set_xlabel(sett['label-sol'][0])
+        ax1.set_ylabel(sett['label-sol'][1])
         ax1.legend(loc='best')
 
         ax2 = fig.add_subplot(grd[0, 1])
 
         if e is not None:
             ax2.plot(t, e, **{
-                'label': sett['label-err-real'],
-                **conf['line'][sett['line-err-real']]
+                'label': sett['line-err-real'][1],
+                **conf['line'][sett['line-err-real'][0]]
             })
         if e_stat is not None:
             ax2.plot(t, e_stat, **{
-                'label': sett['label-err-stat'],
-                **conf['line'][sett['line-err-stat']]
+                'label': sett['line-err-stat'][1],
+                **conf['line'][sett['line-err-stat'][0]]
             })
 
         ax2.semilogy()
         ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
         ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
-        ax2.set_xlabel(sett['label-err-x'])
-        ax2.set_ylabel(sett['label-err-y'])
+        ax2.set_xlabel(sett['label-err'][0])
+        ax2.set_ylabel(sett['label-err'][1])
         ax2.legend(loc='best')
 
         plt.show()
