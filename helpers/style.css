@@ -92,12 +92,12 @@ div {
   padding: 0.5em;
 }
 .note {
-  color: red;
+  color: #42d56e;
 }
 .note::before {
   content: 'Note. ';
   font-weight: bold;
-  color: blue;
+  color: #485536;
 }
 
 .end {

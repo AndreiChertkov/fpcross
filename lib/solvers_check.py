@@ -46,7 +46,7 @@ class SolversCheck(object):
         def calc_many(opts):
             for m in opts['M']:
                 for n in opts['N']:
-                    print('----- Computation     | m = %-6d | n = %-6d'%(m, n))
+                    print('----- Computation     | m = %-8d | n = %-8d'%(m, n))
                     time.sleep(1)
                     opts['%d-%d'%(m, n)] = calc_one(opts, m, n)
             time.sleep(1)
@@ -69,6 +69,8 @@ class SolversCheck(object):
                 't_spec': SL._t_spec,
                 'err': SL._err,
                 'err_stat': SL._err_stat,
+                'err_xpoi': SL._err_xpoi,
+                'err_xpoi_stat': SL.err_xpoi_stat,
             }
 
         for name in self.res.keys():
@@ -89,6 +91,111 @@ class SolversCheck(object):
             data = pickle.load(f)
         self.res = data['res']
 
+    def plot_t(self, name, lims={}):
+        txt = '\n'
+        res = self.res[name]
+        M = res['M'].copy()
+        N = res['N'].copy()
+
+        conf = config['opts']['plot']
+        sett = config['plot']['conv-time']
+
+        fig = plt.figure(**conf['fig'][sett['fig']])
+        grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
+
+        # Plot error vs analytic
+        ax = fig.add_subplot(grd[0, 0])
+        txt+= '\n--------------- Approximations for error vs real solution'
+
+        for i, n in enumerate(N):
+            data = [res['%d-%d'%(m, n)] for m in M]
+            x = np.array(M)
+            y = np.array([d['err'] for d in data])
+            line = conf['line'][sett['line-real'][0]].copy()
+            line['color'] = sett['cols-real'][i]
+            line['markerfacecolor'] = sett['cols-real'][i]
+            line['markeredgecolor'] = sett['cols-real'][i]
+            ax.plot(x, y, label='n = %d'%n, **line)
+
+            l0 = lims.get(n, [None, None])[0]
+            l1 = lims.get(n, [None, None])[1]
+            xe = x[l0:l1]
+            ye = y[l0:l1]
+            b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
+            a = np.exp(a)
+            z = a * np.exp(b * x)
+            line = conf['line'][sett['line-appr'][0]].copy()
+            line['color'] = sett['cols-appr'][i]
+            line['markerfacecolor'] = sett['cols-appr'][i]
+            line['markeredgecolor'] = sett['cols-appr'][i]
+            ax.plot(x, z, **line)
+
+            txt+= '\n n = %8d : e = %8.2e * exp[ %10.2e * m ]'%(n, a, b)
+
+        ax.set_title(sett['title-err'])
+        ax.set_xlabel(sett['label-err'][0])
+        ax.set_ylabel(sett['label-err'][1])
+        ax.legend(loc='best')
+        ax.semilogy()
+
+        # Plot error vs stationary
+        ax = fig.add_subplot(grd[0, 1])
+        txt+= '\n--------------- Approximations for error vs stat solution'
+
+        for i, n in enumerate(N):
+            data = [res['%d-%d'%(m, n)] for m in M]
+            x = np.array(M)
+            y = np.array([d['err_stat'] for d in data])
+            line = conf['line'][sett['line-real'][0]].copy()
+            line['color'] = sett['cols-real'][i]
+            line['markerfacecolor'] = sett['cols-real'][i]
+            line['markeredgecolor'] = sett['cols-real'][i]
+            ax.plot(x, y, label='n = %d'%n, **line)
+
+            l0 = lims.get(n, [None, None])[0]
+            l1 = lims.get(n, [None, None])[1]
+            xe = x[l0:l1]
+            ye = y[l0:l1]
+            b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
+            a = np.exp(a)
+            z = a * np.exp(b * x)
+            line = conf['line'][sett['line-appr'][0]].copy()
+            line['color'] = sett['cols-appr'][i]
+            line['markerfacecolor'] = sett['cols-appr'][i]
+            line['markeredgecolor'] = sett['cols-appr'][i]
+            ax.plot(x, z, **line)
+
+            txt+= '\n n = %8d : e = %8.2e * exp[ %10.2e * m ]'%(n, a, b)
+
+        ax.set_title(sett['title-err-stat'])
+        ax.set_xlabel(sett['label-err-stat'][0])
+        ax.set_ylabel(sett['label-err-stat'][1])
+        ax.legend(loc='best')
+        ax.semilogy()
+
+        # Plot computation time
+        ax = fig.add_subplot(grd[0, 2])
+
+        for i, n in enumerate(N):
+            data = [res['%d-%d'%(m, n)] for m in M]
+            x = np.array(M)
+            y = np.array([d['t_prep'] + d['t_calc'] for d in data])
+            line = conf['line'][sett['line-real'][0]].copy()
+            line['color'] = sett['cols-real'][i]
+            line['markerfacecolor'] = sett['cols-real'][i]
+            line['markeredgecolor'] = sett['cols-real'][i]
+            ax.plot(x, y, label='n = %d'%n, **line)
+
+        ax.set_title(sett['title-time'])
+        ax.set_xlabel(sett['label-time'][0])
+        ax.set_ylabel(sett['label-time'][1])
+        ax.legend(loc='best')
+        ax.semilogy()
+
+        plt.show()
+
+        print(txt)
+
     def plot_x(self, name, lims={}):
         txt = '\n'
         res = self.res[name]
@@ -105,11 +212,15 @@ class SolversCheck(object):
         ax = fig.add_subplot(grd[0, 0])
         txt+= '\n--------------- Approximations for error vs real solution'
 
-        for m in M:
+        for i, m in enumerate(M):
             data = [res['%d-%d'%(m, n)] for n in N]
             x = np.array(N)
             y = np.array([d['err'] for d in data])
-            ax.plot(x, y, label='m = %d'%m)
+            line = conf['line'][sett['line-real'][0]].copy()
+            line['color'] = sett['cols-real'][i]
+            line['markerfacecolor'] = sett['cols-real'][i]
+            line['markeredgecolor'] = sett['cols-real'][i]
+            ax.plot(x, y, label='m = %d'%m, **line)
 
             l0 = lims.get(m, [None, None])[0]
             l1 = lims.get(m, [None, None])[1]
@@ -118,9 +229,13 @@ class SolversCheck(object):
             b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
             a = np.exp(a)
             z = a * np.exp(b * x)
-            ax.plot(x, z, '--')
+            line = conf['line'][sett['line-appr'][0]].copy()
+            line['color'] = sett['cols-appr'][i]
+            line['markerfacecolor'] = sett['cols-appr'][i]
+            line['markeredgecolor'] = sett['cols-appr'][i]
+            ax.plot(x, z, **line)
 
-            txt+= '\n m = %8d : e = %8.2e * exp[- %8.2e * n]'%(m, a, -b)
+            txt+= '\n m = %8d : e = %8.2e * exp[ %10.2e * n ]'%(m, a, b)
 
         ax.set_title(sett['title-err'])
         ax.set_xlabel(sett['label-err'][0])
@@ -132,11 +247,15 @@ class SolversCheck(object):
         ax = fig.add_subplot(grd[0, 1])
         txt+= '\n--------------- Approximations for error vs stat solution'
 
-        for m in M:
+        for i, m in enumerate(M):
             data = [res['%d-%d'%(m, n)] for n in N]
             x = np.array(N)
             y = np.array([d['err_stat'] for d in data])
-            ax.plot(x, y, label='m = %d'%m)
+            line = conf['line'][sett['line-real'][0]].copy()
+            line['color'] = sett['cols-real'][i]
+            line['markerfacecolor'] = sett['cols-real'][i]
+            line['markeredgecolor'] = sett['cols-real'][i]
+            ax.plot(x, y, label='m = %d'%m, **line)
 
             l0 = lims.get(m, [None, None])[0]
             l1 = lims.get(m, [None, None])[1]
@@ -145,9 +264,12 @@ class SolversCheck(object):
             b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
             a = np.exp(a)
             z = a * np.exp(b * x)
-            ax.plot(x, z, '--')
-
-            txt+= '\n m = %8d : e = %8.2e * exp[- %8.2e * n]'%(m, a, -b)
+            line = conf['line'][sett['line-appr'][0]].copy()
+            line['color'] = sett['cols-appr'][i]
+            line['markerfacecolor'] = sett['cols-appr'][i]
+            line['markeredgecolor'] = sett['cols-appr'][i]
+            ax.plot(x, z, **line)
+            txt+= '\n m = %8d : e = %8.2e * exp[ %10.2e * n ]'%(m, a, b)
 
         ax.set_title(sett['title-err-stat'])
         ax.set_xlabel(sett['label-err-stat'][0])
@@ -155,14 +277,18 @@ class SolversCheck(object):
         ax.legend(loc='best')
         ax.semilogy()
 
-        # Plot time
+        # Plot computation time
         ax = fig.add_subplot(grd[0, 2])
 
-        for m in M:
+        for i, m in enumerate(M):
             data = [res['%d-%d'%(m, n)] for n in N]
             x = np.array(N)
             y = np.array([d['t_prep'] + d['t_calc'] for d in data])
-            ax.plot(x, y, label='m = %d'%m)
+            line = conf['line'][sett['line-real'][0]].copy()
+            line['color'] = sett['cols-real'][i]
+            line['markerfacecolor'] = sett['cols-real'][i]
+            line['markeredgecolor'] = sett['cols-real'][i]
+            ax.plot(x, y, label='m = %d'%m, **line)
 
         ax.set_title(sett['title-time'])
         ax.set_xlabel(sett['label-time'][0])
