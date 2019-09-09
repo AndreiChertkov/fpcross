@@ -106,7 +106,7 @@ class Solver(object):
 
         self.T = np.linspace(t_min, t_max, t_poi)
 
-    def set_grid_x(self, x_poi, x_min=-3., x_max=3.):
+    def set_grid_x(self, x_poi, x_min=-3., x_max=3., poi=None):
         '''
         Set parameters of the spatial grid.
         * For each dimension the same number of points and limits are used.
@@ -122,6 +122,10 @@ class Solver(object):
 
         x_max - (optional) max value of the spatial variable for each dimension
         type: float, > x_min
+
+        poi - (optional) special spatial point for error check
+        type: ndarray (or list) [dimensions] of float or float
+        * If is float, then the same value will be used for all dimensions.
         '''
 
         if x_poi < 2:
@@ -141,6 +145,10 @@ class Solver(object):
         n_ = np.ones(self.d, dtype='int') * x_poi
         l_ = np.repeat(np.array([[x_min, x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
+
+        if poi is None:
+            poi = np.array([0.] * self.d)
+        self.spoi = poi
 
     def set_funcs(self, f0, f1, r0, rt=None, rs=None):
         '''
@@ -186,6 +194,7 @@ class Solver(object):
         TODO! Check usage of J matrix.
         TODO! Extend J matrix to > 1D case.
         TODO! Replace X_hst by partial grid (in selected x points).
+        TODO! Add input for the special spatial point (sind).
         '''
 
         _t = time.time()
@@ -194,12 +203,14 @@ class Solver(object):
         self._t_calc = None
         self._t_spec = None
 
-        self.t = self.t_min   # Current value of time variable
-        self._err = None      # Current error calc vs real
-        self._err_stat = None # Current error calc vs stat
-        self.IT.dif2()        # Chebyshev diff. matrices
-        self.D1 = self.IT.D1  # d / dx
-        self.D2 = self.IT.D2  # d2 / dx2
+        self.t = self.t_min        # Current value of time variable
+        self._err = None           # Current error calc vs real
+        self._err_stat = None      # Current error calc vs stat
+        self._err_xpoi = None      # Current error calc vs real at the sp.point
+        self._err_xpoi_stat = None # Current error calc vs stat at the sp.point
+        self.IT.dif2()             # Chebyshev diff. matrices
+        self.D1 = self.IT.D1       # d / dx
+        self.D2 = self.IT.D2       # d2 / dx2
 
         self.IT0 = None       # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
@@ -226,7 +237,11 @@ class Solver(object):
         self.T_hst = []
         self.R_hst = []
         self.E_hst = []
-        self.E_hst_stat = []
+        self.E_stat_hst = []
+        self.E_xpoi_hst = []
+        self.E_xpoi_stat_hst = []
+
+        self.sind = self._sind(self.spoi)
 
     def calc(self):
         '''
@@ -271,7 +286,9 @@ class Solver(object):
         self.T_hst = np.array(self.T_hst)
         self.R_hst = np.array(self.R_hst)
         self.E_hst = np.array(self.E_hst)
-        self.E_hst_stat = np.array(self.E_hst_stat)
+        self.E_stat_hst = np.array(self.E_stat_hst)
+        self.E_xpoi_hst = np.array(self.E_xpoi_hst)
+        self.E_xpoi_stat_hst = np.array(self.E_xpoi_stat_hst)
 
         self._t_spec+= time.time() - self._t_spec - self._t_calc
 
@@ -409,12 +426,17 @@ class Solver(object):
             r = None
             if r_calc is not None:
                 self._err = None
+                self._err_xpoi = None
                 self.E_hst.append(self._err)
+                self.E_xpoi_hst.append(self._err_xpoi)
         else:
             r = self.func_rt(X, self.t)
             if r_calc is not None:
                 self._err = np.linalg.norm(r - r_calc) / np.linalg.norm(r)
+                i = self.sind
+                self._err_xpoi = np.abs(r[i] - r_calc[i]) / np.abs(r[i])
                 self.E_hst.append(self._err)
+                self.E_xpoi_hst.append(self._err_xpoi)
 
         return r
 
@@ -444,12 +466,17 @@ class Solver(object):
             r = None
             if r_calc is not None:
                 self._err_stat = None
-                self.E_hst_stat.append(self._err_stat)
+                self._err_xpoi_stat = None
+                self.E_stat_hst.append(self._err_stat)
+                self.E_xpoi_stat_hst.append(self._err_xpoi_stat)
         else:
             r = self.func_rt(X, self.t)
             if r_calc is not None:
                 self._err_stat = np.linalg.norm(r - r_calc) / np.linalg.norm(r)
-                self.E_hst_stat.append(self._err_stat)
+                i = self.sind
+                self._err_xpoi_stat = np.abs(r[i] - r_calc[i]) / np.abs(r[i])
+                self.E_stat_hst.append(self._err_stat)
+                self.E_xpoi_stat_hst.append(self._err_xpoi_stat)
 
         return r
 
@@ -463,10 +490,18 @@ class Solver(object):
         print('Grid x    : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
         print('Grid t    : poi = %9d, min = %9.4f, max = %9.4f , hst = %9d'%(self.t_poi, self.t_min, self.t_max, self.t_hst))
         print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self._t_prep, self._t_calc, self._t_spec))
-        if self._err:
-            print('Err calc  : %8.2e'%(self._err))
-        if self._err_stat:
-            print('Err stat  : %8.2e'%(self._err_stat))
+        if self._err is not None:
+            if self._err_xpoi is not None:
+                p = ' (at the point: %8.2e)'%self._err_xpoi
+            else:
+                p = ''
+            print('Err calc  : %8.2e%s'%(self._err, p))
+        if self._err_stat is not None:
+            if self._err_xpoi_stat is not None:
+                p = ' (at the point: %8.2e)'%self._err_xpoi_stat
+            else:
+                p = ''
+            print('Err stat  : %8.2e%s'%(self._err_stat, p))
 
     def anim(self, ffmpeg_path, delt=50):
         '''
@@ -761,8 +796,7 @@ class Solver(object):
         conf = config['opts']['plot']
         sett = config['plot']['time']
 
-        x = np.repeat(x.reshape(-1, 1), self.X_hst.shape[1], axis=1)
-        i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
+        i = self._sind(x)
         x = self.X_hst[:, i].reshape(-1, 1)
         t = self.T_hst
         v = np.ones(t.shape[0])
@@ -852,3 +886,31 @@ class Solver(object):
         ax2.legend(loc='best')
 
         plt.show()
+
+    def _sind(self, x):
+        '''
+        Find the nearest flatten grid index for the given spatial point.
+
+        INPUT:
+
+        x - spatial point
+        type: ndarray (or list) [dimensions] of float
+
+        INPUT:
+
+        i - flatten grid index
+        type:  float
+
+        TODO! Add support for calculation without explicit spatial grid.
+        '''
+
+        if isinstance(x, list):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray) or x.shape[0] != self.d:
+            s = 'Invalid spatial point.'
+            raise ValueError(s)
+
+        x = np.repeat(x.reshape(-1, 1), self.X_hst.shape[1], axis=1)
+        i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
+
+        return i
