@@ -70,12 +70,12 @@ class SolversCheck(object):
                 'err': SL._err,
                 'err_stat': SL._err_stat,
                 'err_xpoi': SL._err_xpoi,
-                'err_xpoi_stat': SL.err_xpoi_stat,
+                'err_xpoi_stat': SL._err_xpoi_stat,
             }
 
         for name in self.res.keys():
             _t = time.time()
-            print('----- Calc for solver | %s'%name)
+            print('----- Calc for solver | "%s"'%name)
             calc_many(self.res[name])
             print('----- Done            | Time : %-8.2e sec'%(time.time()-_t))
 
@@ -91,211 +91,140 @@ class SolversCheck(object):
             data = pickle.load(f)
         self.res = data['res']
 
-    def plot_t(self, name, lims={}):
-        txt = '\n'
-        res = self.res[name]
-        M = res['M'].copy()
-        N = res['N'].copy()
+    def plot(self, name, m=None, n=None, lims={}, is_stat=False, is_xpoi=False):
+        if m is None and n is None:
+            s = 'Both m and n arguments are None.'
+            raise ValueError(s)
+        if m is not None and n is not None:
+            s = 'Both m and n arguments are set.'
+            raise ValueError(s)
 
         conf = config['opts']['plot']
-        sett = config['plot']['conv-time']
+        sett = config['plot']['conv']
+        res = self.res[name]
+
+        if m is None:
+            c, x, v = n, res['M'], [res['%d-%d'%(m, n)] for m in res['M']]
+        else:
+            c, x, v = m, res['N'], [res['%d-%d'%(m, n)] for n in res['N']]
+
+        if is_stat:
+            y = [v_['err_xpoi_stat' if is_xpoi else 'err_stat'] for v_ in v]
+        else:
+            y = [v_['err_xpoi' if is_xpoi else 'err'] for v_ in v]
+
+        t = [v_['t_prep'] + v_['t_calc'] for v_ in v]
+
+        x, y, t = np.array(x), np.array(y), np.array(t)
+
+        l0 = (lims.get(c) or lims.get('all') or [None, None])[0]
+        l1 = (lims.get(c) or lims.get('all') or [None, None])[1]
+        xe, ye = x[l0:l1], y[l0:l1]
+
+        if m is None:
+            a, b = np.polyfit(1./xe, ye, 1)
+            s_appr = '%8.1e / m + %8.1e'%(a, b)
+            z = a / x + b
+        else:
+            b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
+            a = np.exp(a)
+            s_appr = '%8.1e * exp[ %9.1e * n ]'%(a, b)
+            z = a * np.exp(b * x)
+
+        s_calc = 'Stationary solution' if is_stat else 'Analytic solution'
+
+        s_title = ' at point' if is_xpoi else ''
+        s_title+= ' (%d x-points)'%n if m is None else ' (%d t-points)'%m
+        
+        s_label = 'Number of %s points'%('time' if m is None else 'spatial')
 
         fig = plt.figure(**conf['fig'][sett['fig']])
         grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
 
-        # Plot error vs analytic
         ax = fig.add_subplot(grd[0, 0])
-        txt+= '\n--------------- Approximations for error vs real solution'
-
-        for i, n in enumerate(N):
-            data = [res['%d-%d'%(m, n)] for m in M]
-            x = np.array(M)
-            y = np.array([d['err'] for d in data])
-            line = conf['line'][sett['line-real'][0]].copy()
-            line['color'] = sett['cols-real'][i]
-            line['markerfacecolor'] = sett['cols-real'][i]
-            line['markeredgecolor'] = sett['cols-real'][i]
-            ax.plot(x, y, label='n = %d'%n, **line)
-
-            l0 = lims.get(n, [None, None])[0]
-            l1 = lims.get(n, [None, None])[1]
-            xe = x[l0:l1]
-            ye = y[l0:l1]
-            b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
-            a = np.exp(a)
-            z = a * np.exp(b * x)
-            line = conf['line'][sett['line-appr'][0]].copy()
-            line['color'] = sett['cols-appr'][i]
-            line['markerfacecolor'] = sett['cols-appr'][i]
-            line['markeredgecolor'] = sett['cols-appr'][i]
-            ax.plot(x, z, **line)
-
-            txt+= '\n n = %8d : e = %8.2e * exp[ %10.2e * m ]'%(n, a, b)
-
-        ax.set_title(sett['title-err'])
-        ax.set_xlabel(sett['label-err'][0])
-        ax.set_ylabel(sett['label-err'][1])
+        ax.plot(x, y, **conf['line'][sett['line-real'][0]], label=s_calc)
+        ax.plot(x, z, **conf['line'][sett['line-appr'][0]], label=s_appr)
+        ax.set_title(sett['title-err'] + s_title)
+        ax.set_xlabel(s_label)
+        ax.set_ylabel('')
+        if m is None:
+            ax.semilogx()
+            ax.semilogy()
+        else:
+            ax.semilogy()
         ax.legend(loc='best')
-        ax.semilogy()
 
-        # Plot error vs stationary
         ax = fig.add_subplot(grd[0, 1])
-        txt+= '\n--------------- Approximations for error vs stat solution'
-
-        for i, n in enumerate(N):
-            data = [res['%d-%d'%(m, n)] for m in M]
-            x = np.array(M)
-            y = np.array([d['err_stat'] for d in data])
-            line = conf['line'][sett['line-real'][0]].copy()
-            line['color'] = sett['cols-real'][i]
-            line['markerfacecolor'] = sett['cols-real'][i]
-            line['markeredgecolor'] = sett['cols-real'][i]
-            ax.plot(x, y, label='n = %d'%n, **line)
-
-            l0 = lims.get(n, [None, None])[0]
-            l1 = lims.get(n, [None, None])[1]
-            xe = x[l0:l1]
-            ye = y[l0:l1]
-            b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
-            a = np.exp(a)
-            z = a * np.exp(b * x)
-            line = conf['line'][sett['line-appr'][0]].copy()
-            line['color'] = sett['cols-appr'][i]
-            line['markerfacecolor'] = sett['cols-appr'][i]
-            line['markeredgecolor'] = sett['cols-appr'][i]
-            ax.plot(x, z, **line)
-
-            txt+= '\n n = %8d : e = %8.2e * exp[ %10.2e * m ]'%(n, a, b)
-
-        ax.set_title(sett['title-err-stat'])
-        ax.set_xlabel(sett['label-err-stat'][0])
-        ax.set_ylabel(sett['label-err-stat'][1])
-        ax.legend(loc='best')
-        ax.semilogy()
-
-        # Plot computation time
-        ax = fig.add_subplot(grd[0, 2])
-
-        for i, n in enumerate(N):
-            data = [res['%d-%d'%(m, n)] for m in M]
-            x = np.array(M)
-            y = np.array([d['t_prep'] + d['t_calc'] for d in data])
-            line = conf['line'][sett['line-real'][0]].copy()
-            line['color'] = sett['cols-real'][i]
-            line['markerfacecolor'] = sett['cols-real'][i]
-            line['markeredgecolor'] = sett['cols-real'][i]
-            ax.plot(x, y, label='n = %d'%n, **line)
-
-        ax.set_title(sett['title-time'])
-        ax.set_xlabel(sett['label-time'][0])
-        ax.set_ylabel(sett['label-time'][1])
-        ax.legend(loc='best')
-        ax.semilogy()
+        ax.plot(x, t, **conf['line'][sett['line-real'][0]])
+        ax.set_title(sett['title-time'] + s_title)
+        ax.set_xlabel(s_label)
+        ax.set_ylabel('')
+        if m is None:
+            ax.semilogx()
+            ax.semilogy()
+        else:
+            ax.semilogy()
 
         plt.show()
 
-        print(txt)
-
-    def plot_x(self, name, lims={}):
-        txt = '\n'
-        res = self.res[name]
-        M = res['M'].copy()
-        N = res['N'].copy()
+    def plot_all(self, m=None, n=None, is_stat=False, is_xpoi=False):
+        if m is None and n is None:
+            s = 'Both m and n arguments are None.'
+            raise ValueError(s)
+        if m is not None and n is not None:
+            s = 'Both m and n arguments are set.'
+            raise ValueError(s)
 
         conf = config['opts']['plot']
-        sett = config['plot']['conv-spatial']
+        sett = config['plot']['conv-all']
+
+        s_calc = 'Stationary solution' if is_stat else 'Analytic solution'
+
+        s_title = ' at point' if is_xpoi else ''
+        s_title+= ' (%d x-points)'%n if m is None else ' (%d t-points)'%m
+
+        s_label = 'Number of %s points'%('time' if m is None else 'spatial')
 
         fig = plt.figure(**conf['fig'][sett['fig']])
         grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
 
-        # Plot error vs analytic
-        ax = fig.add_subplot(grd[0, 0])
-        txt+= '\n--------------- Approximations for error vs real solution'
+        ax1 = fig.add_subplot(grd[0, 0])
+        ax2 = fig.add_subplot(grd[0, 1])
 
-        for i, m in enumerate(M):
-            data = [res['%d-%d'%(m, n)] for n in N]
-            x = np.array(N)
-            y = np.array([d['err'] for d in data])
-            line = conf['line'][sett['line-real'][0]].copy()
-            line['color'] = sett['cols-real'][i]
-            line['markerfacecolor'] = sett['cols-real'][i]
-            line['markeredgecolor'] = sett['cols-real'][i]
-            ax.plot(x, y, label='m = %d'%m, **line)
+        for i, name in enumerate(self.res.keys()):
+            res = self.res[name]
 
-            l0 = lims.get(m, [None, None])[0]
-            l1 = lims.get(m, [None, None])[1]
-            xe = x[l0:l1]
-            ye = y[l0:l1]
-            b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
-            a = np.exp(a)
-            z = a * np.exp(b * x)
-            line = conf['line'][sett['line-appr'][0]].copy()
-            line['color'] = sett['cols-appr'][i]
-            line['markerfacecolor'] = sett['cols-appr'][i]
-            line['markeredgecolor'] = sett['cols-appr'][i]
-            ax.plot(x, z, **line)
+            if m is None:
+                c, x, v = n, res['M'], [res['%d-%d'%(m, n)] for m in res['M']]
+            else:
+                c, x, v = m, res['N'], [res['%d-%d'%(m, n)] for n in res['N']]
 
-            txt+= '\n m = %8d : e = %8.2e * exp[ %10.2e * n ]'%(m, a, b)
+            if is_stat:
+                y = [v_['err_xpoi_stat' if is_xpoi else 'err_stat'] for v_ in v]
+            else:
+                y = [v_['err_xpoi' if is_xpoi else 'err'] for v_ in v]
 
-        ax.set_title(sett['title-err'])
-        ax.set_xlabel(sett['label-err'][0])
-        ax.set_ylabel(sett['label-err'][1])
-        ax.legend(loc='best')
-        ax.semilogy()
+            t = [v_['t_prep'] + v_['t_calc'] for v_ in v]
 
-        # Plot error vs stationary
-        ax = fig.add_subplot(grd[0, 1])
-        txt+= '\n--------------- Approximations for error vs stat solution'
+            line = conf['line'][sett['line'][0]].copy()
+            line['color'] = sett['cols'][i]
+            line['markerfacecolor'] = sett['cols'][i]
+            line['markeredgecolor'] = sett['cols'][i]
+            ax1.plot(x, y, label=name, **line)
+            ax2.plot(x, t, label=name, **line)
 
-        for i, m in enumerate(M):
-            data = [res['%d-%d'%(m, n)] for n in N]
-            x = np.array(N)
-            y = np.array([d['err_stat'] for d in data])
-            line = conf['line'][sett['line-real'][0]].copy()
-            line['color'] = sett['cols-real'][i]
-            line['markerfacecolor'] = sett['cols-real'][i]
-            line['markeredgecolor'] = sett['cols-real'][i]
-            ax.plot(x, y, label='m = %d'%m, **line)
-
-            l0 = lims.get(m, [None, None])[0]
-            l1 = lims.get(m, [None, None])[1]
-            xe = x[l0:l1]
-            ye = y[l0:l1]
-            b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
-            a = np.exp(a)
-            z = a * np.exp(b * x)
-            line = conf['line'][sett['line-appr'][0]].copy()
-            line['color'] = sett['cols-appr'][i]
-            line['markerfacecolor'] = sett['cols-appr'][i]
-            line['markeredgecolor'] = sett['cols-appr'][i]
-            ax.plot(x, z, **line)
-            txt+= '\n m = %8d : e = %8.2e * exp[ %10.2e * n ]'%(m, a, b)
-
-        ax.set_title(sett['title-err-stat'])
-        ax.set_xlabel(sett['label-err-stat'][0])
-        ax.set_ylabel(sett['label-err-stat'][1])
-        ax.legend(loc='best')
-        ax.semilogy()
-
-        # Plot computation time
-        ax = fig.add_subplot(grd[0, 2])
-
-        for i, m in enumerate(M):
-            data = [res['%d-%d'%(m, n)] for n in N]
-            x = np.array(N)
-            y = np.array([d['t_prep'] + d['t_calc'] for d in data])
-            line = conf['line'][sett['line-real'][0]].copy()
-            line['color'] = sett['cols-real'][i]
-            line['markerfacecolor'] = sett['cols-real'][i]
-            line['markeredgecolor'] = sett['cols-real'][i]
-            ax.plot(x, y, label='m = %d'%m, **line)
-
-        ax.set_title(sett['title-time'])
-        ax.set_xlabel(sett['label-time'][0])
-        ax.set_ylabel(sett['label-time'][1])
-        ax.legend(loc='best')
-        ax.semilogy()
+        ax1.set_title(sett['title-err'] + s_title)
+        ax2.set_title(sett['title-time'] + s_title)
+        ax1.set_xlabel(s_label)
+        ax2.set_xlabel(s_label)
+        ax1.set_ylabel('')
+        ax2.set_ylabel('')
+        ax1.semilogy()
+        ax2.semilogy()
+        if m is None:
+            ax1.semilogx()
+            ax2.semilogx()
+        ax1.legend(loc='best')
+        ax2.legend(loc='best')
 
         plt.show()
-
-        print(txt)
