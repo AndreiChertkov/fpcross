@@ -14,11 +14,12 @@ from intertrain import Intertrain
 
 class Solver(object):
     '''
-    Class with fast solver of d-dimensional Fokker-Planck equation
+    Class with the fast solver for multidimensional Fokker-Planck equation
     d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ), r(x,0) = r0(x),
     with known f(x,t), r0(x) and scalar coefficient D.
+
     Full (numpy, NP) of sparse (tensor train, TT with cross approximation)
-    format may be used.
+    format may be used for the solution process.
 
     Basic usage:
      1 Initialize class instance with dimension, format and accuracy parameters.
@@ -47,9 +48,9 @@ class Solver(object):
         type: float, > 0
 
         ord - (optional) order of approximation
-        * If = 1, then 1th order splitting and euler ode solver are used
-        * If = 2, then 2th order splitting and Runge-Kutta ode solver are used
         type: int, = 1, 2
+        * If = 1, then 1th order splitting and euler ode solver are used.
+        * If = 2, then 2th order splitting and Runge-Kutta ode solver are used.
 
         with_tt - (optional) flag:
             True  - sparse (tensor train, TT) format will be used
@@ -72,6 +73,8 @@ class Solver(object):
 
         t_poi - total number of points
         type: int, >= 2
+        * The min and max values are included.
+        * If it is equal to 2, then the grid will be [t_min, t_max].
 
         t_min - (optional) min value of the time variable
         type: float, < t_max
@@ -80,8 +83,8 @@ class Solver(object):
         type: float, > t_min
 
         t_hst - (optional) total number of points for history
-        * solution at this points will be saved to history for further analysis
         type: int, >= 0, <= t_poi
+        * Solution at this points will be saved to history for further analysis.
         '''
 
         if t_poi < 2:
@@ -109,13 +112,15 @@ class Solver(object):
     def set_grid_x(self, x_poi, x_min=-3., x_max=3., poi=None):
         '''
         Set parameters of the spatial grid.
-        * For each dimension the same number of points and limits are used.
-        * Chebyshev spatial grid is used.
+        Chebyshev spatial grid is used and for each dimension the same number
+        of points and limits are used.
 
         INPUT:
 
         x_poi - total number of points for each dimension
         type: int, >= 2
+        * The min and max values are included.
+        * If it is equal to 2, then the grid will be [x_max, x_min]^d.
 
         x_min - (optional) min value of the spatial variable for each dimension
         type: float, < x_max
@@ -125,6 +130,8 @@ class Solver(object):
 
         poi - (optional) special spatial point for error check
         type: ndarray (or list) [dimensions] of float or float
+        default: [0, 0, ..., 0]
+        * The closest point on the selected spatial grid will be used.
         * If is float, then the same value will be used for all dimensions.
         '''
 
@@ -146,21 +153,22 @@ class Solver(object):
         l_ = np.repeat(np.array([[x_min, x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-        if poi is None:
-            poi = np.array([0.] * self.d)
+        if poi is None: poi = np.array([0.] * self.d)
+        if isinstance(poi, (int, float)): poi = np.array([float(poi)] * self.d)
+        if isinstance(poi, list): poi = np.array(poi)
         self.spoi = poi
 
     def set_funcs(self, f0, f1, r0, rt=None, rs=None):
         '''
         Set functions for equation
-        d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
-        r(x, 0) = r0(x), r(x, +infinity) = rs(x),
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x),
         where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
         r0(x) is initial condition, rt(x, t) is optional analytic solution
         and rs(x) is optional stationary solution.
-        * Functions input is X of type ndarray [dimensions, number of points].
-        * Functions f0, f1 should return 2D ndarray of the same shape as X.
-        * Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
+        Functions input is X of type ndarray [dimensions, number of points].
+        Functions f0 and f1 should return 2D ndarray of the same shape as X.
+        Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
         '''
 
         self.func_f0 = f0
@@ -172,8 +180,8 @@ class Solver(object):
     def set_coefs(self, Dc=None):
         '''
         Set coefficients for equation
-        d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
-        r(x, 0) = r0(x), r(x, +infinity) = rs(x).
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x).
 
         INPUT:
 
@@ -194,7 +202,6 @@ class Solver(object):
         TODO! Check usage of J matrix.
         TODO! Extend J matrix to > 1D case.
         TODO! Replace X_hst by partial grid (in selected x points).
-        TODO! Add input for the special spatial point (sind).
         '''
 
         _t = time.time()
@@ -212,12 +219,12 @@ class Solver(object):
         self.D1 = self.IT.D1       # d / dx
         self.D2 = self.IT.D2       # d2 / dx2
 
-        self.IT0 = None       # Interpolant from the previous step
+        self.IT0 = None            # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
 
         if self.ord == 1:
             h = (self.Dc * self.h) ** (1./self.d)
-        else:
+        if self.ord == 2:
             h = (self.Dc * self.h / 2.) ** (1./self.d)
 
         J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
@@ -273,10 +280,13 @@ class Solver(object):
                 self.T_hst.append(t)
                 self.R_hst.append(r)
 
-                _msg = '| At T=%-8.2e :'%self.t
-                _msg+= ' n=%-8.2e'%np.linalg.norm(r)
-                if self._err: _msg+= ' e=%-8.2e'%self._err
-                if self._err_stat: _msg+= ' es=%-8.2e'%self._err_stat
+                _msg = '| At T=%-6.1e :'%self.t
+                if self._err:
+                    _msg+= ' e=%-6.1e'%self._err
+                if self._err_stat:
+                    _msg+= ' es=%-6.1e'%self._err_stat
+                if not self._err and not self._err_stat:
+                    _msg+= ' norm=%-6.1e'%np.linalg.norm(r)
                 _tqdm.set_postfix_str(_msg, refresh=True)
 
             _tqdm.update(1)
@@ -308,9 +318,6 @@ class Solver(object):
 
         r - approximated values of the solution in the given points
         type: ndarray [number of points] of float
-
-        TODO! Cross approximation requests only part of grid points and
-              indices (for expm) are required!
         '''
 
         def step_x(X):
@@ -325,6 +332,16 @@ class Solver(object):
             r0 = self.IT0.calc(X)
 
             return r0
+
+        def step_v(X, v0, I=None):
+            Z = self.Z
+            if I is not None:
+                I = np.ravel_multi_index(I, self.IT.n, order='F')
+                Z = self.Z[np.ix_(I, I)]
+
+            v = Z @ v0
+
+            return v
 
         def step_w(X, w0):
             if self.ord == 1:
@@ -346,33 +363,13 @@ class Solver(object):
 
             return w
 
-        def step_v(X, v0, I=None):
-            Z = self.Z
-            if I is not None:
-                I = np.ravel_multi_index(I, self.IT.n, order='F')
-                Z = self.Z[np.ix_(I, I)]
-            v = Z @ v0
-            return v
-
-        def step_ord1(X):
-            X0 = step_x(X)
-            r0 = step_i(X0)
-            v1 = step_v(X0, r0, I)
-            w1 = step_w(X0, v1)
-            return w1
-
-        def step_ord2(X):
-            X0 = step_x(X)
-            r0 = step_i(X0)
-            v1 = step_v(X0, r0, I)
-            w1 = step_w(X0, v1)
-            v2 = step_v(X0, w1, I)
-            return v2
-
-        if self.ord == 1:
-            return step_ord1(X)
-        if self.ord == 2:
-            return step_ord2(X)
+        X0 = step_x(X)
+        r0 = step_i(X0)
+        v1 = step_v(X0, r0, I)
+        w1 = step_w(X0, v1)
+        if self.ord == 1: return w1
+        v2 = step_v(X0, w1, I)
+        if self.ord == 2: return v2
 
     def comp(self, X=None):
         '''
@@ -390,8 +387,7 @@ class Solver(object):
         type: ndarray [number of points] of float
         '''
 
-        if X is None:
-            X = self.X_hst
+        if X is None: X = self.X_hst
 
         if X is None or not X.shape[1]:
             r = None
@@ -404,12 +400,13 @@ class Solver(object):
         '''
         Compute real (analytic) solution r(x, t) at given spatial points X
         (on the history grid if is None) and the corresponding error vs r_calc.
-        * Current time (t) is used for computation.
+        Current time (t) is used for computation.
 
         INPUT:
 
         X - (optional) values of the spatial variable
         type: ndarray [dimensions, number of points]
+
         r_calc - (optional) calculated solution in the given points
         type: ndarray [number of points] of float
 
@@ -419,24 +416,33 @@ class Solver(object):
         type: ndarray [number of points] of float
         '''
 
-        if X is None:
-            X = self.X_hst
+        if X is None: X = self.X_hst
 
         if X is None or not X.shape[1] or not self.func_rt:
             r = None
             if r_calc is not None:
                 self._err = None
                 self._err_xpoi = None
-                self.E_hst.append(self._err)
-                self.E_xpoi_hst.append(self._err_xpoi)
         else:
             r = self.func_rt(X, self.t)
             if r_calc is not None:
-                self._err = np.linalg.norm(r - r_calc) / np.linalg.norm(r)
+                norm = np.linalg.norm(r)
+                if norm > 0:
+                    self._err = np.linalg.norm(r - r_calc) / norm
+                else:
+                    self._err = np.linalg.norm(r_calc)
+
                 i = self.sind
-                self._err_xpoi = np.abs(r[i] - r_calc[i]) / np.abs(r[i])
-                self.E_hst.append(self._err)
-                self.E_xpoi_hst.append(self._err_xpoi)
+                norm = np.abs(r[i])
+                if norm > 0:
+                    self._err_xpoi = np.abs(r[i] - r_calc[i]) / norm
+                else:
+                    self._err_xpoi = np.abs(r_calc[i])
+
+
+        if r_calc is not None:
+            self.E_hst.append(self._err)
+            self.E_xpoi_hst.append(self._err_xpoi)
 
         return r
 
@@ -444,12 +450,12 @@ class Solver(object):
         '''
         Compute stationary (analytic) solution rs(x) at given spatial points X
         (on the history grid if is None) and the corresponding error vs r_calc.
-        * Current time (t) is used for computation.
 
         INPUT:
 
         X - (optional) values of the spatial variable
         type: ndarray [dimensions, number of points]
+        
         r_calc - (optional) calculated solution in the given points
         type: ndarray [number of points] of float
 
@@ -459,24 +465,32 @@ class Solver(object):
         type: ndarray [number of points] of float
         '''
 
-        if X is None:
-            X = self.X_hst
+        if X is None: X = self.X_hst
 
-        if X is None or not X.shape[1] or not self.func_rt:
+        if X is None or not X.shape[1] or not self.func_rs:
             r = None
             if r_calc is not None:
                 self._err_stat = None
                 self._err_xpoi_stat = None
-                self.E_stat_hst.append(self._err_stat)
-                self.E_xpoi_stat_hst.append(self._err_xpoi_stat)
         else:
-            r = self.func_rt(X, self.t)
+            r = self.func_rs(X)
             if r_calc is not None:
-                self._err_stat = np.linalg.norm(r - r_calc) / np.linalg.norm(r)
+                norm = np.linalg.norm(r)
+                if norm > 0:
+                    self._err_stat = np.linalg.norm(r - r_calc) / norm
+                else:
+                    self._err_stat = np.linalg.norm(r_calc)
+
                 i = self.sind
-                self._err_xpoi_stat = np.abs(r[i] - r_calc[i]) / np.abs(r[i])
-                self.E_stat_hst.append(self._err_stat)
-                self.E_xpoi_stat_hst.append(self._err_xpoi_stat)
+                norm = np.abs(r[i])
+                if norm > 0:
+                    self._err_xpoi_stat = np.abs(r[i] - r_calc[i]) / norm
+                else:
+                    self._err_xpoi_stat = np.abs(r_calc[i])
+
+        if r_calc is not None:
+            self.E_stat_hst.append(self._err_stat)
+            self.E_xpoi_stat_hst.append(self._err_xpoi_stat)
 
         return r
 
@@ -573,14 +587,15 @@ class Solver(object):
 
     def plot_x(self, t=None, opts={}):
         '''
-        Plot solution on the spatial grid at time t (by default at final time
-        point). Initial value, analytical solution and stationary solution
+        Plot solution on the spatial grid at given time t
+        (by default at the final time point):
+        for the given t it finds the closest point on the time history grid.
+        Initial value, analytical solution and stationary solution
         are also presented on the plot.
-        * For the given t it finds the closest point on the time history grid.
 
         INPUT:
 
-        t - time point for plot
+        t - (optional) time point for plot
         type: float
 
         opts - (optional) dictionary with optional parameters
@@ -619,34 +634,26 @@ class Solver(object):
         i = -1 if t is None else (np.abs(self.T_hst - t)).argmin()
         t = self.T_hst[i]
         x = self.X_hst
-        if self.d == 1:
-            xg = x.reshape(-1)
-        else:
-            xg = np.arange(x.shape[1])
+        xg = x.reshape(-1) if self.d == 1 else np.arange(x.shape[1])
 
         r_init, r_stat, r_real, r_calc = None, None, None, None
-        if self.func_r0:
-            r_init = self.func_r0(x)
-        if self.func_rs:
-            r_stat = self.func_rs(x)
-        if self.func_rt:
-            r_real = self.func_rt(x, t)
-        if self.R_hst is not None:
-            r_calc = self.R_hst[i]
+        if self.func_r0: r_init = self.func_r0(x)
+        if self.func_rs: r_stat = self.func_rs(x)
+        if self.func_rt: r_real = self.func_rt(x, t)
+        if self.R_hst is not None: r_calc = self.R_hst[i]
 
         e, e_stat = None, None
         if r_real is not None and r_calc is not None:
             e = np.abs(r_real - r_calc)
-            if opts.get('is_err_abs'):
-                e = e / np.abs(r_real)
+            if not opts.get('is_err_abs'): e/= np.abs(r_real)
         if r_real is not None and r_stat is not None:
-            e_stat = np.abs(r_stat - r_calc)
-            if opts.get('is_err_abs'):
-                e_stat = e_stat / np.abs(r_stat)
-            if not opts.get('with_err_stat'):
+            if opts.get('with_err_stat'):
+                e_stat = np.abs(r_stat - r_calc)
+                if not opts.get('is_err_abs'): e_stat/= np.abs(r_stat)
+            else:
                 e_stat = None
 
-        sx = ' at t = %8.1e'%t
+        st = ' at t = %8.1e'%t
 
         fig = plt.figure(**conf['fig'][sett['fig']])
         grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
@@ -680,7 +687,7 @@ class Solver(object):
 
         if opts.get('is_log'): ax1.semilogy()
         ss = ' (abs.)' if opts.get('is_abs') else ''
-        ax1.set_title('%s%s%s'%(sett['title-sol'], ss, sx))
+        ax1.set_title('%s%s%s'%(sett['title-sol'], ss, st))
         ss = ' (number)' if self.d > 1 else ' coordinate'
         ax1.set_xlabel(sett['label-sol'][0] + ss)
         ax1.set_ylabel(sett['label-sol'][1])
@@ -701,8 +708,9 @@ class Solver(object):
 
         ax2.semilogy()
         ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
-        ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
-        ax2.set_xlabel(sett['label-err'][0])
+        ax2.set_title('%s%s%s'%(sett['title-err'], ss, st))
+        ss = ' (number)' if self.d > 1 else ' coordinate'
+        ax1.set_xlabel(sett['label-err'][0] + ss)
         ax2.set_ylabel(sett['label-err'][1])
         ax2.legend(loc='best')
 
@@ -743,15 +751,16 @@ class Solver(object):
 
     def plot_t(self, x, opts={}):
         '''
-        Plot solution vs time at the spatial grid point x. Initial value,
-        analytical solution and stationary solution are also presented.
-        * For the given x it finds the closest point on the spatial grid.
+        Plot solution dependence of time at given spatial grid point x:
+        for the given x it finds the closest point on the spatial grid.
+        Initial value, analytical solution and stationary solution
+        are also presented on the plot.
 
         INPUT:
 
         x - spatial point for plot
         type: ndarray (or list) [dimensions] of float
-        * In the case of 1D it may be float
+        * In the case of 1D it may be float.
 
         opts - (optional) dictionary with optional parameters
         type: dict with fields:
@@ -785,10 +794,8 @@ class Solver(object):
         TODO! Replace full spatial grid by several selected points.
         '''
 
-        if isinstance(x, (int, float)):
-            x = np.array([float(x)])
-        if isinstance(x, list):
-            x = np.array(x)
+        if isinstance(x, (int, float)): x = np.array([float(x)])
+        if isinstance(x, list): x = np.array(x)
         if not isinstance(x, np.ndarray) or x.shape[0] != self.d:
             s = 'Invalid spatial point.'
             raise ValueError(s)
@@ -802,28 +809,28 @@ class Solver(object):
         v = np.ones(t.shape[0])
 
         r_init, r_stat, r_real, r_calc = None, None, None, None
-        if self.func_r0:
-            r_init = v * self.func_r0(x)[0]
-        if self.func_rs:
-            r_stat = v * self.func_rs(x)[0]
-        if self.func_rt:
-            r_real = np.array([self.func_rt(x, t_)[0] for t_ in t])
-        if self.R_hst is not None:
-            r_calc = np.array([r[i] for r in self.R_hst])
+        if self.func_r0: r_init = v * self.func_r0(x)[0]
+        if self.func_rs: r_stat = v * self.func_rs(x)[0]
+        if self.func_rt: r_real = np.array([self.func_rt(x, t_)[0] for t_ in t])
+        if self.R_hst is not None: r_calc = np.array([r[i] for r in self.R_hst])
 
         e, e_stat = None, None
         if r_real is not None and r_calc is not None:
             e = np.abs(r_real - r_calc)
-            if opts.get('is_err_abs'):
-                e = e / np.abs(r_real)
+            if not opts.get('is_err_abs'): e/= np.abs(r_real)
+            e = np.array([0.] + list(e))
         if r_real is not None and r_stat is not None:
-            e_stat = np.abs(r_stat - r_calc)
-            if opts.get('is_err_abs'):
-                e_stat = e_stat / np.abs(r_stat)
-            if not opts.get('with_err_stat'):
-                e_stat = None
+            if opts.get('with_err_stat'):
+                e_stat = np.abs(r_stat - r_calc)
+                e0 = np.abs(r_stat[0] - r_init[0])
+                if opts.get('is_err_abs'):
+                    e_stat = [e0] + list(e_stat)
+                else:
+                    e_stat/= np.abs(r_stat)
+                    e_stat = [e0 / np.abs(r_stat[0])] + list(e_stat)
+                e_stat = np.array(e_stat)
 
-        sx = ','.join(['%8.1e'%x_ for x_ in list(x.reshape(-1))])
+        sx = ', '.join(['%8.1e'%x_ for x_ in list(x.reshape(-1))])
         print('--- Solution at spatial point')
         print('X = [%s]'%sx)
         sx = ' at x = [%s]'%sx if self.d < 4 else ''
@@ -838,22 +845,30 @@ class Solver(object):
         ax1 = fig.add_subplot(grd[0, 0])
 
         if r_init is not None:
-            ax1.plot(t, _prep(r_init), **{
+            x_ = [self.t_min] + list(t)
+            y_ = [r_init[0]] + list(r_init)
+            ax1.plot(x_, _prep(y_), **{
                 'label': sett['line-sol-init'][1],
                 **conf['line'][sett['line-sol-init'][0]]
             })
         if r_calc is not None:
-            ax1.plot(t, _prep(r_calc), **{
+            x_ = [self.t_min] + list(t)
+            y_ = [r_init[0]] + list(r_calc)
+            ax1.plot(x_, _prep(y_), **{
                 'label': sett['line-sol-calc'][1],
                 **conf['line'][sett['line-sol-calc'][0]]
             })
         if r_real is not None:
-            ax1.plot(t, _prep(r_real), **{
+            x_ = [self.t_min] + list(t)
+            y_ = [r_init[0]] + list(r_real)
+            ax1.plot(x_, _prep(y_), **{
                 'label': sett['line-sol-real'][1],
                 **conf['line'][sett['line-sol-real'][0]]
             })
         if r_stat is not None:
-            ax1.plot(t, _prep(r_stat), **{
+            x_ = [self.t_min] + list(t)
+            y_ = [r_stat[0]] + list(r_stat)
+            ax1.plot(x_, _prep(y_), **{
                 'label': sett['line-sol-stat'][1],
                 **conf['line'][sett['line-sol-stat'][0]]
             })
@@ -868,12 +883,16 @@ class Solver(object):
         ax2 = fig.add_subplot(grd[0, 1])
 
         if e is not None:
-            ax2.plot(t, e, **{
+            x_ = [self.t_min] + list(t)
+            y_ = e
+            ax2.plot(x_, y_, **{
                 'label': sett['line-err-real'][1],
                 **conf['line'][sett['line-err-real'][0]]
             })
         if e_stat is not None:
-            ax2.plot(t, e_stat, **{
+            x_ = [self.t_min] + list(t)
+            y_ = e_stat
+            ax2.plot(x_, y_, **{
                 'label': sett['line-err-stat'][1],
                 **conf['line'][sett['line-err-stat'][0]]
             })
@@ -904,8 +923,7 @@ class Solver(object):
         TODO! Add support for calculation without explicit spatial grid.
         '''
 
-        if isinstance(x, list):
-            x = np.array(x)
+        if isinstance(x, list): x = np.array(x)
         if not isinstance(x, np.ndarray) or x.shape[0] != self.d:
             s = 'Invalid spatial point.'
             raise ValueError(s)
