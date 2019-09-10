@@ -455,7 +455,7 @@ class Solver(object):
 
         X - (optional) values of the spatial variable
         type: ndarray [dimensions, number of points]
-        
+
         r_calc - (optional) calculated solution in the given points
         type: ndarray [number of points] of float
 
@@ -646,12 +646,10 @@ class Solver(object):
         if r_real is not None and r_calc is not None:
             e = np.abs(r_real - r_calc)
             if not opts.get('is_err_abs'): e/= np.abs(r_real)
-        if r_real is not None and r_stat is not None:
+        if r_stat is not None and r_calc is not None:
             if opts.get('with_err_stat'):
                 e_stat = np.abs(r_stat - r_calc)
                 if not opts.get('is_err_abs'): e_stat/= np.abs(r_stat)
-            else:
-                e_stat = None
 
         st = ' at t = %8.1e'%t
 
@@ -693,26 +691,27 @@ class Solver(object):
         ax1.set_ylabel(sett['label-sol'][1])
         ax1.legend(loc='best')
 
-        ax2 = fig.add_subplot(grd[0, 1])
+        if e is not None or e_stat is not None:
+            ax2 = fig.add_subplot(grd[0, 1])
 
-        if e is not None:
-            ax2.plot(xg, e, **{
-                'label': sett['line-err-real'][1],
-                **conf['line'][sett['line-err-real'][0]]
-            })
-        if e_stat is not None:
-            ax2.plot(xg, e_stat, **{
-                'label': sett['line-err-stat'][1],
-                **conf['line'][sett['line-err-stat'][0]]
-            })
+            if e is not None:
+                ax2.plot(xg, e, **{
+                    'label': sett['line-err-real'][1],
+                    **conf['line'][sett['line-err-real'][0]]
+                })
+            if e_stat is not None:
+                ax2.plot(xg, e_stat, **{
+                    'label': sett['line-err-stat'][1],
+                    **conf['line'][sett['line-err-stat'][0]]
+                })
 
-        ax2.semilogy()
-        ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
-        ax2.set_title('%s%s%s'%(sett['title-err'], ss, st))
-        ss = ' (number)' if self.d > 1 else ' coordinate'
-        ax1.set_xlabel(sett['label-err'][0] + ss)
-        ax2.set_ylabel(sett['label-err'][1])
-        ax2.legend(loc='best')
+            ax2.semilogy()
+            ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
+            ax2.set_title('%s%s%s'%(sett['title-err'], ss, st))
+            ss = ' (number)' if self.d > 1 else ' coordinate'
+            ax1.set_xlabel(sett['label-err'][0] + ss)
+            ax2.set_ylabel(sett['label-err'][1])
+            ax2.legend(loc='best')
 
         plt.show()
 
@@ -819,7 +818,7 @@ class Solver(object):
             e = np.abs(r_real - r_calc)
             if not opts.get('is_err_abs'): e/= np.abs(r_real)
             e = np.array([0.] + list(e))
-        if r_real is not None and r_stat is not None:
+        if r_stat is not None and r_calc is not None:
             if opts.get('with_err_stat'):
                 e_stat = np.abs(r_stat - r_calc)
                 e0 = np.abs(r_stat[0] - r_init[0])
@@ -880,29 +879,30 @@ class Solver(object):
         ax1.set_ylabel(sett['label-sol'][1])
         ax1.legend(loc='best')
 
-        ax2 = fig.add_subplot(grd[0, 1])
+        if e is not None or e_stat is not None:
+            ax2 = fig.add_subplot(grd[0, 1])
 
-        if e is not None:
-            x_ = [self.t_min] + list(t)
-            y_ = e
-            ax2.plot(x_, y_, **{
-                'label': sett['line-err-real'][1],
-                **conf['line'][sett['line-err-real'][0]]
-            })
-        if e_stat is not None:
-            x_ = [self.t_min] + list(t)
-            y_ = e_stat
-            ax2.plot(x_, y_, **{
-                'label': sett['line-err-stat'][1],
-                **conf['line'][sett['line-err-stat'][0]]
-            })
+            if e is not None:
+                x_ = [self.t_min] + list(t)
+                y_ = e
+                ax2.plot(x_, y_, **{
+                    'label': sett['line-err-real'][1],
+                    **conf['line'][sett['line-err-real'][0]]
+                })
+            if e_stat is not None:
+                x_ = [self.t_min] + list(t)
+                y_ = e_stat
+                ax2.plot(x_, y_, **{
+                    'label': sett['line-err-stat'][1],
+                    **conf['line'][sett['line-err-stat'][0]]
+                })
 
-        ax2.semilogy()
-        ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
-        ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
-        ax2.set_xlabel(sett['label-err'][0])
-        ax2.set_ylabel(sett['label-err'][1])
-        ax2.legend(loc='best')
+            ax2.semilogy()
+            ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
+            ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
+            ax2.set_xlabel(sett['label-err'][0])
+            ax2.set_ylabel(sett['label-err'][1])
+            ax2.legend(loc='best')
 
         plt.show()
 

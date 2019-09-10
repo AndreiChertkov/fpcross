@@ -123,8 +123,9 @@ class SolversCheck(object):
 
         if m is None:
             a, b = np.polyfit(1./xe, ye, 1)
-            s_appr = '%8.1e / m + %8.1e'%(a, b)
-            z = a / x + b
+            # s_appr = '%8.1e / m + %8.1e'%(a, b)
+            s_appr = '%8.1e / m'%a
+            z = a / x #+ b
         else:
             b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
             a = np.exp(a)
@@ -135,7 +136,7 @@ class SolversCheck(object):
 
         s_title = ' at point' if is_xpoi else ''
         s_title+= ' (%d x-points)'%n if m is None else ' (%d t-points)'%m
-        
+
         s_label = 'Number of %s points'%('time' if m is None else 'spatial')
 
         fig = plt.figure(**conf['fig'][sett['fig']])
