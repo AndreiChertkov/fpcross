@@ -221,6 +221,7 @@ class Solver(object):
 
         self.IT0 = None            # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
+        # self.IT.info(0)
 
         J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
         h = self.h if self.ord == 1 else self.h / 2.
@@ -263,6 +264,7 @@ class Solver(object):
             self.IT0 = self.IT.copy()
             self.IT.init(self.step, opts={ 'is_f_with_i': self.with_tt }).prep()
             self._t_calc+= time.time() - _t
+            # self.IT.info(0)
 
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
                 r = self.comp()
