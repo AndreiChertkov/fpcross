@@ -1,0 +1,9 @@
+swp: 0/199 er_rel = 4.0e+02 er_abs = 5.1e+01 erank = 3.0 fun_eval: 240
+swp: 1/199 er_rel = 2.4e-04 er_abs = 3.1e-05 erank = 5.0 fun_eval: 960
+swp: 2/199 er_rel = 2.6e-04 er_abs = 3.3e-05 erank = 7.0 fun_eval: 2400
+swp: 3/199 er_rel = 7.2e-05 er_abs = 9.2e-06 erank = 9.0 fun_eval: 4800
+swp: 4/199 er_rel = 5.5e-05 er_abs = 7.0e-06 erank = 11.5 fun_eval: 8580
+swp: 5/199 er_rel = 4.0e-05 er_abs = 5.1e-06 erank = 14.5 fun_eval: 14235
+swp: 6/199 er_rel = 4.6e-05 er_abs = 5.9e-06 erank = 15.5 fun_eval: 21915
+swp: 7/199 er_rel = 7.7e-06 er_abs = 9.7e-07 erank = 15.5 fun_eval: 29625
+swp: 8/199 er_rel = 4.6e-16 er_abs = 5.9e-17 erank = 15.5 fun_eval: 37335

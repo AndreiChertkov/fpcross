@@ -222,21 +222,12 @@ class Solver(object):
         self.IT0 = None            # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
 
-        if self.ord == 1:
-            h = (self.Dc * self.h) ** (1./self.d)
-        if self.ord == 2:
-            h = (self.Dc * self.h / 2.) ** (1./self.d)
-
         J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
-        self.J = J.copy()
-        for d in range(self.d-1):
-            self.J = kron(self.J, J)
-
-        D = expm(h * J @ self.D2)
-        self.Z = D.copy()
-        for d in range(self.d-1):
-            self.Z = kron(self.Z, D)
-        self.Z = self.Z @ self.J
+        h = self.h if self.ord == 1 else self.h / 2.
+        Z0 = expm(h * self.Dc * J @ self.D2)
+        self.Z = Z0.copy()
+        for _ in range(1, self.d):
+            self.Z = np.kron(self.Z, Z0)
 
         self._t_prep = time.time() - _t
 
