@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from matplotlib import animation, rc
 from tqdm import tqdm
 
+import tt
+
 from config import config
 from utils import rk4, eul
 from intertrain import Intertrain
@@ -219,16 +221,15 @@ class Solver(object):
         self.D1 = self.IT.D1       # d / dx
         self.D2 = self.IT.D2       # d2 / dx2
 
-        self.IT0 = None            # Interpolant from the previous step
         self.IT.init(self.func_r0).prep()
-        self.IT.info(0)
+        #self.IT.info(0)
 
         J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
         h = self.h if self.ord == 1 else self.h / 2.
-        Z0 = expm(h * self.Dc * J @ self.D2)
-        self.Z = Z0.copy()
-        for _ in range(1, self.d):
-            self.Z = np.kron(self.Z, Z0)
+        self.Z0 = expm(h * self.Dc * J @ self.D2)
+
+        self.Z = self.Z0.copy() # TODO! Remove Z.
+        for _ in range(1, self.d): self.Z = np.kron(self.Z, self.Z0)
 
         self._t_prep = time.time() - _t
 
@@ -244,9 +245,7 @@ class Solver(object):
 
     def calc(self):
         '''
-        Calculate solution of the equation.
-
-        TODO! Maybe move here interpolation of init. cond. from prep func.
+        Calculation of the solution.
         '''
 
         self._t_calc = 0.
@@ -261,10 +260,13 @@ class Solver(object):
                 continue
 
             _t = time.time()
-            self.IT0 = self.IT.copy()
-            self.IT.init(self.step, opts={ 'is_f_with_i': self.with_tt }).prep()
+
+            self.step_v(self.IT)
+            self.step_w(self.IT)
+            if self.ord == 2: self.step_v(self.IT)
+
             self._t_calc+= time.time() - _t
-            self.IT.info(0)
+            #self.IT.info(0)
 
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
                 r = self.comp()
@@ -295,74 +297,76 @@ class Solver(object):
 
         self._t_spec+= time.time() - self._t_spec - self._t_calc
 
-    def step(self, X, I=None):
+    def step_v(self, IT):
         '''
-        One computation step for the solver.
+        One computation step for the diffusion term.
 
         INPUT:
 
-        X - values of the spatial variable
-        type: ndarray [dimensions, number of points] of float
-
-        I - (optional) grid indices of the spatial variable
-        type: ndarray [dimensions, number of points] of int
-
-        OUTPUT:
-
-        r - approximated values of the solution in the given points
-        type: ndarray [number of points] of float
+        IT - current interpolation of the solution
+        type: Intertrain
         '''
 
-        def step_x(X):
-            if self.ord == 1:
-                X0 = eul(self.func_f0, X, self.t, self.t - self.h, t_poi=2)
-            else:
-                X0 = rk4(self.func_f0, X, self.t, self.t - self.h, t_poi=2)
+        if self.with_tt:
+            G = tt.tensor.to_list(IT.A)
+            for i in range(self.d):
+                G[i] = np.einsum('ij,kim->kjm', self.Z0, G[i])
+                continue
+                sh0 = G[i].shape
+                sh1 = [sh0[1], sh0[0], sh0[2]]
+                Q = np.swapaxes(G[i], 0, 1)
+                Q = Q.reshape(sh1[0], -1)
+                Q = self.Z0.T @ Q
+                Q = Q.reshape(sh1)
+                Q = np.swapaxes(Q, 0, 1)
+                G[i] = Q
+            IT.A = tt.tensor.from_list(G).round(self.eps)
+        else:
+            pass
 
-            return X0
+    def step_w(self, IT):
+        '''
+        One computation step for the drift term.
 
-        def step_i(X):
-            r0 = self.IT0.calc(X)
+        INPUT:
 
-            return r0
+        IT - current interpolation of the solution
+        type: Intertrain
+        '''
 
-        def step_v(X, v0, I=None):
-            Z = self.Z
-            if I is not None:
-                I = np.ravel_multi_index(I, self.IT.n, order='F')
-                Z = self.Z[np.ix_(I, I)]
+        def func(y, t):
+            x = y[:-1, :]
+            r = y[-1, :]
 
-            v = Z @ v0
+            f0 = self.func_f0(x, t)
+            f1 = self.func_f1(x, t)
 
-            return v
+            return np.vstack([f0, -np.trace(f1) * r])
 
-        def step_w(X, w0):
-            if self.ord == 1:
-                f1 = self.func_f1(X, self.t - self.h)
-                w = (1. - self.h * np.trace(f1)) * w0
-            else:
-                def func(y, t):
-                    x = y[:-1, :]
-                    r = y[-1, :]
+        def step(X):
+            '''
+            INPUT:
 
-                    f0 = self.func_f0(x, t)
-                    f1 = self.func_f1(x, t)
+            X - values of the spatial variable
+            type: ndarray [dimensions, number of points] of float
 
-                    return np.vstack([f0, -np.trace(f1) * r])
+            OUTPUT:
 
-                y0 = np.vstack([X, w0])
-                y1 = rk4(func, y0, self.t - self.h, self.t, t_poi=2)
-                w = y1[-1, :]
+            w - approximated values of the solution in the given points
+            type: ndarray [number of points] of float
+            '''
 
-            return w
+            sl = rk4 if self.ord == 2 else eul
+            X0 = sl(self.func_f0, X, self.t, self.t - self.h, t_poi=2)
+            w0 = IT0.calc(X)
+            y0 = np.vstack([X, w0])
+            y1 = sl(func, y0, self.t - self.h, self.t)
+            w1 = y1[-1, :]
 
-        X0 = step_x(X)
-        r0 = step_i(X0)
-        v1 = step_v(X0, r0, I)
-        w1 = step_w(X0, v1)
-        if self.ord == 1: return w1
-        v2 = step_v(X0, w1, I)
-        if self.ord == 2: return v2
+            return w1
+
+        IT0 = IT.copy()
+        IT.init(step).prep()
 
     def comp(self, X=None):
         '''
