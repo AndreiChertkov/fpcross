@@ -224,16 +224,22 @@ class Solver(object):
         self.IT.init(self.func_r0).prep()
         #self.IT.info(0)
 
+        self.X_hst = self.IT.grid() # TODO! Remove
+
         J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
         h = self.h if self.ord == 1 else self.h / 2.
         self.Z0 = expm(h * self.Dc * J @ self.D2)
 
-        self.Z = self.Z0.copy() # TODO! Remove Z.
-        for _ in range(1, self.d): self.Z = np.kron(self.Z, self.Z0)
+        if self.with_tt:
+            x = self.X_hst[0, :self.n]
+            T0 = Intertrain.polynomials(x, self.n-1, self.IT.l).T
+            self.Q0 = self.Z0 @ T0
+        else:
+            self.Z = self.Z0.copy()
+            for _ in range(1, self.d): self.Z = np.kron(self.Z, self.Z0)
 
         self._t_prep = time.time() - _t
 
-        self.X_hst = self.IT.grid()
         self.T_hst = []
         self.R_hst = []
         self.E_hst = []
@@ -261,9 +267,9 @@ class Solver(object):
 
             _t = time.time()
 
-            self.step_v(self.IT)
-            self.step_w(self.IT)
-            if self.ord == 2: self.step_v(self.IT)
+            self.step_v()
+            self.step_w()
+            if self.ord == 2: self.step_v()
 
             self._t_calc+= time.time() - _t
             #self.IT.info(0)
@@ -297,41 +303,26 @@ class Solver(object):
 
         self._t_spec+= time.time() - self._t_spec - self._t_calc
 
-    def step_v(self, IT):
+    def step_v(self):
         '''
         One computation step for the diffusion term.
-
-        INPUT:
-
-        IT - current interpolation of the solution
-        type: Intertrain
         '''
 
         if self.with_tt:
-            G = tt.tensor.to_list(IT.A)
+            G = tt.tensor.to_list(self.IT.A)
             for i in range(self.d):
-                G[i] = np.einsum('ij,kim->kjm', self.Z0, G[i])
-                continue
-                sh0 = G[i].shape
-                sh1 = [sh0[1], sh0[0], sh0[2]]
-                Q = np.swapaxes(G[i], 0, 1)
-                Q = Q.reshape(sh1[0], -1)
-                Q = self.Z0.T @ Q
-                Q = Q.reshape(sh1)
-                Q = np.swapaxes(Q, 0, 1)
-                G[i] = Q
-            IT.A = tt.tensor.from_list(G).round(self.eps)
-        else:
-            pass
+                G[i] = np.einsum('ij,kjm->kim', self.Q0, G[i])
 
-    def step_w(self, IT):
+            v = tt.tensor.from_list(G)
+            self.IT.init(Y=v).prep()
+        else:
+            v = self.Z @ self.IT.calc(self.X_hst)
+            
+        self.IT.init(Y=v).prep()
+
+    def step_w(self):
         '''
         One computation step for the drift term.
-
-        INPUT:
-
-        IT - current interpolation of the solution
-        type: Intertrain
         '''
 
         def func(y, t):
@@ -365,8 +356,8 @@ class Solver(object):
 
             return w1
 
-        IT0 = IT.copy()
-        IT.init(step).prep()
+        IT0 = self.IT.copy()
+        self.IT.init(step).prep()
 
     def comp(self, X=None):
         '''
