@@ -1,5 +1,4 @@
 import time
-
 import numpy as np
 from numpy import kron as kron
 from scipy.linalg import expm as expm
@@ -16,7 +15,7 @@ from intertrain import Intertrain
 
 class Solver(object):
     '''
-    Class with the fast solver for multidimensional Fokker-Planck equation
+    Class with the fast solver for multidimensional Fokker-Planck equation (FPE)
     d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ), r(x,0) = r0(x),
     with known f(x,t), r0(x) and scalar diffusion coefficient D.
 
@@ -27,8 +26,8 @@ class Solver(object):
      1 Initialize class instance with dimension, format and accuracy parameters.
      2 Call "set_grid_t" to set time grid parameters.
      3 Call "set_grid_x" to set spatial grid parameters.
-     4 Call "set_funcs" to set functions in PDE and analytic solution if known.
-     5 Call "set_coefs" to set coefficients in PDE.
+     4 Call "set_funcs" to set functions for FPE and analytic solution if known.
+     5 Call "set_coefs" to set coefficients for FPE.
      6 Call "prep" for initialization of the solver.
      7 Call "calc" for calculation process.
      8 Call "info" for demonstration of calculation results.
@@ -36,7 +35,7 @@ class Solver(object):
     10 Call "plot_t" for plot of solution and error at selected spatial point.
 
     Advanced usage:
-     - Call "comp" to obtain final solution at given spatial point.
+     - Call "comp" to obtain final solution at any given spatial point.
     '''
 
     def __init__(self, d, eps=1.E-6, ord=2, with_tt=False):
@@ -46,15 +45,15 @@ class Solver(object):
         d - dimension of the spatial variable
         type: int, >= 1
 
-        eps - (optional) desired accuracy of the solution
+        eps - desired accuracy of the solution
         type: float, > 0
 
-        ord - (optional) order of approximation
+        ord - order of approximation
+        type: int, = 1, 2
         * If = 1, then 1th order splitting and euler ode solver are used.
         * If = 2, then 2th order splitting and Runge-Kutta ode solver are used.
-        type: int, = 1, 2
 
-        with_tt - (optional) flag:
+        with_tt - flag:
             True  - sparse (tensor train, TT) format will be used
             False - dense (numpy, NP) format will be used
         type: bool
@@ -78,13 +77,13 @@ class Solver(object):
         * The min and max values are included.
         * If it is equal to 2, then the grid will be [t_min, t_max].
 
-        t_min - (optional) min value of the time variable
+        t_min - min value of the time variable
         type: float, < t_max
 
-        t_max - (optional) max value of the time variable
+        t_max - max value of the time variable
         type: float, > t_min
 
-        t_hst - (optional) total number of points for history
+        t_hst - total number of points for history
         type: int, >= 0, <= t_poi
         * Solution at this points will be saved to history for further analysis.
         '''
@@ -124,13 +123,13 @@ class Solver(object):
         * The min and max values are included.
         * If it is equal to 2, then the grid will be [x_max, x_min]^d.
 
-        x_min - (optional) min value of the spatial variable for each dimension
+        x_min - min value of the spatial variable for each dimension
         type: float, < x_max
 
-        x_max - (optional) max value of the spatial variable for each dimension
+        x_max - max value of the spatial variable for each dimension
         type: float, > x_min
 
-        poi - (optional) special spatial point for error check
+        poi - special spatial point for error check
         type: ndarray (or list) [dimensions] of float or float
         default: [0, 0, ..., 0]
         * The closest point on the constructed spatial grid will be used.
@@ -187,7 +186,7 @@ class Solver(object):
 
         INPUT:
 
-        Dc - (optional) diffusion coefficient
+        Dc - diffusion coefficient D
         type: float
         default: 1.
 
@@ -201,7 +200,6 @@ class Solver(object):
         Init calculation parameters and prepare special matrices.
 
         TODO! Check usage of J matrix.
-        TODO! Replace X_hst by partial grid (in selected x points).
         '''
 
         _t = time.time()
@@ -228,6 +226,7 @@ class Solver(object):
             for _ in range(1, self.d): self.Z = np.kron(self.Z, self.Z0)
 
         self._t_prep = time.time() - _t
+        _t = time.time()
 
         self.X_hst = self.IT.grid() # TODO! Remove
         self.T_hst = []
@@ -238,6 +237,8 @@ class Solver(object):
         self.E_xpoi_stat_hst = []
 
         self.sind = self._sind(self.spoi)
+
+        self._t_spec = time.time() - _t
 
     def calc(self):
         '''
@@ -268,6 +269,8 @@ class Solver(object):
 
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
                 r = self.IT.Y
+                if self.with_tt: r = r.full()
+                r = r.reshape(-1, order='F')
                 self.comp_real(r_calc=r)
                 self.comp_stat(r_calc=r)
                 self.T_hst.append(t)
@@ -286,6 +289,11 @@ class Solver(object):
 
         _tqdm.close()
 
+        # Prepare interpolation for the final result
+        _t = time.time()
+        self.IT.prep()
+        self._t_calc+= time.time() - _t
+
         self.T_hst = np.array(self.T_hst)
         self.R_hst = np.array(self.R_hst)
         self.E_hst = np.array(self.E_hst)
@@ -293,7 +301,7 @@ class Solver(object):
         self.E_xpoi_hst = np.array(self.E_xpoi_hst)
         self.E_xpoi_stat_hst = np.array(self.E_xpoi_stat_hst)
 
-        self._t_spec+= time.time() - self._t_spec - self._t_calc
+        self._t_spec = time.time() - self._t_spec - self._t_calc
 
     def step_v(self):
         '''
@@ -306,11 +314,11 @@ class Solver(object):
             G = tt.tensor.to_list(v0)
             for i in range(self.d):
                 G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
-
             v = tt.tensor.from_list(G)
-            self.IT.init(Y=v)
         else:
+            v0 = v0.reshape(-1, order='F')
             v = self.Z @ v0
+            v = v.reshape(self.IT.n, order='F')
 
         self.IT.init(Y=v)
 
@@ -328,11 +336,11 @@ class Solver(object):
 
             return np.vstack([f0, -np.trace(f1) * r])
 
-        def step(X):
+        def step(x):
             '''
             INPUT:
 
-            X - values of the spatial variable
+            x - values of the spatial variable
             type: ndarray [dimensions, number of points] of float
 
             OUTPUT:
@@ -342,27 +350,25 @@ class Solver(object):
             '''
 
             sl = rk4 if self.ord == 2 else eul
-            X0 = sl(self.func_f0, X, self.t, self.t - self.h, t_poi=2)
-            w0 = IT0.calc(X)
-            y0 = np.vstack([X, w0])
+            x0 = sl(self.func_f0, x, self.t, self.t - self.h, t_poi=2)
+            w0 = IT0.calc(x0)
+            y0 = np.vstack([x0, w0])
             y1 = sl(func, y0, self.t - self.h, self.t)
             w1 = y1[-1, :]
 
             return w1
 
-        self.IT.prep()
-
-        IT0 = self.IT.copy()
+        IT0 = self.IT.copy().prep()
         self.IT.init(step)
 
-    def comp(self, X=None):
+    def comp(self, x=None):
         '''
-        Compute calculated solution at given spatial points X
+        Compute calculated solution at given spatial points x
         (on the history grid if is None).
 
         INPUT:
 
-        X - (optional) values of the spatial variable
+        x - values of the spatial variable
         type: ndarray [dimensions, number of points]
 
         OUTPUT:
@@ -371,27 +377,27 @@ class Solver(object):
         type: ndarray [number of points] of float
         '''
 
-        if X is None: X = self.X_hst
+        if x is None: x = self.X_hst
 
-        if X is None or not X.shape[1]:
+        if x is None or not x.shape[1]:
             r = None
         else:
-            r = self.IT.calc(X)
+            r = self.IT.calc(x)
 
         return r
 
-    def comp_real(self, X=None, r_calc=None):
+    def comp_real(self, x=None, r_calc=None):
         '''
-        Compute real (analytic) solution r(x, t) at given spatial points X
+        Compute real (analytic) solution r(x, t) at given spatial points x
         (on the history grid if is None) and the corresponding error vs r_calc.
         Current time (t) is used for computation.
 
         INPUT:
 
-        X - (optional) values of the spatial variable
+        x - values of the spatial variable
         type: ndarray [dimensions, number of points]
 
-        r_calc - (optional) calculated solution in the given points
+        r_calc - calculated solution in the given points
         type: ndarray [number of points] of float
 
         OUTPUT:
@@ -400,15 +406,15 @@ class Solver(object):
         type: ndarray [number of points] of float
         '''
 
-        if X is None: X = self.X_hst
+        if x is None: x = self.X_hst
 
-        if X is None or not X.shape[1] or not self.func_rt:
+        if x is None or not x.shape[1] or not self.func_rt:
             r = None
             if r_calc is not None:
                 self._err = None
                 self._err_xpoi = None
         else:
-            r = self.func_rt(X, self.t)
+            r = self.func_rt(x, self.t)
             if r_calc is not None:
                 norm = np.linalg.norm(r)
                 if norm > 0:
@@ -430,17 +436,17 @@ class Solver(object):
 
         return r
 
-    def comp_stat(self, X=None, r_calc=None):
+    def comp_stat(self, x=None, r_calc=None):
         '''
-        Compute stationary (analytic) solution rs(x) at given spatial points X
+        Compute stationary (analytic) solution rs(x) at given spatial points x
         (on the history grid if is None) and the corresponding error vs r_calc.
 
         INPUT:
 
-        X - (optional) values of the spatial variable
+        x - values of the spatial variable
         type: ndarray [dimensions, number of points]
 
-        r_calc - (optional) calculated solution in the given points
+        r_calc - calculated solution in the given points
         type: ndarray [number of points] of float
 
         OUTPUT:
@@ -449,15 +455,15 @@ class Solver(object):
         type: ndarray [number of points] of float
         '''
 
-        if X is None: X = self.X_hst
+        if x is None: x = self.X_hst
 
-        if X is None or not X.shape[1] or not self.func_rs:
+        if x is None or not x.shape[1] or not self.func_rs:
             r = None
             if r_calc is not None:
                 self._err_stat = None
                 self._err_xpoi_stat = None
         else:
-            r = self.func_rs(X)
+            r = self.func_rs(x)
             if r_calc is not None:
                 norm = np.linalg.norm(r)
                 if norm > 0:
@@ -510,7 +516,7 @@ class Solver(object):
         ffmpeg_path - path to the ffmpeg executable
         type: str
 
-        delt - (optional) number of frames per second
+        delt - number of frames per second
         type: int, > 0
         '''
 
@@ -579,10 +585,10 @@ class Solver(object):
 
         INPUT:
 
-        t - (optional) time point for plot
+        t - time point for plot
         type: float
 
-        opts - (optional) dictionary with optional parameters
+        opts - dictionary with optional parameters
         type: dict with fields:
 
             is_log - flag:
@@ -745,7 +751,7 @@ class Solver(object):
         type: ndarray (or list) [dimensions] of float
         * In the case of 1D it may be float.
 
-        opts - (optional) dictionary with optional parameters
+        opts - dictionary with optional parameters
         type: dict with fields:
 
             is_log - flag:
