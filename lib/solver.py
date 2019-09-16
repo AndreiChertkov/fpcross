@@ -18,7 +18,7 @@ class Solver(object):
     '''
     Class with the fast solver for multidimensional Fokker-Planck equation
     d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ), r(x,0) = r0(x),
-    with known f(x,t), r0(x) and scalar coefficient D.
+    with known f(x,t), r0(x) and scalar diffusion coefficient D.
 
     Full (numpy, NP) of sparse (tensor train, TT with cross approximation)
     format may be used for the solution process.
@@ -50,9 +50,9 @@ class Solver(object):
         type: float, > 0
 
         ord - (optional) order of approximation
-        type: int, = 1, 2
         * If = 1, then 1th order splitting and euler ode solver are used.
         * If = 2, then 2th order splitting and Runge-Kutta ode solver are used.
+        type: int, = 1, 2
 
         with_tt - (optional) flag:
             True  - sparse (tensor train, TT) format will be used
@@ -133,7 +133,7 @@ class Solver(object):
         poi - (optional) special spatial point for error check
         type: ndarray (or list) [dimensions] of float or float
         default: [0, 0, ..., 0]
-        * The closest point on the selected spatial grid will be used.
+        * The closest point on the constructed spatial grid will be used.
         * If is float, then the same value will be used for all dimensions.
         '''
 
@@ -198,11 +198,9 @@ class Solver(object):
 
     def prep(self):
         '''
-        Init calculation parameters, prepare interpolation of
-        the initial condition and calculate special matrices.
+        Init calculation parameters and prepare special matrices.
 
         TODO! Check usage of J matrix.
-        TODO! Extend J matrix to > 1D case.
         TODO! Replace X_hst by partial grid (in selected x points).
         '''
 
@@ -221,25 +219,17 @@ class Solver(object):
         self.D1 = self.IT.D1       # d / dx
         self.D2 = self.IT.D2       # d2 / dx2
 
-        self.IT.init(self.func_r0).prep()
-        #self.IT.info(0)
-
-        self.X_hst = self.IT.grid() # TODO! Remove
-
         J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
         h = self.h if self.ord == 1 else self.h / 2.
         self.Z0 = expm(h * self.Dc * J @ self.D2)
 
-        if self.with_tt:
-            x = self.X_hst[0, :self.n]
-            T0 = Intertrain.polynomials(x, self.n-1, self.IT.l).T
-            self.Q0 = self.Z0 @ T0
-        else:
+        if not self.with_tt:
             self.Z = self.Z0.copy()
             for _ in range(1, self.d): self.Z = np.kron(self.Z, self.Z0)
 
         self._t_prep = time.time() - _t
 
+        self.X_hst = self.IT.grid() # TODO! Remove
         self.T_hst = []
         self.R_hst = []
         self.E_hst = []
@@ -261,21 +251,23 @@ class Solver(object):
         t_hst = int(self.t_poi / self.t_hst) if self.t_hst else 0
 
         for i, t in enumerate(self.T):
-            self.t = t
-            if i == 0: # First iteration is the initial condition
-                continue
-
             _t = time.time()
+
+            self.t = t
+
+            if i == 0:
+                # First iteration is the initial condition
+                self.IT.init(self.func_r0)
+                continue
 
             self.step_v()
             self.step_w()
             if self.ord == 2: self.step_v()
 
             self._t_calc+= time.time() - _t
-            #self.IT.info(0)
 
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
-                r = self.comp()
+                r = self.IT.Y
                 self.comp_real(r_calc=r)
                 self.comp_stat(r_calc=r)
                 self.T_hst.append(t)
@@ -308,17 +300,19 @@ class Solver(object):
         One computation step for the diffusion term.
         '''
 
+        v0 = self.IT.Y
+
         if self.with_tt:
-            G = tt.tensor.to_list(self.IT.A)
+            G = tt.tensor.to_list(v0)
             for i in range(self.d):
-                G[i] = np.einsum('ij,kjm->kim', self.Q0, G[i])
+                G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
 
             v = tt.tensor.from_list(G)
-            self.IT.init(Y=v).prep()
+            self.IT.init(Y=v)
         else:
-            v = self.Z @ self.IT.calc(self.X_hst)
-            
-        self.IT.init(Y=v).prep()
+            v = self.Z @ v0
+
+        self.IT.init(Y=v)
 
     def step_w(self):
         '''
@@ -356,8 +350,10 @@ class Solver(object):
 
             return w1
 
+        self.IT.prep()
+
         IT0 = self.IT.copy()
-        self.IT.init(step).prep()
+        self.IT.init(step)
 
     def comp(self, X=None):
         '''
