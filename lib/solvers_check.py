@@ -92,6 +92,9 @@ class SolversCheck(object):
         self.res = data['res']
 
     def plot(self, name, m=None, n=None, lims={}, is_stat=False, is_xpoi=False):
+        if self.res.get(name) is None:
+            s = 'Invalid solver name "%s".'%name
+            raise ValueError(s)
         if m is None and n is None:
             s = 'Both m and n arguments are None.'
             raise ValueError(s)
@@ -99,9 +102,9 @@ class SolversCheck(object):
             s = 'Both m and n arguments are set.'
             raise ValueError(s)
 
+        res = self.res[name]
         conf = config['opts']['plot']
         sett = config['plot']['conv']
-        res = self.res[name]
 
         if m is None:
             c, x, v = n, res['M'], [res['%d-%d'%(m, n)] for m in res['M']]
@@ -121,11 +124,15 @@ class SolversCheck(object):
         l1 = (lims.get(c) or lims.get('all') or [None, None])[1]
         xe, ye = x[l0:l1], y[l0:l1]
 
-        if m is None:
+        if m is None and res['ord'] == 1:
             a, b = np.polyfit(1./xe, ye, 1)
             # s_appr = '%8.1e / m + %8.1e'%(a, b)
             s_appr = '%8.1e / m'%a
             z = a / x #+ b
+        elif m is None and res['ord'] == 2:
+            a, b = np.polyfit(1./xe**2, ye, 1)
+            s_appr = '%8.1e / m^2'%a
+            z = a / x**2
         else:
             b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
             a = np.exp(a)
@@ -133,10 +140,8 @@ class SolversCheck(object):
             z = a * np.exp(b * x)
 
         s_calc = 'Stationary solution' if is_stat else 'Analytic solution'
-
         s_title = ' at point' if is_xpoi else ''
-        s_title+= ' (%d x-points)'%n if m is None else ' (%d t-points)'%m
-
+        s_title+= ' (%d %s-points)'%(n or m, 'x' if m is None else 't')
         s_label = 'Number of %s points'%('time' if m is None else 'spatial')
 
         fig = plt.figure(**conf['fig'][sett['fig']])
@@ -148,11 +153,8 @@ class SolversCheck(object):
         ax.set_title(sett['title-err'] + s_title)
         ax.set_xlabel(s_label)
         ax.set_ylabel('')
-        if m is None:
-            ax.semilogx()
-            ax.semilogy()
-        else:
-            ax.semilogy()
+        if m is None: ax.semilogx()
+        ax.semilogy()
         ax.legend(loc='best')
 
         ax = fig.add_subplot(grd[0, 1])
@@ -160,11 +162,8 @@ class SolversCheck(object):
         ax.set_title(sett['title-time'] + s_title)
         ax.set_xlabel(s_label)
         ax.set_ylabel('')
-        if m is None:
-            ax.semilogx()
-            ax.semilogy()
-        else:
-            ax.semilogy()
+        if m is None: ax.semilogx()
+        ax.semilogy()
 
         plt.show()
 
@@ -180,10 +179,8 @@ class SolversCheck(object):
         sett = config['plot']['conv-all']
 
         s_calc = 'Stationary solution' if is_stat else 'Analytic solution'
-
         s_title = ' at point' if is_xpoi else ''
-        s_title+= ' (%d x-points)'%n if m is None else ' (%d t-points)'%m
-
+        s_title+= ' (%d %s-points)'%(n or m, 'x' if m is None else 't')
         s_label = 'Number of %s points'%('time' if m is None else 'spatial')
 
         fig = plt.figure(**conf['fig'][sett['fig']])
@@ -207,6 +204,8 @@ class SolversCheck(object):
 
             t = [v_['t_prep'] + v_['t_calc'] for v_ in v]
 
+            x, y, t = np.array(x), np.array(y), np.array(t)
+
             line = conf['line'][sett['line'][0]].copy()
             line['color'] = sett['cols'][i]
             line['markerfacecolor'] = sett['cols'][i]
@@ -222,9 +221,8 @@ class SolversCheck(object):
         ax2.set_ylabel('')
         ax1.semilogy()
         ax2.semilogy()
-        if m is None:
-            ax1.semilogx()
-            ax2.semilogx()
+        if m is None: ax1.semilogx()
+        if m is None: ax2.semilogx()
         ax1.legend(loc='best')
         ax2.legend(loc='best')
 
