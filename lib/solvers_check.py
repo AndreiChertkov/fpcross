@@ -126,14 +126,13 @@ class SolversCheck(object):
 
         if m is None and res['ord'] == 1:
             a, b = np.polyfit(1./xe, ye, 1)
-            # s_appr = '%8.1e / m + %8.1e'%(a, b)
             s_appr = '%8.1e / m'%a
-            z = a / x #+ b
-        elif m is None and res['ord'] == 2:
+            z = a / x
+        if m is None and res['ord'] == 2:
             a, b = np.polyfit(1./xe**2, ye, 1)
             s_appr = '%8.1e / m^2'%a
             z = a / x**2
-        else:
+        if n is None:
             b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
             a = np.exp(a)
             s_appr = '%8.1e * exp[ %9.1e * n ]'%(a, b)
