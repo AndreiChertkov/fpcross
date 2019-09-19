@@ -1,8 +1,8 @@
 import time
 import numpy as np
-from numpy import kron
-from scipy.linalg import expm
-from scipy.integrate import solve_ivp
+from numpy import kron as np_kron
+from scipy.linalg import expm as sp_expm
+from scipy.integrate import solve_ivp as sp_solve_ivp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
@@ -47,7 +47,7 @@ class Solver(object):
 
         eps - desired accuracy of the solution
         type: float, > 0
-        * Is used only for rounding operations and cross approximation
+        * Is used only for TT-rounding operations and cross approximation
         * in the TT-format (is actual only if with_tt flag is set).
 
         ord - order of approximation
@@ -102,15 +102,12 @@ class Solver(object):
             s = 'Invalid number of history time points (should be <= t_poi).'
             raise ValueError(s)
 
-        self.t_poi = t_poi
-        self.t_min = t_min
-        self.t_max = t_max
-        self.t_hst = t_hst
+        self.t_poi = int(t_poi)
+        self.t_min = float(t_min)
+        self.t_max = float(t_max)
+        self.t_hst = int(self.t_poi * 1. / t_hst) if t_hst else 0
 
-        self.m = t_poi
         self.h = (t_max - t_min) / (t_poi - 1)
-
-        self.T = np.linspace(t_min, t_max, t_poi)
 
     def set_grid_x(self, x_poi, x_min=-3., x_max=3.):
         '''
@@ -140,14 +137,12 @@ class Solver(object):
             s = 'Ivalid spatial limits (min should be less of max).'
             raise ValueError(s)
 
-        self.x_poi = x_poi
-        self.x_min = x_min
-        self.x_max = x_max
+        self.x_poi = int(x_poi)
+        self.x_min = float(x_min)
+        self.x_max = float(x_max)
 
-        self.n = x_poi
-
-        n_ = np.ones(self.d, dtype='int') * x_poi
-        l_ = np.repeat(np.array([[x_min, x_max]]), self.d, axis=0)
+        n_ = np.ones(self.d, dtype='int') * self.x_poi
+        l_ = np.repeat(np.array([[self.x_min, self.x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
     def set_funcs(self, f0, f1, r0, rt=None, rs=None):
@@ -210,15 +205,15 @@ class Solver(object):
         self.t = self.t_min             # Current value of time variable
 
         self.D0 = self.IT.dif2().copy() # Chebyshev diff. matrix d2 / dx2
-        self.J0 = np.eye(self.n)
+        self.J0 = np.eye(self.x_poi)
         self.J0[+0, +0] = 0.
         self.J0[-1, -1] = 0.
         self.h0 = self.h if self.ord == 1 else self.h / 2.
-        self.Z0 = expm(self.h0 * self.Dc * self.J0 @ self.D0)
+        self.Z0 = sp_expm(self.h0 * self.Dc * self.J0 @ self.D0)
 
         if not self.with_tt:
             self.Z = self.Z0.copy()
-            for _ in range(1, self.d): self.Z = np.kron(self.Z, self.Z0)
+            for _ in range(1, self.d): self.Z = np.np_kron(self.Z, self.Z0)
 
         self.tms['prep'] = time.time() - _t
 
@@ -228,26 +223,23 @@ class Solver(object):
         '''
 
         _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=80)
-        t_hst = int(self.t_poi / self.t_hst) if self.t_hst else 0
 
-        for i, t in enumerate(self.T):
+        self.t = self.t_min
+        self.IT.init(self.func_r0)
+        for i in range(1, self.t_poi):
             _t = time.time()
 
-            self.t = t
+            self.t = self.t_min + i * self.h
 
-            if i == 0:
-                # First iteration is the initial condition
-                self.IT.init(self.func_r0)
-            else:
-                self.step_v()
-                self.step_w()
-                if self.ord == 2: self.step_v()
+            self.step_v()
+            self.step_w()
+            if self.ord == 2: self.step_v()
 
             self.tms['calc']+= time.time() - _t
 
             _t = time.time()
 
-            if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
+            if self.t_hst and (i % self.t_hst == 0 or i == self.t_poi - 1):
                 _msg = self.step_check()
                 _tqdm.set_postfix_str(_msg, refresh=True)
             _tqdm.update(1)
@@ -258,7 +250,7 @@ class Solver(object):
 
         _t = time.time()
 
-        self.IT.prep() # Prepare interpolation for the final result
+        self.IT.prep()
 
         for n in ['T', 'R', 'E_real', 'E_stat']:
             self.hst[n] = np.array(self.hst[n])
@@ -293,8 +285,27 @@ class Solver(object):
         '''
 
         def func(y, t):
-            x = y[:-1, :]
-            r = y[-1, :]
+            '''
+            Compute rhs for the system of convection equations
+            d x / dt = f(x, t)
+            d w / dt = - Tr[ d f(x, t) / d t] w.
+
+            INPUT:
+
+            y - values of the spatial variable (x) and PDF (w)
+            type: ndarray [dimensions + 1, number of points] of float
+            * First dimensions rows are related to x and the last - to w.
+
+            t - time
+            type: float
+
+            OUTPUT:
+
+            f - rhs of the system
+            type: ndarray [dimensions + 1, number of points] of float
+            '''
+
+            x, r = y[:-1, :], y[-1, :]
 
             f0 = self.func_f0(x, t)
             f1 = self.func_f1(x, t)
@@ -337,8 +348,6 @@ class Solver(object):
 
         msg - string representation of the current step for print
         type: str
-
-        TODO! Remove construction of the full tensor (use cross appr. instead).
         '''
 
         def _err_calc(r_calc, r_real):
@@ -350,7 +359,7 @@ class Solver(object):
         r = self.IT.Y
 
         self.hst['T'].append(self.t)
-        self.hst['R'].append(r)
+        self.hst['R'].append(r.copy())
 
         msg = '| At T=%-6.1e :'%self.t
 
@@ -368,7 +377,7 @@ class Solver(object):
 
             msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
 
-        if self.func_rt and not self.func_rs:
+        if not self.func_rt and not self.func_rs:
             # msg+= ' norm=%-6.1e'%np.linalg.norm(r)
             pass
 
@@ -533,12 +542,12 @@ class Solver(object):
         raise NotImplementedError(s)
 
         def _anim_1d(ax):
-            x1d = self.X[0, :self.n]
+            x1d = self.X[0, :self.x_poi]
             X1 = x1d
 
             def run(i):
                 t = self.T[i]
-                r = self.R[i].reshape(self.n)
+                r = self.R[i].reshape(self.x_poi)
 
                 ax.clear()
                 ax.set_title('PDF at t=%-8.4f'%t)
@@ -551,12 +560,12 @@ class Solver(object):
 
         def _anim_2d(ax):
             return # DRAFT
-            x1d = self.X[0, :self.n]
+            x1d = self.X[0, :self.x_poi]
             X1, X2 = np.meshgrid(x1d, x1d)
 
             def run(i):
                 t = self.T[i]
-                r = self.R[i].reshape((self.n, self.n))
+                r = self.R[i].reshape((self.x_poi, self.x_poi))
 
                 ax.clear()
                 ax.set_title('Spatial distribution (t=%f)'%t)
@@ -718,7 +727,7 @@ class Solver(object):
 
         def _plot_2d(t):
             return # DRAFT
-            x1d = self.X[0, :self.n]
+            x1d = self.X[0, :self.x_poi]
             X1, X2 = np.meshgrid(x1d, x1d)
 
             fig = plt.figure(figsize=(10, 6))
@@ -729,7 +738,7 @@ class Solver(object):
 
             if self.IT1:
                 ax = fig.add_subplot(gs[0, :2])
-                ct1 = ax.contourf(X1, X2, self.R[0].reshape((self.n, self.n)))
+                ct1 = ax.contourf(X1, X2, self.R[0].reshape((self.x_poi, self.x_poi)))
                 ax.set_title('Initial PDF (t=%f)'%self.t_min)
                 ax.set_xlabel('x1')
                 ax.set_ylabel('x2')
@@ -739,7 +748,7 @@ class Solver(object):
 
             if self.IT2:
                 ax = fig.add_subplot(gs[0, 2:])
-                ct2 = ax.contourf(X1, X2, self.R[-1].reshape((self.n, self.n)))
+                ct2 = ax.contourf(X1, X2, self.R[-1].reshape((self.x_poi, self.x_poi)))
                 ax.set_title('Final PDF (t=%f)'%self.t_max)
                 ax.set_xlabel('x1')
                 ax.set_ylabel('x2')
@@ -1117,7 +1126,7 @@ class Solver(object):
                 if with_y0: return f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
                 return f(y_, t).reshape(-1)
 
-            y[:, j] = solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]
+            y[:, j] = sp_solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]
 
         return y
 
