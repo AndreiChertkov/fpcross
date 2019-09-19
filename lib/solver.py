@@ -1,7 +1,7 @@
 import time
 import numpy as np
-from numpy import kron as kron
-from scipy.linalg import expm as expm
+from numpy import kron
+from scipy.linalg import expm
 from scipy.integrate import solve_ivp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -19,13 +19,13 @@ class Solver(object):
     d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ), r(x,0) = r0(x),
     with known f(x,t), r0(x) and scalar diffusion coefficient D.
 
-    Full (numpy, NP) of sparse (tensor train, TT with cross approximation)
+    Full (numpy, NP) or sparse (tensor train, TT with cross approximation)
     format may be used for the solution process.
 
     Basic usage:
      1 Initialize class instance with dimension, format and accuracy parameters.
-     2 Call "set_grid_t" to set time grid parameters.
-     3 Call "set_grid_x" to set spatial grid parameters.
+     2 Call "set_grid_t" to set the time grid parameters.
+     3 Call "set_grid_x" to set the spatial grid parameters.
      4 Call "set_funcs" to set functions for FPE and analytic solution if known.
      5 Call "set_coefs" to set coefficients for FPE.
      6 Call "prep" for initialization of the solver.
@@ -47,11 +47,13 @@ class Solver(object):
 
         eps - desired accuracy of the solution
         type: float, > 0
+        * Is used only for rounding operations and cross approximation
+        * in the TT-format (is actual only if with_tt flag is set).
 
         ord - order of approximation
         type: int, = 1, 2
-        * If = 1, then 1th order splitting and euler ode solver are used.
-        * If = 2, then 2th order splitting and Runge-Kutta ode solver are used.
+        * If = 1, then 1th order splitting and Euler ODE solver are used.
+        * If = 2, then 2th order splitting and Runge-Kutta ODE solver are used.
 
         with_tt - flag:
             True  - sparse (tensor train, TT) format will be used
@@ -133,7 +135,7 @@ class Solver(object):
         type: ndarray (or list) [dimensions] of float or float
         default: [0, 0, ..., 0]
         * The closest point on the constructed spatial grid will be used.
-        * If is float, then the same value will be used for all dimensions.
+        * If is float, then this value will be used for all dimensions.
         '''
 
         if x_poi < 2:
@@ -154,8 +156,8 @@ class Solver(object):
         l_ = np.repeat(np.array([[x_min, x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-        if poi is None: poi = np.array([0.] * self.d)
-        if isinstance(poi, (int, float)): poi = np.array([float(poi)] * self.d)
+        if poi is None: poi = 0.
+        if isinstance(poi, (int, float)): poi = [float(poi)] * self.d
         if isinstance(poi, list): poi = np.array(poi)
         self.spoi = poi
 
@@ -200,6 +202,7 @@ class Solver(object):
         Init calculation parameters and prepare special matrices.
 
         TODO! Check usage of J matrix.
+        TODO! Remove construction of the full spatial grid.
         '''
 
         _t = time.time()
@@ -208,18 +211,17 @@ class Solver(object):
         self._t_calc = None
         self._t_spec = None
 
-        self.t = self.t_min        # Current value of time variable
-        self._err = None           # Current error calc vs real
-        self._err_stat = None      # Current error calc vs stat
-        self._err_xpoi = None      # Current error calc vs real at the sp.point
-        self._err_xpoi_stat = None # Current error calc vs stat at the sp.point
-        self.IT.dif2()             # Chebyshev diff. matrices
-        self.D1 = self.IT.D1       # d / dx
-        self.D2 = self.IT.D2       # d2 / dx2
-
-        J = np.eye(self.n); J[0, 0] = 0.; J[-1, -1] = 0.
-        h = self.h if self.ord == 1 else self.h / 2.
-        self.Z0 = expm(h * self.Dc * J @ self.D2)
+        self.t = self.t_min             # Current value of time variable
+        self._err = None                # Current error calc vs real
+        self._err_stat = None           # Current error calc vs stat
+        self._err_xpoi = None           # Current error calc vs real at point
+        self._err_xpoi_stat = None      # Current error calc vs stat at point
+        self.D0 = self.IT.dif2().copy() # Chebyshev diff. matrix d2 / dx2
+        self.J0 = np.eye(self.n)
+        self.J0[+0, +0] = 0.
+        self.J0[-1, -1] = 0.
+        self.h0 = self.h if self.ord == 1 else self.h / 2.
+        self.Z0 = expm(self.h0 * self.Dc * self.J0 @ self.D0)
 
         if not self.with_tt:
             self.Z = self.Z0.copy()
@@ -228,7 +230,7 @@ class Solver(object):
         self._t_prep = time.time() - _t
         _t = time.time()
 
-        self.X_hst = self.IT.grid() # TODO! Remove
+        self.X_hst = self.IT.grid()
         self.T_hst = []
         self.R_hst = []
         self.E_hst = []
@@ -259,6 +261,8 @@ class Solver(object):
             if i == 0:
                 # First iteration is the initial condition
                 self.IT.init(self.func_r0)
+
+                self._t_calc+= time.time() - _t
                 continue
 
             self.step_v()
@@ -268,21 +272,7 @@ class Solver(object):
             self._t_calc+= time.time() - _t
 
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
-                r = self.IT.Y
-                if self.with_tt: r = r.full()
-                r = r.reshape(-1, order='F')
-                self.comp_real(r_calc=r)
-                self.comp_stat(r_calc=r)
-                self.T_hst.append(t)
-                self.R_hst.append(r)
-
-                _msg = '| At T=%-6.1e :'%self.t
-                if self._err:
-                    _msg+= ' e=%-6.1e'%self._err
-                if self._err_stat:
-                    _msg+= ' es=%-6.1e'%self._err_stat
-                if not self._err and not self._err_stat:
-                    _msg+= ' norm=%-6.1e'%np.linalg.norm(r)
+                _msg = self.step_check()
                 _tqdm.set_postfix_str(_msg, refresh=True)
 
             _tqdm.update(1)
@@ -325,6 +315,8 @@ class Solver(object):
     def step_w(self):
         '''
         One computation step for the drift term.
+
+        TODO! Check IT.copy() work.
         '''
 
         def func(y, t):
@@ -360,6 +352,36 @@ class Solver(object):
 
         IT0 = self.IT.copy().prep()
         self.IT.init(step)
+
+    def step_check(self):
+        '''
+        Check result of the current calculation step.
+
+        OUTPUT:
+
+        msg - string representation of the current step for print
+        type: str
+
+        TODO! Remove construction of the full tensor (use cross appr. instead).
+        '''
+
+        r = self.IT.Y
+        if self.with_tt: r = r.full()
+        r = r.reshape(-1, order='F')
+        self.comp_real(r_calc=r)
+        self.comp_stat(r_calc=r)
+        self.T_hst.append(self.t)
+        self.R_hst.append(r)
+
+        msg = '| At T=%-6.1e :'%self.t
+        if self._err:
+            msg+= ' e=%-6.1e'%self._err
+        if self._err_stat:
+            msg+= ' es=%-6.1e'%self._err_stat
+        if not self._err and not self._err_stat:
+            msg+= ' norm=%-6.1e'%np.linalg.norm(r)
+
+        return msg
 
     def comp(self, x=None):
         '''
@@ -404,6 +426,8 @@ class Solver(object):
 
         r - analytic solution in the given points
         type: ndarray [number of points] of float
+
+        TODO! Do not calculate function on the full grid.
         '''
 
         if x is None: x = self.X_hst
@@ -453,6 +477,8 @@ class Solver(object):
 
         r - stationary solution in the given points
         type: ndarray [number of points] of float
+
+        TODO! Do not calculate function on the full grid.
         '''
 
         if x is None: x = self.X_hst
@@ -616,6 +642,8 @@ class Solver(object):
                 False - error vs stationary solution will not be presented
             default: False
             type: bool
+
+        TODO! Build full spatial grid only if plot is required.
         '''
 
         conf = config['opts']['plot']
@@ -905,7 +933,7 @@ class Solver(object):
         x - spatial point
         type: ndarray (or list) [dimensions] of float
 
-        INPUT:
+        OUTPUT:
 
         i - flatten grid index
         type:  float
