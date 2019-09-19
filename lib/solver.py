@@ -348,6 +348,9 @@ class Solver(object):
             y1 = sl(func, y0, self.t - self.h, self.t)
             w1 = y1[-1, :]
 
+            if self.with_tt and np.linalg.norm(w1) < 1.E-15:
+                w1+= 1.E-15 # To prevent zero division in cross appr.
+
             return w1
 
         IT0 = self.IT.copy().prep()
