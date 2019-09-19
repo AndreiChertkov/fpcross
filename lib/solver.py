@@ -2,6 +2,7 @@ import time
 import numpy as np
 from numpy import kron as kron
 from scipy.linalg import expm as expm
+from scipy.integrate import solve_ivp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
@@ -10,7 +11,6 @@ from tqdm import tqdm
 import tt
 
 from config import config
-from utils import rk4, eul
 from intertrain import Intertrain
 
 class Solver(object):
@@ -349,7 +349,7 @@ class Solver(object):
             type: ndarray [number of points] of float
             '''
 
-            sl = rk4 if self.ord == 2 else eul
+            sl = Solver.ode_solve_rk4 if self.ord == 2 else Solver.ode_solve_eul
             x0 = sl(self.func_f0, x, self.t, self.t - self.h, t_poi=2)
             w0 = IT0.calc(x0)
             y0 = np.vstack([x0, w0])
@@ -922,3 +922,190 @@ class Solver(object):
         i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
 
         return i
+
+    @staticmethod
+    def ode_solve_eul(f, y0, t_min, t_max, t_poi=2, with_y0=False):
+        '''
+        Solve the ordinary differential equation (ODE) d y / d t = f(y, t)
+        with multiple initial conditions by standard Euiler method.
+
+        INPUT:
+
+        f - function that calculate the rhs of the ODE for given points
+        type: function
+            inp:
+                y - values of the spatial variable
+                type: ndarray [dimensions, number of points] of float
+                t - value of the time
+                type: float
+            out:
+                f - function values on y points for time t
+                type: ndarray [dimensions, number of points] of float
+
+        y0 - initial values of the variable
+        type: ndarray (or list) [dimensions, number of points] of float
+
+        t_min - initial time
+        type: float
+
+        t_max - final time
+        type: float
+
+        t_poi - total number of points
+        type: int, >= 2
+        * The min and max values are included.
+        * If it is equal to 2, then points will be [t_min, t_max].
+
+        with_y0 - flag:
+            True  - the 3th argument y0 for the current points will be passed
+                    to the function f
+            False - without y0 argument
+        type: bool
+
+        OUTPUT:
+
+        y - solution at the final time step
+        type: ndarray [dimensions, number of points] of float
+        '''
+
+        if t_poi < 2:
+            s = 'Invalid number of time points (should be at least 2).'
+            raise ValueError(s)
+
+        if not isinstance(y0, np.ndarray): y0 = np.array(y0)
+
+        h = (t_max - t_min) / (t_poi - 1)
+        t = t_min
+        y = y0.copy()
+
+        def func(y, t):
+            return f(y, t, y0) if with_y0 else f(y, t)
+
+        for _ in range(1, t_poi):
+            y+= h * func(y, t)
+            t+= h
+
+        return y
+
+    @staticmethod
+    def ode_solve_rk4(f, y0, t_min, t_max, t_poi=2, with_y0=False):
+        '''
+        Solve the ordinary differential equation (ODE) d y / d t = f(y, t)
+        with multiple initial conditions by the 4th order Runge-Kutta method.
+
+        INPUT:
+
+        f - function that calculate the rhs of the ODE for given points
+        type: function
+            inp:
+                y - values of the spatial variable
+                type: ndarray [dimensions, number of points] of float
+                t - value of the time
+                type: float
+            out:
+                f - function values on y points for time t
+                type: ndarray [dimensions, number of points] of float
+
+        y0 - initial values of the variable
+        type: ndarray (or list) [dimensions, number of points] of float
+
+        t_min - initial time
+        type: float
+
+        t_max - final time
+        type: float
+
+        t_poi - total number of points
+        type: int, >= 2
+        * The min and max values are included.
+        * If it is equal to 2, then points will be [t_min, t_max].
+
+        with_y0 - flag:
+            True  - the 3th argument y0 for the current points will be passed
+                    to the function f
+            False - without y0 argument
+        type: bool
+
+        OUTPUT:
+
+        y - solution at the final time step
+        type: ndarray [dimensions, number of points] of float
+        '''
+
+        if not isinstance(y0, np.ndarray): y0 = np.array(y0)
+
+        h = (t_max - t_min) / (t_poi - 1)
+        t = t_min
+        y = y0.copy()
+
+        def func(y, t):
+            return f(y, t, y0) if with_y0 else f(y, t)
+
+        for _ in range(1, t_poi):
+            k1 = h * func(y, t)
+            k2 = h * func(y + 0.5 * k1, t + 0.5 * h)
+            k3 = h * func(y + 0.5 * k2, t + 0.5 * h)
+            k4 = h * func(y + k3, t + h)
+            y+= (k1 + k2 + k2 + k3 + k3 + k4) / 6.
+            t+= h
+
+        return y
+
+    @staticmethod
+    def ode_solve_ivp(f, y0, t_min, t_max, t_poi=2, with_y0=False):
+        '''
+        Solve the ordinary differential equation (ODE) d y / d t = f(y, t)
+        with multiple initial conditions by the standard scipy solver.
+
+        INPUT:
+
+        f - function that calculate the rhs of the ODE for given points
+        type: function
+            inp:
+                y - values of the spatial variable
+                type: ndarray [dimensions, number of points] of float
+                t - value of the time
+                type: float
+            out:
+                f - function values on y points for time t
+                type: ndarray [dimensions, number of points] of float
+
+        y0 - initial values of the variable
+        type: ndarray (or list) [dimensions, number of points] of float
+
+        t_min - initial time
+        type: float
+
+        t_max - final time
+        type: float
+
+        t_poi - total number of points
+        type: int, >= 2
+        * The min and max values are included.
+        * If it is equal to 2, then points will be [t_min, t_max].
+
+        with_y0 - flag:
+            True  - the 3th argument y0 for the current points will be passed
+                    to the function f
+            False - without y0 argument
+        type: bool
+
+        OUTPUT:
+
+        y - solution at the final time step
+        type: ndarray [dimensions, number of points] of float
+        '''
+
+        if not isinstance(y0, np.ndarray): y0 = np.array(y0)
+        y = y0.copy()
+
+        for j in range(y.shape[1]):
+
+            def func(t, y):
+                y_ = y.reshape(-1, 1)
+                if with_y0: return f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
+                return f(y_, t).reshape(-1)
+
+            y[:, j] = solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]
+
+        return y
