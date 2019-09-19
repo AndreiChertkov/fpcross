@@ -112,7 +112,7 @@ class Solver(object):
 
         self.T = np.linspace(t_min, t_max, t_poi)
 
-    def set_grid_x(self, x_poi, x_min=-3., x_max=3., poi=None):
+    def set_grid_x(self, x_poi, x_min=-3., x_max=3.):
         '''
         Set parameters of the spatial grid.
         Chebyshev spatial grid is used and for each dimension the same number
@@ -130,12 +130,6 @@ class Solver(object):
 
         x_max - max value of the spatial variable for each dimension
         type: float, > x_min
-
-        poi - special spatial point for error check
-        type: ndarray (or list) [dimensions] of float or float
-        default: [0, 0, ..., 0]
-        * The closest point on the constructed spatial grid will be used.
-        * If is float, then this value will be used for all dimensions.
         '''
 
         if x_poi < 2:
@@ -155,11 +149,6 @@ class Solver(object):
         n_ = np.ones(self.d, dtype='int') * x_poi
         l_ = np.repeat(np.array([[x_min, x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
-
-        if poi is None: poi = 0.
-        if isinstance(poi, (int, float)): poi = [float(poi)] * self.d
-        if isinstance(poi, list): poi = np.array(poi)
-        self.spoi = poi
 
     def set_funcs(self, f0, f1, r0, rt=None, rs=None):
         '''
@@ -202,20 +191,24 @@ class Solver(object):
         Init calculation parameters and prepare special matrices.
 
         TODO! Check usage of J matrix.
-        TODO! Remove construction of the full spatial grid.
         '''
 
         _t = time.time()
 
-        self._t_prep = None
-        self._t_calc = None
-        self._t_spec = None
+        self.hst = {      # Saved (history) values:
+            'T': [],      # time moments
+            'R': [],      # solution on the spatial grid
+            'E_real': [], # error vs analytic (real) solution
+            'E_stat': [], # error vs stationary solution
+        }
+        self.tms = {      # Saved times (durations)
+            'prep': 0.,   # prepare special matrices
+            'calc': 0.,   # calculations
+            'spec': 0.,   # special operations (like error computation)
+        }
 
         self.t = self.t_min             # Current value of time variable
-        self._err = None                # Current error calc vs real
-        self._err_stat = None           # Current error calc vs stat
-        self._err_xpoi = None           # Current error calc vs real at point
-        self._err_xpoi_stat = None      # Current error calc vs stat at point
+
         self.D0 = self.IT.dif2().copy() # Chebyshev diff. matrix d2 / dx2
         self.J0 = np.eye(self.n)
         self.J0[+0, +0] = 0.
@@ -227,28 +220,12 @@ class Solver(object):
             self.Z = self.Z0.copy()
             for _ in range(1, self.d): self.Z = np.kron(self.Z, self.Z0)
 
-        self._t_prep = time.time() - _t
-        _t = time.time()
-
-        self.X_hst = self.IT.grid()
-        self.T_hst = []
-        self.R_hst = []
-        self.E_hst = []
-        self.E_stat_hst = []
-        self.E_xpoi_hst = []
-        self.E_xpoi_stat_hst = []
-
-        self.sind = self._sind(self.spoi)
-
-        self._t_spec = time.time() - _t
+        self.tms['prep'] = time.time() - _t
 
     def calc(self):
         '''
         Calculation of the solution.
         '''
-
-        self._t_calc = 0.
-        self._t_spec = time.time()
 
         _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=80)
         t_hst = int(self.t_poi / self.t_hst) if self.t_hst else 0
@@ -261,37 +238,32 @@ class Solver(object):
             if i == 0:
                 # First iteration is the initial condition
                 self.IT.init(self.func_r0)
+            else:
+                self.step_v()
+                self.step_w()
+                if self.ord == 2: self.step_v()
 
-                self._t_calc+= time.time() - _t
-                continue
+            self.tms['calc']+= time.time() - _t
 
-            self.step_v()
-            self.step_w()
-            if self.ord == 2: self.step_v()
-
-            self._t_calc+= time.time() - _t
+            _t = time.time()
 
             if t_hst and (i % t_hst == 0 or i == self.t_poi - 1):
                 _msg = self.step_check()
                 _tqdm.set_postfix_str(_msg, refresh=True)
-
             _tqdm.update(1)
+
+            self.tms['spec']+= time.time() - _t
 
         _tqdm.close()
 
-        # Prepare interpolation for the final result
         _t = time.time()
-        self.IT.prep()
-        self._t_calc+= time.time() - _t
 
-        self.T_hst = np.array(self.T_hst)
-        self.R_hst = np.array(self.R_hst)
-        self.E_hst = np.array(self.E_hst)
-        self.E_stat_hst = np.array(self.E_stat_hst)
-        self.E_xpoi_hst = np.array(self.E_xpoi_hst)
-        self.E_xpoi_stat_hst = np.array(self.E_xpoi_stat_hst)
+        self.IT.prep() # Prepare interpolation for the final result
 
-        self._t_spec = time.time() - self._t_spec - self._t_calc
+        for n in ['T', 'R', 'E_real', 'E_stat']:
+            self.hst[n] = np.array(self.hst[n])
+
+        self.tms['spec']+= time.time() - _t
 
     def step_v(self):
         '''
@@ -317,6 +289,7 @@ class Solver(object):
         One computation step for the drift term.
 
         TODO! Check IT.copy() work.
+        TODO! Is it correct to add eps to prevent zero division in cross appr?
         '''
 
         def func(y, t):
@@ -368,21 +341,36 @@ class Solver(object):
         TODO! Remove construction of the full tensor (use cross appr. instead).
         '''
 
+        def _err_calc(r_calc, r_real):
+            dr = r_real - r_calc
+            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
+            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
+            return dn / n0 if n0 > 0 else dn
+
         r = self.IT.Y
-        if self.with_tt: r = r.full()
-        r = r.reshape(-1, order='F')
-        self.comp_real(r_calc=r)
-        self.comp_stat(r_calc=r)
-        self.T_hst.append(self.t)
-        self.R_hst.append(r)
+
+        self.hst['T'].append(self.t)
+        self.hst['R'].append(r)
 
         msg = '| At T=%-6.1e :'%self.t
-        if self._err:
-            msg+= ' e=%-6.1e'%self._err
-        if self._err_stat:
-            msg+= ' es=%-6.1e'%self._err_stat
-        if not self._err and not self._err_stat:
-            msg+= ' norm=%-6.1e'%np.linalg.norm(r)
+
+        if self.func_rt:
+            def func_rt(x): return self.func_rt(x, self.t)
+            r_real = self.IT.copy(is_full=False).init(func_rt).Y
+            self.hst['E_real'].append(_err_calc(r, r_real))
+
+            msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
+
+        if self.func_rs:
+            def func_rs(x): return self.func_rs(x)
+            r_stat = self.IT.copy(is_full=False).init(func_rs).Y
+            self.hst['E_stat'].append(_err_calc(r, r_stat))
+
+            msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
+
+        if self.func_rt and not self.func_rs:
+            # msg+= ' norm=%-6.1e'%np.linalg.norm(r)
+            pass
 
         return msg
 
@@ -522,19 +510,11 @@ class Solver(object):
         print('Format    : %1dD, %s [order=%d]'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
         print('Grid x    : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
         print('Grid t    : poi = %9d, min = %9.4f, max = %9.4f , hst = %9d'%(self.t_poi, self.t_min, self.t_max, self.t_hst))
-        print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self._t_prep, self._t_calc, self._t_spec))
-        if self._err is not None:
-            if self._err_xpoi is not None:
-                p = ' (at the point: %8.2e)'%self._err_xpoi
-            else:
-                p = ''
-            print('Err calc  : %8.2e%s'%(self._err, p))
-        if self._err_stat is not None:
-            if self._err_xpoi_stat is not None:
-                p = ' (at the point: %8.2e)'%self._err_xpoi_stat
-            else:
-                p = ''
-            print('Err stat  : %8.2e%s'%(self._err_stat, p))
+        print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self.tms['prep'], self.tms['calc'],self.tms['spec']))
+        if len(self.hst['E_real']):
+            print('Err real  : %8.2e'%self.hst['E_real'][-1])
+        if len(self.hst['E_stat']):
+            print('Err stat  : %8.2e'%self.hst['E_stat'][-1])
 
     def anim(self, ffmpeg_path, delt=50):
         '''
@@ -1140,3 +1120,7 @@ class Solver(object):
             y[:, j] = solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]
 
         return y
+
+
+#if self.with_tt: r = r.full()
+#r = r.reshape(-1, order='F')
