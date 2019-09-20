@@ -1,1 +1,2 @@
-swp: 0/199 er_rel = 1.3e+02 er_abs = 4.7e+02 erank = 3.0 fun_eval: 976
+swp: 0/199 er_rel = 9.9e+14 er_abs = 5.6e+01 erank = 3.0 fun_eval: 512
+swp: 1/199 er_rel = 1.5e-16 er_abs = 8.8e-30 erank = 5.0 fun_eval: 1536

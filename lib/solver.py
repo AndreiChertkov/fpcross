@@ -213,7 +213,7 @@ class Solver(object):
 
         if not self.with_tt:
             self.Z = self.Z0.copy()
-            for _ in range(1, self.d): self.Z = np.np_kron(self.Z, self.Z0)
+            for _ in range(1, self.d): self.Z = np_kron(self.Z, self.Z0)
 
         self.tms['prep'] = time.time() - _t
 
@@ -339,6 +339,14 @@ class Solver(object):
 
         IT0 = self.IT.copy().prep()
         self.IT.init(step)
+
+        x1 = self.IT.Y.copy().full().reshape(-1, order='F')
+        IT1 = self.IT.copy()
+        IT1.with_tt = False
+        IT1.init(step)
+        x2 = IT1.Y.copy().reshape(-1, order='F')
+
+        print(np.linalg.norm(x1 - x2) / np.linalg.norm(x1))
 
     def step_check(self):
         '''
@@ -1024,7 +1032,3 @@ class Solver(object):
             y[:, j] = sp_solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]
 
         return y
-
-
-#if self.with_tt: r = r.full()
-#r = r.reshape(-1, order='F')
