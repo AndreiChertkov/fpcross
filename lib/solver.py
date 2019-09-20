@@ -383,10 +383,9 @@ class Solver(object):
 
         return msg
 
-    def comp(self, x=None):
+    def comp(self, x):
         '''
-        Compute calculated solution at given spatial points x
-        (on the history grid if is None).
+        Compute calculated solution at given spatial points x.
 
         INPUT:
 
@@ -399,116 +398,12 @@ class Solver(object):
         type: ndarray [number of points] of float
         '''
 
-        if x is None: x = self.X_hst
+        if self.IT.A is None:
+            s = 'Solution of the equation is not calculated yet. '
+            s+= 'Call "prep" and "calc" functions before.'
+            raise ValueError(s)
 
-        if x is None or not x.shape[1]:
-            r = None
-        else:
-            r = self.IT.calc(x)
-
-        return r
-
-    def comp_real(self, x=None, r_calc=None):
-        '''
-        Compute real (analytic) solution r(x, t) at given spatial points x
-        (on the history grid if is None) and the corresponding error vs r_calc.
-        Current time (t) is used for computation.
-
-        INPUT:
-
-        x - values of the spatial variable
-        type: ndarray [dimensions, number of points]
-
-        r_calc - calculated solution in the given points
-        type: ndarray [number of points] of float
-
-        OUTPUT:
-
-        r - analytic solution in the given points
-        type: ndarray [number of points] of float
-
-        TODO! Do not calculate function on the full grid.
-        '''
-
-        if x is None: x = self.X_hst
-
-        if x is None or not x.shape[1] or not self.func_rt:
-            r = None
-            if r_calc is not None:
-                self._err = None
-                self._err_xpoi = None
-        else:
-            r = self.func_rt(x, self.t)
-            if r_calc is not None:
-                norm = np.linalg.norm(r)
-                if norm > 0:
-                    self._err = np.linalg.norm(r - r_calc) / norm
-                else:
-                    self._err = np.linalg.norm(r_calc)
-
-                i = self.sind
-                norm = np.abs(r[i])
-                if norm > 0:
-                    self._err_xpoi = np.abs(r[i] - r_calc[i]) / norm
-                else:
-                    self._err_xpoi = np.abs(r_calc[i])
-
-
-        if r_calc is not None:
-            self.E_hst.append(self._err)
-            self.E_xpoi_hst.append(self._err_xpoi)
-
-        return r
-
-    def comp_stat(self, x=None, r_calc=None):
-        '''
-        Compute stationary (analytic) solution rs(x) at given spatial points x
-        (on the history grid if is None) and the corresponding error vs r_calc.
-
-        INPUT:
-
-        x - values of the spatial variable
-        type: ndarray [dimensions, number of points]
-
-        r_calc - calculated solution in the given points
-        type: ndarray [number of points] of float
-
-        OUTPUT:
-
-        r - stationary solution in the given points
-        type: ndarray [number of points] of float
-
-        TODO! Do not calculate function on the full grid.
-        '''
-
-        if x is None: x = self.X_hst
-
-        if x is None or not x.shape[1] or not self.func_rs:
-            r = None
-            if r_calc is not None:
-                self._err_stat = None
-                self._err_xpoi_stat = None
-        else:
-            r = self.func_rs(x)
-            if r_calc is not None:
-                norm = np.linalg.norm(r)
-                if norm > 0:
-                    self._err_stat = np.linalg.norm(r - r_calc) / norm
-                else:
-                    self._err_stat = np.linalg.norm(r_calc)
-
-                i = self.sind
-                norm = np.abs(r[i])
-                if norm > 0:
-                    self._err_xpoi_stat = np.abs(r[i] - r_calc[i]) / norm
-                else:
-                    self._err_xpoi_stat = np.abs(r_calc[i])
-
-        if r_calc is not None:
-            self.E_stat_hst.append(self._err_stat)
-            self.E_xpoi_stat_hst.append(self._err_xpoi_stat)
-
-        return r
+        return self.IT.calc(x)
 
     def info(self):
         '''
