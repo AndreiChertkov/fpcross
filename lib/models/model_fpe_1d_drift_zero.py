@@ -82,10 +82,9 @@ class Model(ModelBase):
     def __init__(self):
         super().__init__(name, desc, tags, info)
 
-    def init(self, s=None, A=None, D=None):
+    def init(self, s=None, D=None):
         self.d = 1
         self._set('s', s, 1.)
-        self._set('A', A, 1.)
         self._set('D', D, 0.5)
 
     def _d0(self):

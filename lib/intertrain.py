@@ -157,6 +157,10 @@ class Intertrain(object):
             default: 2
             type: int, > 0
 
+            Y0 - initial guess for cross approximation
+            default: None (random TT-tensor will be used)
+            type: ndarray or TT-tensor [*n] of float
+
         OUTPUT:
 
         self - class instance
@@ -176,6 +180,7 @@ class Intertrain(object):
             'nswp': (opts or {}).get('nswp', 200),
             'kickrank': (opts or {}).get('kickrank', 1),
             'rf': (opts or {}).get('rf', 2),
+            'Y0': (opts or {}).get('Y0', None),
         }
 
         self.f = f
@@ -714,6 +719,10 @@ class Intertrain(object):
             default: 2
             type: int, > 0
 
+            Y0 - initial guess for cross approximation
+            default: random TT-tensor
+            type: ndarray or TT-tensor [*n] of float
+
         fpath - (optional) file path for output cross approximation native info
         type: str
 
@@ -737,6 +746,7 @@ class Intertrain(object):
             'nswp': (opts or {}).get('nswp', 200),
             'kickrank': (opts or {}).get('kickrank', 1),
             'rf': (opts or {}).get('rf', 2),
+            'Y0': (opts or {}).get('Y0', None),
         }
 
         crs_res = { 'evals': 0, 't_func': 0. }
@@ -755,7 +765,8 @@ class Intertrain(object):
             stdout0 = sys.stdout
             sys.stdout = log
 
-            Z = tt.rand(n, n.shape[0], 1)
+            Z = opts['Y0']
+            if Z is None: Z = tt.rand(n, n.shape[0], 1)
             Y = tt_cross(
                 func, Z, eps=eps, nswp=opts['nswp'], kickrank=opts['kickrank'],
                 rf=opts['rf'], verbose=True
