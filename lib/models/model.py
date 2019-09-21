@@ -30,6 +30,19 @@ class Model(object):
         self._check_is_selected()
         return self.md.info()
 
+    def d0(self):
+        '''
+        Diffusion coefficient D.
+
+        OUTPUT:
+
+        v - corresponding value
+        type: float
+        '''
+
+        self._check_is_selected()
+        return self.md.d0()
+
     def f0(self, x, t):
         '''
         Function f(x, t).

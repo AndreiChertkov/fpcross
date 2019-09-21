@@ -129,6 +129,9 @@ class Model(ModelBase):
         self._set('A', A, 1.)
         self._set('D', D, 0.5)
 
+    def _d0(self):
+        return self.D
+
     def _f0(self, x, t):
         return -self.A * x
 

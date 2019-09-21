@@ -2,6 +2,9 @@ import os
 import numpy as np
 
 class Model(object):
+    '''
+    Base (abstract) class for all models of equations.
+    '''
 
     def __init__(self, name, desc, tags, info):
         '''
@@ -33,6 +36,18 @@ class Model(object):
 
         from IPython.display import display, Latex
         display(Latex(self._info['latex']))
+
+    def d0(self):
+        '''
+        Diffusion coefficient D.
+
+        OUTPUT:
+
+        v - corresponding value
+        type: float
+        '''
+
+        return self._d0()
 
     def f0(self, x, t):
         '''
@@ -141,6 +156,10 @@ class Model(object):
         if isinstance(x, list): x = np.array(x)
 
         return x
+
+    def _d0(self):
+        s = 'Is abstract model. Use method of the specific model.'
+        raise NotImplementedError(s)
 
     def _f0(self, x, t):
         s = 'Is abstract model. Use method of the specific model.'
