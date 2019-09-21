@@ -35,6 +35,7 @@ class Solver(object):
     10 Call "plot_t" for plot of solution and error at selected spatial point.
 
     Advanced usage:
+     - Call "set_model" to set equation parameters from an existing model.
      - Call "comp" to obtain final solution at any given spatial point.
     '''
 
@@ -181,6 +182,21 @@ class Solver(object):
 
         self.Dc = Dc if Dc is not None else 1.
 
+    def set_model(self, MD):
+        '''
+        Set coefficients for equation
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x).
+
+        INPUT:
+
+        MD - model for equation
+        type: Model
+        '''
+
+        self.set_funcs(MD.f0, MD.f1, MD.r0, MD.rt, MD.rs)
+        self.set_coefs(MD.d0())
+
     def prep(self):
         '''
         Init calculation parameters and prepare special matrices.
@@ -226,6 +242,7 @@ class Solver(object):
 
         self.t = self.t_min
         self.IT.init(self.func_r0)
+        self.W0 = self.IT.Y.copy()
         for i in range(1, self.t_poi):
             _t = time.time()
 
@@ -338,15 +355,17 @@ class Solver(object):
             return w1
 
         IT0 = self.IT.copy().prep()
-        self.IT.init(step)
+        self.IT.init(step, opts={
+            'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
+        })
+        self.W0 = self.IT.Y.copy()
 
-        x1 = self.IT.Y.copy().full().reshape(-1, order='F')
-        IT1 = self.IT.copy()
-        IT1.with_tt = False
-        IT1.init(step)
-        x2 = IT1.Y.copy().reshape(-1, order='F')
-
-        print(np.linalg.norm(x1 - x2) / np.linalg.norm(x1))
+        # x1 = self.IT.Y.copy().full().reshape(-1, order='F')
+        # IT1 = self.IT.copy()
+        # IT1.with_tt = False
+        # IT1.init(step)
+        # x2 = IT1.Y.copy().reshape(-1, order='F')
+        #print(np.linalg.norm(x1 - x2) / np.linalg.norm(x1))
 
     def step_check(self):
         '''
@@ -420,8 +439,8 @@ class Solver(object):
 
         print('----------- Solver')
         print('Format    : %1dD, %s [order=%d]'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
+        print('Grid t    : poi = %9d, min = %9.4f, max = %9.4f'%(self.t_poi, self.t_min, self.t_max))
         print('Grid x    : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
-        print('Grid t    : poi = %9d, min = %9.4f, max = %9.4f , hst = %9d'%(self.t_poi, self.t_min, self.t_max, self.t_hst))
         print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self.tms['prep'], self.tms['calc'],self.tms['spec']))
         if len(self.hst['E_real']):
             print('Err real  : %8.2e'%self.hst['E_real'][-1])
