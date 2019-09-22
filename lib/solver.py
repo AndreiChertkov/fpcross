@@ -17,29 +17,31 @@ class Solver(object):
     '''
     Class with the fast solver for multidimensional Fokker-Planck equation (FPE)
     d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ), r(x,0) = r0(x),
-    with known f(x,t), r0(x) and scalar diffusion coefficient D.
+    with known f(x,t), its spatial derivative d f(x,t) / d x,
+    initial condition r0(x) and scalar diffusion coefficient D.
 
     Full (numpy, NP) or sparse (tensor train, TT with cross approximation)
     format may be used for the solution process.
 
     Basic usage:
      1 Initialize class instance with dimension, format and accuracy parameters.
-     2 Call "set_grid_t" to set the time grid parameters.
-     3 Call "set_grid_x" to set the spatial grid parameters.
-     4 Call "set_funcs" to set functions for FPE and analytic solution if known.
-     5 Call "set_coefs" to set coefficients for FPE.
+     2 Call "set_funcs" to set functions for FPE and analytic solution if known.
+     3 Call "set_coefs" to set coefficients for FPE.
+     4 Call "set_grid_t" to set the time grid parameters.
+     5 Call "set_grid_x" to set the spatial grid parameters.
      6 Call "prep" for initialization of the solver.
      7 Call "calc" for calculation process.
-     8 Call "info" for demonstration of calculation results.
-     9 Call "plot_x" for plot of solution and error at selected time moment.
-    10 Call "plot_t" for plot of solution and error at selected spatial point.
+     8 Call "comp" to obtain final solution at any given spatial point.
+     9 Call "info" for demonstration of calculation results.
+    10 Call "plot_x" for plot of solution and error at selected time moment.
+    11 Call "plot_t" for plot of solution and error at selected spatial point.
 
-    Advanced usage:
-     - Call "set_model" to set equation parameters from an existing model.
-     - Call "comp" to obtain final solution at any given spatial point.
+    Notes:
+     - Instead of "set_funcs" and "set_coefs" calls, equation parameters may be
+       provided from an existing model while constructor or "set_model" call.
     '''
 
-    def __init__(self, d, eps=1.E-6, ord=2, with_tt=False):
+    def __init__(self, d=None, eps=1.E-6, ord=2, with_tt=False, model=None):
         '''
         INPUT:
 
@@ -60,6 +62,9 @@ class Solver(object):
             True  - sparse (tensor train, TT) format will be used
             False - dense (numpy, NP) format will be used
         type: bool
+
+        model - model for equation with functions and coefficients
+        type: Model
         '''
 
         self.d = d
@@ -67,7 +72,72 @@ class Solver(object):
         self.ord = ord
         self.with_tt = with_tt
 
-        self.set_coefs()
+        if model is not None:
+            self.set_model(model)
+        else:
+            self.set_coefs()
+
+    def set_model(self, model):
+        '''
+        Set functions and coefficients from existing model for equation
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x).
+        where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
+        r0(x) is initial condition, rt(x, t) is optional analytic solution
+        and rs(x) is optional stationary solution.
+
+        INPUT:
+
+        model - model for equation with functions and coefficients
+        type: Model
+        '''
+
+        self.d = model.d
+
+        d0 = model.d0()
+        f0 = model.f0
+        f1 = model.f1
+        r0 = model.r0
+        rt = model.rt if True else None
+        rs = model.rs if True else None
+        self.set_funcs(f0, f1, r0, rt, rs)
+        self.set_coefs(d0)
+
+    def set_funcs(self, f0, f1, r0, rt=None, rs=None):
+        '''
+        Set functions for equation
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x),
+        where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
+        r0(x) is initial condition, rt(x, t) is optional analytic solution
+        and rs(x) is optional stationary solution.
+        Functions input is X of type ndarray [dimensions, number of points].
+        Functions f0 and f1 should return 2D ndarray of the same shape as X.
+        Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
+        '''
+
+        self.func_f0 = f0
+        self.func_f1 = f1
+        self.func_r0 = r0
+        self.func_rt = rt
+        self.func_rs = rs
+
+    def set_coefs(self, Dc=None):
+        '''
+        Set coefficients for equation
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x).
+
+        INPUT:
+
+        Dc - diffusion coefficient D
+        type: float
+        default: 1.
+
+        TODO! Replace Dc by matrix.
+        '''
+
+        self.Dc = Dc if Dc is not None else 1.
 
     def set_grid_t(self, t_poi, t_min=0., t_max=1., t_hst=0):
         '''
@@ -108,7 +178,7 @@ class Solver(object):
         self.t_max = float(t_max)
         self.t_hst = int(self.t_poi * 1. / t_hst) if t_hst else 0
 
-        self.h = (t_max - t_min) / (t_poi - 1)
+        self.h = (self.t_max - self.t_min) / (self.t_poi - 1)
 
     def set_grid_x(self, x_poi, x_min=-3., x_max=3.):
         '''
@@ -146,57 +216,6 @@ class Solver(object):
         l_ = np.repeat(np.array([[self.x_min, self.x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-    def set_funcs(self, f0, f1, r0, rt=None, rs=None):
-        '''
-        Set functions for equation
-        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
-        r(x,0) = r0(x), r(x, +infinity) = rs(x),
-        where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
-        r0(x) is initial condition, rt(x, t) is optional analytic solution
-        and rs(x) is optional stationary solution.
-        Functions input is X of type ndarray [dimensions, number of points].
-        Functions f0 and f1 should return 2D ndarray of the same shape as X.
-        Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
-        '''
-
-        self.func_f0 = f0
-        self.func_f1 = f1
-        self.func_r0 = r0
-        self.func_rt = rt
-        self.func_rs = rs
-
-    def set_coefs(self, Dc=None):
-        '''
-        Set coefficients for equation
-        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
-        r(x,0) = r0(x), r(x, +infinity) = rs(x).
-
-        INPUT:
-
-        Dc - diffusion coefficient D
-        type: float
-        default: 1.
-
-        TODO! Replace Dc by matrix.
-        '''
-
-        self.Dc = Dc if Dc is not None else 1.
-
-    def set_model(self, MD):
-        '''
-        Set coefficients for equation
-        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
-        r(x,0) = r0(x), r(x, +infinity) = rs(x).
-
-        INPUT:
-
-        MD - model for equation
-        type: Model
-        '''
-
-        self.set_funcs(MD.f0, MD.f1, MD.r0, MD.rt, MD.rs)
-        self.set_coefs(MD.d0())
-
     def prep(self):
         '''
         Init calculation parameters and prepare special matrices.
@@ -206,7 +225,7 @@ class Solver(object):
 
         _t = time.time()
 
-        self.hst = {      # Saved (history) values:
+        self.hst = {      # Saved (history) values
             'T': [],      # time moments
             'R': [],      # solution on the spatial grid
             'E_real': [], # error vs analytic (real) solution
@@ -242,11 +261,11 @@ class Solver(object):
 
         self.t = self.t_min
         self.IT.init(self.func_r0)
-        self.W0 = self.IT.Y.copy()
-        for i in range(1, self.t_poi):
+        self.W0 = self.IT.Y.copy() # TODO! Check
+        for m in range(1, self.t_poi):
             _t = time.time()
 
-            self.t = self.t_min + i * self.h
+            self.t = self.t_min + m * self.h
 
             self.step_v()
             self.step_w()
@@ -256,7 +275,7 @@ class Solver(object):
 
             _t = time.time()
 
-            if self.t_hst and (i % self.t_hst == 0 or i == self.t_poi - 1):
+            if self.t_hst and (m % self.t_hst == 0 or m == self.t_poi - 1):
                 _msg = self.step_check()
                 _tqdm.set_postfix_str(_msg, refresh=True)
             _tqdm.update(1)
@@ -277,6 +296,7 @@ class Solver(object):
     def step_v(self):
         '''
         One computation step for the diffusion term.
+        Result is saved to the IT instance.
         '''
 
         v0 = self.IT.Y
@@ -296,6 +316,7 @@ class Solver(object):
     def step_w(self):
         '''
         One computation step for the drift term.
+        Result is saved to the IT instance.
 
         TODO! Check IT.copy() work.
         TODO! Is it correct to add eps to prevent zero division in cross appr?
