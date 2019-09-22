@@ -13,6 +13,9 @@ class SolversCheck(object):
         self.fpath = fpath
         self.res = {}
 
+    def set_model(self, model):
+        self.model = model
+
     def set_grid_t(self, t_min=0., t_max=1.):
         self.t_min = t_min
         self.t_max = t_max
@@ -21,19 +24,8 @@ class SolversCheck(object):
         self.x_min = x_min
         self.x_max = x_max
 
-    def set_funcs(self, f0, f1, r0, rt=None, rs=None):
-        self.func_f0 = f0
-        self.func_f1 = f1
-        self.func_r0 = r0
-        self.func_rt = rt
-        self.func_rs = rs
-
-    def set_coefs(self, Dc=None):
-        self.Dc = Dc if Dc is not None else 1.
-
-    def add(self, name, d, eps, ord, with_tt, M, N):
+    def add(self, name, eps, ord, with_tt, M, N):
         self.res[name] = {
-            'd': d,
             'eps': eps,
             'ord': ord,
             'with_tt': with_tt,
@@ -52,25 +44,24 @@ class SolversCheck(object):
             time.sleep(1)
 
         def calc_one(opts, m, n):
-            SL = Solver(opts['d'], opts['eps'], opts['ord'], opts['with_tt'])
+            SL = Solver(model=self.model,
+                eps=opts['eps'], ord=opts['ord'], with_tt=opts['with_tt']
+            )
             SL.set_grid_t(m, self.t_min, self.t_max, 1)
             SL.set_grid_x(n, self.x_min, self.x_max)
-            SL.set_funcs(
-                self.func_f0, self.func_f1,
-                self.func_r0, self.func_rt, self.func_rs
-            )
-            SL.set_coefs(self.Dc)
             SL.prep()
             SL.calc()
 
+            tms = SL.tms
+            hst = SL.hst
+
             return {
-                't_prep': SL._t_prep,
-                't_calc': SL._t_calc,
-                't_spec': SL._t_spec,
-                'err': SL._err,
-                'err_stat': SL._err_stat,
-                'err_xpoi': SL._err_xpoi,
-                'err_xpoi_stat': SL._err_xpoi_stat,
+                't_prep': tms['prep'],
+                't_calc': tms['calc'],
+                't_spec': tms['spec'],
+                'e_real': hst['E_real'][-1] if len(hst['E_real']) else None,
+                'e_stat': hst['E_stat'][-1] if len(hst['E_stat']) else None,
+                'avrank': hst['R'][-1].erank if opts['with_tt'] else None,
             }
 
         for name in self.res.keys():
@@ -91,7 +82,7 @@ class SolversCheck(object):
             data = pickle.load(f)
         self.res = data['res']
 
-    def plot(self, name, m=None, n=None, lims={}, is_stat=False, is_xpoi=False):
+    def plot(self, name, m=None, n=None, lims={}, is_stat=False):
         if self.res.get(name) is None:
             s = 'Invalid solver name "%s".'%name
             raise ValueError(s)
@@ -111,11 +102,7 @@ class SolversCheck(object):
         else:
             c, x, v = m, res['N'], [res['%d-%d'%(m, n)] for n in res['N']]
 
-        if is_stat:
-            y = [v_['err_xpoi_stat' if is_xpoi else 'err_stat'] for v_ in v]
-        else:
-            y = [v_['err_xpoi' if is_xpoi else 'err'] for v_ in v]
-
+        y = [v_['e_stat' if is_stat else 'e_real'] for v_ in v]
         t = [v_['t_prep'] + v_['t_calc'] for v_ in v]
 
         x, y, t = np.array(x), np.array(y), np.array(t)
@@ -126,29 +113,28 @@ class SolversCheck(object):
 
         if m is None and res['ord'] == 1:
             a, b = np.polyfit(1./xe, ye, 1)
-            s_appr = '%8.1e / m'%a
+            s_lappr = '%8.1e / m'%a
             z = a / x
         if m is None and res['ord'] == 2:
             a, b = np.polyfit(1./xe**2, ye, 1)
-            s_appr = '%8.1e / m^2'%a
+            s_lappr = '%8.1e / m^2'%a
             z = a / x**2
         if n is None:
             b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
             a = np.exp(a)
-            s_appr = '%8.1e * exp[ %9.1e * n ]'%(a, b)
+            s_lappr = '%8.1e * exp[ %9.1e * n ]'%(a, b)
             z = a * np.exp(b * x)
 
-        s_calc = 'Stationary solution' if is_stat else 'Analytic solution'
-        s_title = ' at point' if is_xpoi else ''
-        s_title+= ' (%d %s-points)'%(n or m, 'x' if m is None else 't')
+        s_lcalc = 'Stationary solution' if is_stat else 'Analytic solution'
+        s_title = ' (%d %s-points)'%(n or m, 'x' if m is None else 't')
         s_label = 'Number of %s points'%('time' if m is None else 'spatial')
 
         fig = plt.figure(**conf['fig'][sett['fig']])
         grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
 
         ax = fig.add_subplot(grd[0, 0])
-        ax.plot(x, y, **conf['line'][sett['line-real'][0]], label=s_calc)
-        ax.plot(x, z, **conf['line'][sett['line-appr'][0]], label=s_appr)
+        ax.plot(x, y, **conf['line'][sett['line-real'][0]], label=s_lcalc)
+        ax.plot(x, z, **conf['line'][sett['line-appr'][0]], label=s_lappr)
         ax.set_title(sett['title-err'] + s_title)
         ax.set_xlabel(s_label)
         ax.set_ylabel('')
@@ -166,7 +152,7 @@ class SolversCheck(object):
 
         plt.show()
 
-    def plot_all(self, m=None, n=None, is_stat=False, is_xpoi=False):
+    def plot_all(self, m=None, n=None, is_stat=False):
         if m is None and n is None:
             s = 'Both m and n arguments are None.'
             raise ValueError(s)
@@ -177,9 +163,7 @@ class SolversCheck(object):
         conf = config['opts']['plot']
         sett = config['plot']['conv-all']
 
-        s_calc = 'Stationary solution' if is_stat else 'Analytic solution'
-        s_title = ' at point' if is_xpoi else ''
-        s_title+= ' (%d %s-points)'%(n or m, 'x' if m is None else 't')
+        s_title = ' (%d %s-points)'%(n or m, 'x' if m is None else 't')
         s_label = 'Number of %s points'%('time' if m is None else 'spatial')
 
         fig = plt.figure(**conf['fig'][sett['fig']])
@@ -196,11 +180,7 @@ class SolversCheck(object):
             else:
                 c, x, v = m, res['N'], [res['%d-%d'%(m, n)] for n in res['N']]
 
-            if is_stat:
-                y = [v_['err_xpoi_stat' if is_xpoi else 'err_stat'] for v_ in v]
-            else:
-                y = [v_['err_xpoi' if is_xpoi else 'err'] for v_ in v]
-
+            y = [v_['e_stat' if is_stat else 'e_real'] for v_ in v]
             t = [v_['t_prep'] + v_['t_calc'] for v_ in v]
 
             x, y, t = np.array(x), np.array(y), np.array(t)

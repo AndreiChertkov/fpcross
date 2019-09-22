@@ -147,4 +147,4 @@ class Model(ModelBase):
         return True
 
     def _with_rs(self):
-        return True
+        return False

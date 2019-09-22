@@ -84,6 +84,8 @@ class Intertrain(object):
 
         IT - new class instance
         type: Intertrain
+
+        TODO! Add argument with changed opts (eps etc).
         '''
 
         n = self.n.copy()

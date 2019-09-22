@@ -322,6 +322,8 @@ class Solver(object):
 
         TODO! Check IT.copy() work.
         TODO! Is it correct to add eps to prevent zero division in cross appr?
+        TODO! Try interpolation of the log.
+        TODO! Try initial guess in the form of the Euler solution.
         '''
 
         def func(y, t):
@@ -332,16 +334,16 @@ class Solver(object):
 
             INPUT:
 
-            y - values of the spatial variable (x) and PDF (w)
+            y - combined values of the spatial variable (x) and PDF (w)
             type: ndarray [dimensions + 1, number of points] of float
-            * First dimensions rows are related to x and the last - to w.
+            * First dimensions rows are related to x and the last row to w.
 
             t - time
             type: float
 
             OUTPUT:
 
-            f - rhs of the system
+            rhs - rhs of the system
             type: ndarray [dimensions + 1, number of points] of float
             '''
 
@@ -369,7 +371,7 @@ class Solver(object):
             x0 = sl(self.func_f0, x, self.t, self.t - self.h, t_poi=2)
             w0 = IT0.calc(x0)
             y0 = np.vstack([x0, w0])
-            y1 = sl(func, y0, self.t - self.h, self.t)
+            y1 = sl(func, y0, self.t - self.h, self.t, t_poi=2)
             w1 = y1[-1, :]
 
             if self.with_tt and np.linalg.norm(w1) < 1.E-15:
@@ -383,13 +385,6 @@ class Solver(object):
         })
         self.W0 = self.IT.Y.copy()
 
-        # x1 = self.IT.Y.copy().full().reshape(-1, order='F')
-        # IT1 = self.IT.copy()
-        # IT1.with_tt = False
-        # IT1.init(step)
-        # x2 = IT1.Y.copy().reshape(-1, order='F')
-        #print(np.linalg.norm(x1 - x2) / np.linalg.norm(x1))
-
     def step_check(self):
         '''
         Check result of the current calculation step.
@@ -398,6 +393,8 @@ class Solver(object):
 
         msg - string representation of the current step for print
         type: str
+
+        TODO! Add initial guess r to rt and maybe rs.
         '''
 
         def _err_calc(r_calc, r_real):
@@ -413,16 +410,19 @@ class Solver(object):
 
         msg = '| At T=%-6.1e :'%self.t
 
+        IT = self.IT.copy(is_full=False)
+        IT.eps/= 100
+
         if self.func_rt:
             def func_rt(x): return self.func_rt(x, self.t)
-            r_real = self.IT.copy(is_full=False).init(func_rt).Y
+            r_real = IT.init(func_rt).Y
             self.hst['E_real'].append(_err_calc(r, r_real))
 
             msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
 
         if self.func_rs:
             def func_rs(x): return self.func_rs(x)
-            r_stat = self.IT.copy(is_full=False).init(func_rs).Y
+            r_stat = IT.init(func_rs).Y
             self.hst['E_stat'].append(_err_calc(r, r_stat))
 
             msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
