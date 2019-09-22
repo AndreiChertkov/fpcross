@@ -34,8 +34,8 @@ class Model(object):
         Latex mode for jupyter lab cells is used.
         '''
 
-        from IPython.display import display, Latex
-        display(Latex(self._info['latex']))
+        from IPython.display import display, Markdown
+        display(Markdown(self._info['latex']))
 
     def dim(self):
         '''

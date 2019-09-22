@@ -4,9 +4,36 @@ from model_ import Model as ModelBase
 
 name = 'fpe_1d_drift_zero'
 desc = 'One-dimensional Focker Planck equation with the zero drift'
-tags = ['FPE', '1D']
+tags = ['FPE', '1D', 'analyt', 'time-diffusion']
 info = {
     'latex': r'''
+
+<div class="head0">
+    <div class="head0__name">
+        Model problem
+    </div>
+    <div class="head0__note">
+        One-dimensional Focker Planck equation with the zero drift
+    </div>
+</div>
+
+<div class="head2">
+    <div class="head2__name">
+        Parameters
+    </div>
+    <div class="head2__note">
+        <ul>
+            <li>$s$ - variance of the initial condition (float, default $= 1$)</li>
+            <li>$D_c$ - diffusion coefficient (float, default $= 0.5$)</li>
+        </ul>
+    </div>
+</div>
+
+<div class="head1">
+    <div class="head1__name">
+        Description
+    </div>
+</div>
 
 Consider
 $$
@@ -33,9 +60,9 @@ Let
 $$
     Q(t) \equiv I,
     \,
-    S(x, t) \equiv 0.2 I
+    S(x, t) \equiv \sqrt{2 D_c} I
     \implies
-    D(x, t) \equiv 0.02 I,
+    D(x, t) \equiv D_c I,
 $$
 and
 $$
@@ -74,6 +101,12 @@ and the stationary solution ($t \rightarrow \infty$) is
 $$
     \rho_{stat}(x) = 0.
 $$
+
+<div class="note">
+    Since interpolation is not required for the case of the zero drift ($f \equiv 0$), but our solver calculates it by design, then it is expected to operate much slower than another simple solvers.
+</div>
+
+<div class="end"></div>
     '''
 }
 

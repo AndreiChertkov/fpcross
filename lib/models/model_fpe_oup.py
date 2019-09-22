@@ -4,10 +4,39 @@ from scipy.linalg import solve_lyapunov
 from model_ import Model as ModelBase
 
 name = 'fpe-oup'
-desc = 'Multi-dimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
+desc = 'Multidimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
 tags = ['FPE', 'OUP']
 info = {
     'latex': r'''
+
+<div class="head0">
+    <div class="head0__name">
+        Model problem
+    </div>
+    <div class="head0__note">
+        Multidimensional Focker Planck equation with linear drift (Ornstein–Uhlenbeck process)
+    </div>
+</div>
+
+<div class="head2">
+    <div class="head2__name">
+        Parameters
+    </div>
+    <div class="head2__note">
+        <ul>
+            <li>$d$ - spatial dimension (int, default $= 1$)</li>
+            <li>$s$ - variance of the initial condition (float, default $= 1$)</li>
+            <li>$D_c$ - diffusion coefficient (float, default $= 0.5$)</li>
+            <li>$A$ - constant drift matrix (array $d \times d$ of float, default $= I_d$)</li>
+        </ul>
+    </div>
+</div>
+
+<div class="head1">
+    <div class="head1__name">
+        Description
+    </div>
+</div>
 
 Consider
 $$
@@ -34,13 +63,12 @@ Let
 $$
     Q(t) \equiv I,
     \,
-    S(x, t) \equiv I
+    S(x, t) \equiv \sqrt{2 D_c} I
     \implies
-    D(x, t) \equiv \frac{1}{2} I,
+    D(x, t) \equiv D_c I,
 $$
 and
 $$
-    d = 3,
     \quad
     x \in \Omega,
     \quad
@@ -51,7 +79,7 @@ $$
     \mu \equiv 0,
     \quad
     \rho_0(x) =
-        \frac{1}{\left(2 \pi s \right)^{\frac{3}{2}}}
+        \frac{1}{\left(2 \pi s \right)^{\frac{d}{2}}}
         \exp{\left[-\frac{|x|^2}{2s}\right]}.
 $$
 
@@ -63,7 +91,7 @@ $$
             exp \left[ -\frac{1}{2} x^{\top} W^{-1} x \right]
         }
         {
-            \sqrt{(2 \pi)^3 det(W)}
+            \sqrt{(2 \pi)^d det(W)}
         },
 $$
 where matrix $W$ is solution of the matrix equation
@@ -71,19 +99,15 @@ $$
     A W + W A^{\top} = 2 D.
 $$
 
-Let $A \equiv I$, then $W = \frac{1}{2} I$ and
-$$
-    \rho_{stat}(x) =
-        \frac
-        {
-            exp \left[ - x^{\top} x \right]
-        }
-        {
-            \sqrt{(2 \pi)^3 0.5^3}
-        },
-$$
+<div class="note">
+    The multivariate Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if if all eigenvalues of $A$ are positive and this process at any time is a multivariate normal random variable.
+</div>
 
-Note that the multivariate Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if if all eigenvalues of $A$ are positive and this process at any time is a multivariate normal random variable.
+<div class="note">
+    We do not construct analytic solution for this multidimensional case, but use comparison with known stationary solution. The corresponding error will depend on the maximum value for the used time grid.
+</div>
+
+<div class="end"></div>
     '''
 }
 
@@ -92,11 +116,11 @@ class Model(ModelBase):
     def __init__(self):
         super().__init__(name, desc, tags, info)
 
-    def init(self, d=None, s=None, A=None, D=None):
+    def init(self, d=None, s=None, D=None, A=None):
         self._set('d', d, 1)
         self._set('s', s, 1.)
-        self._set('A', A, 1.)
         self._set('D', D, 0.5)
+        self._set('A', A, 1.)
 
         self.W = solve_lyapunov(self.A, 2. * self.D * np.eye(self.d))
         self.Wi = np.linalg.inv(self.W)

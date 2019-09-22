@@ -8,6 +8,33 @@ tags = ['FPE', '3D']
 info = {
     'latex': r'''
 
+<div class="head0">
+    <div class="head0__name">
+        Model problem
+    </div>
+    <div class="head0__note">
+        Three-dimensional Focker Planck equation with the zero drift
+    </div>
+</div>
+
+<div class="head2">
+    <div class="head2__name">
+        Parameters
+    </div>
+    <div class="head2__note">
+        <ul>
+            <li>$s$ - variance of the initial condition (float, default $= 1$)</li>
+            <li>$D_c$ - diffusion coefficient (float, default $= 0.5$)</li>
+        </ul>
+    </div>
+</div>
+
+<div class="head1">
+    <div class="head1__name">
+        Description
+    </div>
+</div>
+
 Consider
 $$
     d x = f(x, t) \, dt + S(x, t) \, d \beta,
@@ -33,9 +60,9 @@ Let
 $$
     Q(t) \equiv I,
     \,
-    S(x, t) \equiv I
+    S(x, t) \equiv \sqrt{2 D_c} I
     \implies
-    D(x, t) \equiv 0.5 I,
+    D(x, t) \equiv D_c I,
 $$
 and
 $$
@@ -68,6 +95,12 @@ and the stationary solution ($t \rightarrow \infty$) is
 $$
     \rho_{stat}(x) = 0.
 $$
+
+<div class="note">
+    Since interpolation is not required for the case of the zero drift ($f \equiv 0$), but our solver calculates it by design, then it is expected to operate much slower than another simple solvers.
+</div>
+
+<div class="end"></div>
     '''
 }
 
