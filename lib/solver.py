@@ -92,14 +92,14 @@ class Solver(object):
         type: Model
         '''
 
-        self.d = model.d
+        self.d = model.dim()
 
         d0 = model.d0()
         f0 = model.f0
         f1 = model.f1
         r0 = model.r0
-        rt = model.rt if True else None
-        rs = model.rs if True else None
+        rt = model.rt if model.with_rt() else None
+        rs = model.rs if model.with_rs() else None
         self.set_funcs(f0, f1, r0, rt, rs)
         self.set_coefs(d0)
 
@@ -114,6 +114,8 @@ class Solver(object):
         Functions input is X of type ndarray [dimensions, number of points].
         Functions f0 and f1 should return 2D ndarray of the same shape as X.
         Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
+
+        TODO! Add support for unknown f1 function.
         '''
 
         self.func_f0 = f0
@@ -444,6 +446,8 @@ class Solver(object):
 
         r - calculated solution in the given points
         type: ndarray [number of points] of float
+
+        TODO! Add support for one-point input.
         '''
 
         if self.IT.A is None:
@@ -995,6 +999,10 @@ class Solver(object):
         type: ndarray [dimensions, number of points] of float
         '''
 
+        if t_poi < 2:
+            s = 'Invalid number of time points (should be at least 2).'
+            raise ValueError(s)
+
         if not isinstance(y0, np.ndarray): y0 = np.array(y0)
 
         h = (t_max - t_min) / (t_poi - 1)
@@ -1044,8 +1052,7 @@ class Solver(object):
 
         t_poi - total number of points
         type: int, >= 2
-        * The min and max values are included.
-        * If it is equal to 2, then points will be [t_min, t_max].
+        * Is not used in the current version.
 
         with_y0 - flag:
             True  - the 3th argument y0 for the current points will be passed
@@ -1059,14 +1066,20 @@ class Solver(object):
         type: ndarray [dimensions, number of points] of float
         '''
 
+        if t_poi < 2:
+            s = 'Invalid number of time points (should be at least 2).'
+            raise ValueError(s)
+
         if not isinstance(y0, np.ndarray): y0 = np.array(y0)
+
         y = y0.copy()
 
         for j in range(y.shape[1]):
 
             def func(t, y):
                 y_ = y.reshape(-1, 1)
-                if with_y0: return f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
+                if with_y0:
+                    return f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
                 return f(y_, t).reshape(-1)
 
             y[:, j] = sp_solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]

@@ -116,10 +116,13 @@ class Model(ModelBase):
         r = np.exp(-np.sum(x*x, axis=0) / a) / (np.pi * a)**(self.d/2)
         return r.reshape(-1)
 
-    def _rt(self, x, t):
-        return np.ones(x.shape[1])
-
     def _rs(self, x):
         r = np.exp(-0.5 * np.diag(x.T @ self.Wi @ x))
         r/= np.sqrt(2**self.d * np.pi**self.d * self.Wd)
         return r
+
+    def _with_rt(self):
+        return False
+
+    def _with_rs(self):
+        return True

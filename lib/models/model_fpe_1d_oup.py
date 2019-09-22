@@ -156,3 +156,9 @@ class Model(ModelBase):
         a = 1. / self.A
         r = np.exp(-x * x / a) / np.sqrt(np.pi * a)
         return r.reshape(-1)
+
+    def _with_rt(self):
+        return True
+
+    def _with_rs(self):
+        return True

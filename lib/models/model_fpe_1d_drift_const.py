@@ -131,3 +131,9 @@ class Model(ModelBase):
     def _rs(self, x):
         r = np.zeros(x.shape)
         return r.reshape(-1)
+
+    def _with_rt(self):
+        return True
+
+    def _with_rs(self):
+        return True

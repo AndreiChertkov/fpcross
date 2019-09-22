@@ -37,6 +37,18 @@ class Model(object):
         from IPython.display import display, Latex
         display(Latex(self._info['latex']))
 
+    def dim(self):
+        '''
+        Dimension of the equation.
+
+        OUTPUT:
+
+        v - corresponding value
+        type: int, >= 1
+        '''
+
+        return self.d
+
     def d0(self):
         '''
         Diffusion coefficient D.
@@ -148,6 +160,30 @@ class Model(object):
         x = self._prep_x(x)
         return self._rs(x)
 
+    def with_rt(self):
+        '''
+        Check if model has real (analytic) solution r(x, t).
+
+        OUTPUT:
+
+        v - corresponding flag
+        type: bool
+        '''
+
+        return self._with_rt()
+
+    def with_rs(self):
+        '''
+        Check if model has stationary (analytic) solution rs(x).
+
+        OUTPUT:
+
+        v - corresponding flag
+        type: bool
+        '''
+
+        return self._with_rs()
+
     def _set(self, name, v, v0):
         if v is None: v = v0
         object.__setattr__(self, name, v)
@@ -178,5 +214,13 @@ class Model(object):
         raise NotImplementedError(s)
 
     def _rs(self, x):
+        s = 'Is abstract model. Use method of the specific model.'
+        raise NotImplementedError(s)
+
+    def _with_rt(self):
+        s = 'Is abstract model. Use method of the specific model.'
+        raise NotImplementedError(s)
+
+    def _with_rs(self):
         s = 'Is abstract model. Use method of the specific model.'
         raise NotImplementedError(s)
