@@ -762,13 +762,21 @@ class Intertrain(object):
             crs_res['evals']+= ind.shape[0]
             return Y
 
+        Z = opts['Y0']
+        Z = tt.rand(n, n.shape[0], 1) if Z is None else Z.copy()
+
+        if opts['Y0'] is None:
+            Z = tt.rand(n, n.shape[0], 1)
+        else:
+            Z = opts['Y0']
+            if np.max(Z.r) > np.min(n):
+                Z = Z.round(rmax=np.max(n))
+
         try:
             log = open(fpath, 'w')
             stdout0 = sys.stdout
             sys.stdout = log
 
-            Z = opts['Y0']
-            if Z is None: Z = tt.rand(n, n.shape[0], 1)
             Y = tt_cross(
                 func, Z, eps=eps, nswp=opts['nswp'], kickrank=opts['kickrank'],
                 rf=opts['rf'], verbose=True
