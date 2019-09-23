@@ -32,7 +32,7 @@ All examples are performed as interactive browser-based jupyter lab notebooks (t
 
 To work with example run in terminal `jupyter lab` (the corresponding page will be opened in the default web-browser), find in the directory tree the "fpcross/examples" folder, open the corresponding jupyter lab notebook and run all the cells one by one.
 
-See `./examples/intertrain.ipynb` for interpolation submodule details, `./examples/base.ipynb` for example of solver usage and another jupyter notebooks in `./examples/` folder for examples of various special use cases.
+See `./examples/intertrain.ipynb` for interpolation submodule details, `./examples/main.ipynb` for example of solver usage and another jupyter lab notebooks in `./examples/` folder for examples of various special use cases.
 
 #### Authors
 

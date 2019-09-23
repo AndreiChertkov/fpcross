@@ -380,6 +380,7 @@ class Solver(object):
             return w1
 
         IT0 = self.IT.copy().prep()
+
         self.IT.init(step, opts={
             'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
         })
