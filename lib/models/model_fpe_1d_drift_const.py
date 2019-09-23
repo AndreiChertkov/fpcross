@@ -23,9 +23,9 @@ info = {
     </div>
     <div class="head2__note">
         <ul>
-            <li>$s$ - variance of the initial condition (float, default $= 1$)</li>
-            <li>$D_c$ - diffusion coefficient (float, default $= 0.5$)</li>
-            <li>$v$ - constant drift value (float, default $= 1$)</li>
+            <li>$s$ - variance of the initial condition (float, default $= 0.1$)</li>
+            <li>$D_c$ - diffusion coefficient (float, default $= 0.02$)</li>
+            <li>$v$ - constant drift value (float, default $= 0.02$)</li>
         </ul>
     </div>
 </div>
@@ -139,9 +139,9 @@ class Model(ModelBase):
 
     def init(self, s=None, D=None, v=None):
         self.d = 1
-        self._set('s', s, 1.)
-        self._set('D', D, 0.5)
-        self._set('v', v, 1.)
+        self._set('s', s, 0.1)
+        self._set('D', D, 0.02)
+        self._set('v', v, 0.02)
 
     def _d0(self):
         return self.D

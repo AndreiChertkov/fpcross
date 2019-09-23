@@ -4,7 +4,7 @@ from model_ import Model as ModelBase
 
 name = 'fpe_3d_drift_zero'
 desc = 'Three-dimensional Focker Planck equation with the zero drift'
-tags = ['FPE', '3D']
+tags = ['FPE', '3D', 'analyt']
 info = {
     'latex': r'''
 

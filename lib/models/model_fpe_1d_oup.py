@@ -4,7 +4,7 @@ from model_ import Model as ModelBase
 
 name = 'fpe-1d-oup'
 desc = 'One-dimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
-tags = ['FPE', '1D', 'OUP']
+tags = ['FPE', '1D', 'OUP', 'analyt']
 info = {
     'latex': r'''
 
@@ -160,7 +160,7 @@ class Model(ModelBase):
         self._set('s', s, 1.)
         self._set('D', D, 0.5)
         self._set('A', A, 1.)
-        
+
     def _d0(self):
         return self.D
 

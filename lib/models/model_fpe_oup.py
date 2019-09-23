@@ -5,7 +5,7 @@ from model_ import Model as ModelBase
 
 name = 'fpe-oup'
 desc = 'Multidimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
-tags = ['FPE', 'OUP']
+tags = ['FPE', 'OUP', 'analyt-stat']
 info = {
     'latex': r'''
 
@@ -120,7 +120,7 @@ class Model(ModelBase):
         self._set('d', d, 1)
         self._set('s', s, 1.)
         self._set('D', D, 0.5)
-        self._set('A', A, 1.)
+        self._set('A', A, np.eye(self.d))
 
         self.W = solve_lyapunov(self.A, 2. * self.D * np.eye(self.d))
         self.Wi = np.linalg.inv(self.W)
