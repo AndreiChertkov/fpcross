@@ -461,6 +461,8 @@ class Solver(object):
     def info(self):
         '''
         Present info about the last computation.
+
+        TODO! Replace prints by string construction.
         '''
 
         print('----------- Solver')
