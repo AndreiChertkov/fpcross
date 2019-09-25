@@ -6,7 +6,7 @@ name = 'fpe_1d_drift_const'
 desc = 'One-dimensional Focker Planck equation with the constant drift'
 tags = ['FPE', '1D']
 info = {
-    'latex': r'''
+    'markdown': r'''
 
 <div class="head0">
     <div class="head0__name">

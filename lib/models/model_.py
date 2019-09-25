@@ -31,11 +31,11 @@ class Model(object):
     def info(self):
         '''
         Present info about the model.
-        Latex mode for jupyter lab cells is used.
+        Markdown mode for jupyter lab cells is used.
         '''
 
         from IPython.display import display, Markdown
-        display(Markdown(self._info['latex']))
+        display(Markdown(self._info['markdown']))
 
     def dim(self):
         '''

@@ -6,7 +6,7 @@ name = 'fpe-1d-oup'
 desc = 'One-dimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
 tags = ['FPE', '1D', 'OUP', 'analyt']
 info = {
-    'latex': r'''
+    'markdown': r'''
 
 <div class="head0">
     <div class="head0__name">

@@ -6,7 +6,7 @@ name = 'fpe_3d_drift_zero'
 desc = 'Three-dimensional Focker Planck equation with the zero drift'
 tags = ['FPE', '3D', 'analyt']
 info = {
-    'latex': r'''
+    'markdown': r'''
 
 <div class="head0">
     <div class="head0__name">

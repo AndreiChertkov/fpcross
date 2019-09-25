@@ -6,7 +6,7 @@ name = 'fpe_1d_drift_zero'
 desc = 'One-dimensional Focker Planck equation with the zero drift'
 tags = ['FPE', '1D', 'analyt', 'time-diffusion']
 info = {
-    'latex': r'''
+    'markdown': r'''
 
 <div class="head0">
     <div class="head0__name">
