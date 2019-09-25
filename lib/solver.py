@@ -92,6 +92,8 @@ class Solver(object):
         type: Model
         '''
 
+        self.model = model
+        
         self.d = model.dim()
 
         d0 = model.d0()
