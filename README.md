@@ -10,7 +10,7 @@
 
 1. python package [ttpy](https://github.com/oseledets/ttpy);
 
-1. browser based gui for python [jupyter lab](https://github.com/jupyterlab/jupyterlab) (jupyter notebook).
+1. browser based gui for python [jupyter lab](https://github.com/jupyterlab/jupyterlab) (jupyter lab notebook).
 
 #### Installation
 

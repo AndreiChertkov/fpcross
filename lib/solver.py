@@ -93,7 +93,7 @@ class Solver(object):
         '''
 
         self.model = model
-        
+
         self.d = model.dim()
 
         d0 = model.d0()
@@ -894,6 +894,48 @@ class Solver(object):
         i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
 
         return i
+
+    def _calc_rhs(self, t=None, is_real=False, is_stat=False):
+
+        if is_real:
+            IT = self.IT.copy(is_full=False).init(self.func_rt)
+        elif is_stat:
+            IT = self.IT.copy(is_full=False).init(self.func_rs)
+        else:
+            IT = self.IT
+
+        I0 = np.eye(self.x_poi)
+        D1 = IT.dif1()
+        D2 = IT.dif2()
+
+        if not t: t = self.t
+        x = IT.grid()
+        f = self.func_f0(x, t)
+        r = IT.Y
+        if self.with_tt: r = r.full()
+        r = r.reshape(-1, order='F')
+
+        rhs = 0.
+        for k in range(self.d):
+            M = [I0.copy() for _ in range(self.d)]
+
+            M[self.d-1-k] = D1.copy(); _D1 = M[0].copy()
+            for k_ in range(1, self.d): _D1 = np.kron(_D1, M[k_])
+
+            M[self.d-1-k] = D2.copy(); _D2 = M[0].copy()
+            for k_ in range(1, self.d): _D2 = np.kron(_D2, M[k_])
+
+            rhs-= _D1 @ (r * f[k, :])
+            rhs+= _D2 @ (r * self.Dc)
+
+        J0 = np.eye(self.x_poi); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
+        for _ in range(1, self.d): J = np.kron(J, J0)
+        rhs = J @ rhs
+
+        n_rho = np.linalg.norm(r)
+        n_rhs = np.linalg.norm(rhs)
+        e = n_rhs / n_rho
+        print('|| rhs_stat || / || rho_stat || = %-8.2e'%e)
 
     @staticmethod
     def ode_solve_eul(f, y0, t_min, t_max, t_poi=2, with_y0=False):
