@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from solver import Solver
-from config import config
+from .solver import Solver
+from .config import config
 
 class SolversCheck(object):
 

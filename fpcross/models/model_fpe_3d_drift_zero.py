@@ -1,10 +1,10 @@
 import numpy as np
 
-from model_ import Model as ModelBase
+from .model_ import Model as ModelBase
 
-name = 'fpe_1d_drift_const'
-desc = 'One-dimensional Focker Planck equation with the constant drift'
-tags = ['FPE', '1D']
+name = 'fpe_3d_drift_zero'
+desc = 'Three-dimensional Focker Planck equation with the zero drift'
+tags = ['FPE', '3D', 'analyt']
 info = {
     'markdown': r'''
 
@@ -13,7 +13,7 @@ info = {
         Model problem
     </div>
     <div class="head0__note">
-        One-dimensional Focker Planck equation with the constant drift
+        Three-dimensional Focker Planck equation with the zero drift
     </div>
 </div>
 
@@ -23,9 +23,8 @@ info = {
     </div>
     <div class="head2__note">
         <ul>
-            <li>$s$ - variance of the initial condition (float, default $= 0.1$)</li>
-            <li>$D_c$ - diffusion coefficient (float, default $= 0.02$)</li>
-            <li>$v$ - constant drift value (float, default $= 0.02$)</li>
+            <li>$s$ - variance of the initial condition (float, default $= 1$)</li>
+            <li>$D_c$ - diffusion coefficient (float, default $= 0.5$)</li>
         </ul>
     </div>
 </div>
@@ -67,52 +66,25 @@ $$
 $$
 and
 $$
-    d = 1,
+    d = 3,
     \quad
     x \in \Omega,
     \quad
     \rho(x, t) |_{\partial \Omega} \approx 0,
     \quad
-    f(x, t) \equiv v,
+    f(x, t) \equiv 0,
     \quad
-    \rho_0(x) = \frac{1}{\sqrt{2 \pi s}}\exp{\left[-\frac{x^2}{2s}\right]}.
+    \rho_0(x) = \frac{1}{(2 \pi s)^{\frac{3}{2}}}\exp{\left[-\frac{|x|^2}{2s}\right]}.
 $$
 
-This equation has exact solution ([see this paper](http://www.icmp.lviv.ua/journal/zbirnyk.73/13002/art13002.pdf); note that there is a typo in the paper for this formula: $\pi$ is missed!)
-$$
-    \rho(x, t, x_0) =
-        \frac{1}{\sqrt{4 \pi D t}}
-        \exp{\left[
-            - \frac
-                {
-                    \left( x - x_0 - v t \right)^2
-                }
-                {
-                    4 D t
-                }
-        \right]},
-$$
-where $x_0$ is an initial condition.
-
-We can rewrite the solution $\rho(x, t, x_0)$ in terms of the initial PDF $\rho_0(x)$ as
-$$
-    \rho(x, t) = \int_{-\infty}^{\infty}
-        \rho(x, t, x_0) \rho_0(x_0) \, d x_0,
-$$
-which after accurate computations leads to the following analytic solution
+It can be shown that the analytic solution is
 $$
     \rho(x, t) =
-        \frac
-            {
-                1
-            }
-            {
-                \sqrt{2 \pi s + 4 \pi D t}
-            }
+        (2 \pi s + 4 \pi D t)^{-\frac{3}{2}}
         \exp{ \left[
             - \frac
                 {
-                    (x - vt)^2
+                    |x|^2
                 }
                 {
                     2  s + 4 D t
@@ -125,7 +97,7 @@ $$
 $$
 
 <div class="note">
-    The final solution is not vanish on the boundary, hence we have significant integral error on the grid. At the same time, on the inner grid points solution is very accurate.
+    Since interpolation is not required for the case of the zero drift ($f \equiv 0$), but our solver calculates it by design, then it is expected to operate much slower than another simple solvers.
 </div>
 
 <div class="end"></div>
@@ -137,33 +109,32 @@ class Model(ModelBase):
     def __init__(self):
         super().__init__(name, desc, tags, info)
 
-    def init(self, s=None, D=None, v=None):
-        self.d = 1
-        self._set('s', s, 0.1)
-        self._set('D', D, 0.02)
-        self._set('v', v, 0.02)
+    def init(self, s=None, D=None):
+        self.d = 3
+        self._set('s', s, 1.)
+        self._set('D', D, 0.5)
 
     def _d0(self):
         return self.D
 
     def _f0(self, x, t):
-        return self.v * np.ones(x.shape)
+        return np.zeros(x.shape)
 
     def _f1(self, x, t):
         return np.zeros(x.shape)
 
     def _r0(self, x):
         a = 2. * self.s
-        r = np.exp(-x * x / a) / np.sqrt(np.pi * a)
+        r = np.exp(-np.sum(x*x, axis=0) / a) / (np.pi * a)**1.5
         return r.reshape(-1)
 
     def _rt(self, x, t):
         a = 2. * self.s + 4. * self.D * t
-        r = np.exp(-(x - self.v * t)**2 / a) / np.sqrt(np.pi * a)
+        r = np.exp(-np.sum(x*x, axis=0) / a) / (np.pi * a)**1.5
         return r.reshape(-1)
 
     def _rs(self, x):
-        r = np.zeros(x.shape)
+        r = np.zeros(x.shape[1])
         return r.reshape(-1)
 
     def _with_rt(self):

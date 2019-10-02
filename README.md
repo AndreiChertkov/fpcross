@@ -18,13 +18,17 @@
 
 1. install ttpy python package according to instructions from [github repo](https://github.com/oseledets/ttpy);
 
-1. download this repo and open jupyter lab files in browser to run the code in the interactive mode.
+1. download this repo and run `python setup.py install` from the root folder of the project.
 
-> TODO! Add setup file.
+  > To uninstall this package run `pip uninstall fpcross`.
+
+1. Open jupyter lab files from the `examples` folder in the browser to run the code in the interactive mode.
 
 #### Tests
 
-> TODO! Add tests
+Run `python ./tests/test.py` from the root folder of the project to perform all tests (`-v` option is available).
+
+> TODO! Add more tests
 
 #### Examples
 

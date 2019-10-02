@@ -1,6 +1,6 @@
 import numpy as np
 
-from model_ import Model as ModelBase
+from .model_ import Model as ModelBase
 
 name = 'fpe_1d_drift_zero'
 desc = 'One-dimensional Focker Planck equation with the zero drift'

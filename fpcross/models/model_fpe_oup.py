@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.linalg import solve_lyapunov
 
-from model_ import Model as ModelBase
+from .model_ import Model as ModelBase
 
 name = 'fpe-oup'
 desc = 'Multidimensional Focker Planck equation (Ornstein–Uhlenbeck process)'

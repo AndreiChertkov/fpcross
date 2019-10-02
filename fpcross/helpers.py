@@ -6,19 +6,127 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from config import config
+from .config import config
+
+css = '''
+
+div {
+  margin: 0;
+  padding: 0;
+}
+
+.head0 {
+  padding: 10px;
+  display: flex;
+  background-color: #dedee2;
+}
+.head0__name {
+  padding-right: 5px;
+  flex: 1 1 50%;
+  align-self: center;
+  font-size: 36px;
+  font-weight: bold;
+  color: #6b7e51;
+}
+.head0__note {
+  padding-left: 10px;
+  flex: 1 1 50%;
+  align-self: flex-end;
+  font-size: 16px;
+  font-style: italic;
+  color: #485536;
+  border-left: 5px solid #8b1d1d;
+}
+
+.head1 {
+  margin-top: 30px;
+  padding: 10px;
+  border-top: 5px solid #8b1d1d;
+}
+.head1__name {
+  font-size: 32px;
+  font-weight: bold;
+  color: #485536;
+}
+.head1__note {
+  padding-left: 20px;
+  font-size: 20px;
+  font-style: italic;
+  color: #485536;
+}
+
+.head2 {
+  margin-top: 7px;
+  padding: 5px 30px 5px;
+  border-left: 2px solid #42d56e;
+}
+.head2__name {
+  display: inline-block;
+  max-width: 70%;
+  padding: 2px 10px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #145929;
+  border-bottom: 2px solid #42d56e;
+}
+.head2__note {
+  padding: 5px 10px 0px;
+  font-size: 14px;
+  font-style: italic;
+  color: #485536;
+}
+
+.head3 {
+  margin-top: 5px;
+  padding: 3px 40px 3px;
+  border-left: 2px dotted #485536;
+}
+.head3__name {
+  display: inline-block;
+  max-width: 70%;
+  padding: 2px 10px;
+  font-size: 20px;
+  font-weight: bold;
+  color: #145929;
+  border-bottom: 2px dotted #485536;
+}
+.head3__note {
+  padding: 2px 10px 0px;
+  font-size: 12px;
+  font-style: italic;
+  color: #485536;
+}
+
+.warn {
+  background-color: #fcf2f2;
+  border-color: #dfb5b4;
+  border-left: 5px solid #dfb5b4;
+  padding: 0.5em;
+}
+.note {
+  color: #42d56e;
+}
+.note::before {
+  content: 'Note. ';
+  font-weight: bold;
+  color: #485536;
+}
+
+.end {
+  padding: 5px;
+  border-top: 5px solid #8b1d1d;
+  border-bottom: 5px solid #8b1d1d;
+}
+
+'''
 
 def init_jupyter():
-    fpath = os.path.join(os.path.dirname(__file__), 'style.css')
-    with open(fpath, 'r' ) as f:
-        style = f.read()
-
     t = time.strftime('%l:%M%p %Z on %b %d, %Y')
     print('Start | %s |'%t)
     print('-'*37)
 
     from IPython.core.display import HTML
-    return HTML('<style>%s</style>' %style)
+    return HTML('<style>%s</style>' %css)
 
 def save_mnet(fpath, DATA, ord, M, N, E, T, opts={}):
     DATA['ord%d'%ord] = {

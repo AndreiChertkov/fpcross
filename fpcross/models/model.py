@@ -1,6 +1,6 @@
 from importlib import import_module
 
-from model_ import Model as ModelBase
+from .model_ import Model as ModelBase
 
 class Model(object):
     '''

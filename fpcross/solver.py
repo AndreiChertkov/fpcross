@@ -1,8 +1,6 @@
 import time
 import numpy as np
-from numpy import kron as np_kron
-from scipy.linalg import expm as sp_expm
-from scipy.integrate import solve_ivp as sp_solve_ivp
+import scipy as sp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
@@ -10,8 +8,8 @@ from tqdm import tqdm
 
 import tt
 
-from config import config
-from intertrain import Intertrain
+from .config import config
+from .intertrain import Intertrain
 
 class Solver(object):
     '''
@@ -82,9 +80,8 @@ class Solver(object):
         Set functions and coefficients from existing model for equation
         d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
         r(x,0) = r0(x), r(x, +infinity) = rs(x).
-        where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
-        r0(x) is initial condition, rt(x, t) is optional analytic solution
-        and rs(x) is optional stationary solution.
+
+        See also functions set_funcs and set_coefs.
 
         INPUT:
 
@@ -248,11 +245,11 @@ class Solver(object):
         self.J0[+0, +0] = 0.
         self.J0[-1, -1] = 0.
         self.h0 = self.h if self.ord == 1 else self.h / 2.
-        self.Z0 = sp_expm(self.h0 * self.Dc * self.J0 @ self.D0)
+        self.Z0 = sp.linalg.expm(self.h0 * self.Dc * self.J0 @ self.D0)
 
         if not self.with_tt:
             self.Z = self.Z0.copy()
-            for _ in range(1, self.d): self.Z = np_kron(self.Z, self.Z0)
+            for _ in range(1, self.d): self.Z = np.kron(self.Z, self.Z0)
 
         self.tms['prep'] = time.time() - _t
 
@@ -1131,6 +1128,7 @@ class Solver(object):
                     return f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
                 return f(y_, t).reshape(-1)
 
-            y[:, j] = sp_solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]
+            res = sp.integrate.solve_ivp(func, [t_min, t_max], y[:, j])
+            y[:, j] = res.y[:, -1]
 
         return y

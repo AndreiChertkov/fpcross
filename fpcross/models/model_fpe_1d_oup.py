@@ -1,6 +1,6 @@
 import numpy as np
 
-from model_ import Model as ModelBase
+from .model_ import Model as ModelBase
 
 name = 'fpe-1d-oup'
 desc = 'One-dimensional Focker Planck equation (Ornstein–Uhlenbeck process)'

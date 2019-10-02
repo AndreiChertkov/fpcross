@@ -1,7 +1,7 @@
 import sys
 import time
 import numpy as np
-from scipy.linalg import toeplitz
+import scipy as sp
 
 import tt
 from tt.cross.rectcross import cross as tt_cross
@@ -647,7 +647,7 @@ class Intertrain(object):
         Z = 1. / DX
         Z[range(n), range(n)] = 0.
 
-        C = toeplitz((-1.)**k)
+        C = sp.linalg.toeplitz((-1.)**k)
         C[+0, :]*= 2
         C[-1, :]*= 2
         C[:, +0]*= 0.5
