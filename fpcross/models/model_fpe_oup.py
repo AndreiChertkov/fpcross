@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.linalg import solve_lyapunov
+from scipy.linalg import solve_lyapunov as _solve_lyapunov
 
 from .model_ import Model as ModelBase
 
@@ -122,7 +122,7 @@ class Model(ModelBase):
         self._set('D', D, 0.5)
         self._set('A', A, np.eye(self.d))
 
-        self.W = solve_lyapunov(self.A, 2. * self.D * np.eye(self.d))
+        self.W = _solve_lyapunov(self.A, 2. * self.D * np.eye(self.d))
         self.Wi = np.linalg.inv(self.W)
         self.Wd = np.linalg.det(self.W)
 

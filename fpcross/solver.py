@@ -1,6 +1,8 @@
 import time
 import numpy as np
 import scipy as sp
+from scipy.linalg import expm as _expm
+from scipy.integrate import solve_ivp as _solve_ivp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
@@ -8,8 +10,8 @@ from tqdm import tqdm
 
 import tt
 
-from .config import config
-from .intertrain import Intertrain
+from . import config
+from . import Intertrain
 
 class Solver(object):
     '''
@@ -245,7 +247,7 @@ class Solver(object):
         self.J0[+0, +0] = 0.
         self.J0[-1, -1] = 0.
         self.h0 = self.h if self.ord == 1 else self.h / 2.
-        self.Z0 = sp.linalg.expm(self.h0 * self.Dc * self.J0 @ self.D0)
+        self.Z0 = _expm(self.h0 * self.Dc * self.J0 @ self.D0)
 
         if not self.with_tt:
             self.Z = self.Z0.copy()
@@ -1128,7 +1130,7 @@ class Solver(object):
                     return f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
                 return f(y_, t).reshape(-1)
 
-            res = sp.integrate.solve_ivp(func, [t_min, t_max], y[:, j])
+            res = _solve_ivp(func, [t_min, t_max], y[:, j])
             y[:, j] = res.y[:, -1]
 
         return y

@@ -2,9 +2,9 @@ import sys
 import time
 import numpy as np
 import scipy as sp
-
+from scipy.linalg import toeplitz as _toeplitz
 import tt
-from tt.cross.rectcross import cross as tt_cross
+from tt.cross.rectcross import cross as _cross
 
 class Intertrain(object):
     '''
@@ -647,7 +647,7 @@ class Intertrain(object):
         Z = 1. / DX
         Z[range(n), range(n)] = 0.
 
-        C = sp.linalg.toeplitz((-1.)**k)
+        C = _toeplitz((-1.)**k)
         C[+0, :]*= 2
         C[-1, :]*= 2
         C[:, +0]*= 0.5
@@ -775,7 +775,7 @@ class Intertrain(object):
             stdout0 = sys.stdout
             sys.stdout = log
 
-            Y = tt_cross(
+            Y = _cross(
                 func, Z, eps=eps, nswp=opts['nswp'], kickrank=opts['kickrank'],
                 rf=opts['rf'], verbose=True
             )

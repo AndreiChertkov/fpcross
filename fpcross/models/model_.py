@@ -1,4 +1,3 @@
-import os
 import numpy as np
 
 class Model(object):

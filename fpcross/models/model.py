@@ -36,7 +36,7 @@ class Model(object):
         #p_file = os.path.join(p_fold, './model%d.md'%self.numb)
         #with open(p_file) as f: info = f.read()
 
-        self.md = import_module('model_%s'%name).Model()
+        self.md = import_module('.models.model_%s'%name, 'fpcross').Model()
 
     def init(self, *args, **kwargs):
         '''

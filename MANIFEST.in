@@ -1,3 +1,4 @@
 include README.md
 recursive-include examples *
+recursive-include computations *
 recursive-include tests *
