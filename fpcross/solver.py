@@ -1,7 +1,8 @@
 import time
+import types
 import numpy as np
-from scipy.linalg import expm as _expm
-from scipy.integrate import solve_ivp as _solve_ivp
+from scipy.linalg import expm as sp_expm
+from scipy.integrate import solve_ivp as sp_solve_ivp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
@@ -30,8 +31,8 @@ class Solver(object):
      5 Call "set_grid_x" to set the spatial grid parameters.
      6 Call "prep" for initialization of the solver.
      7 Call "calc" for calculation process.
-     8 Call "comp" to obtain final solution at any given spatial point.
-     9 Call "info" for demonstration of calculation results.
+     8 Call "comp" to obtain the final solution at any given spatial point.
+     9 Call "info" for demonstration of the calculation results.
     10 Call "plot_x" for plot of solution and error at selected time moment.
     11 Call "plot_t" for plot of solution and error at selected spatial point.
 
@@ -46,6 +47,8 @@ class Solver(object):
 
         d - dimension of the spatial variable
         type: int, >= 1
+        * If model is provided, then the corresponding value from the model
+        * will be used instead of this argument.
 
         eps - desired accuracy of the solution
         type: float, > 0
@@ -94,12 +97,12 @@ class Solver(object):
 
         self.d = model.dim()
 
-        d0 = model.d0()
-        f0 = model.f0
-        f1 = model.f1
-        r0 = model.r0
-        rt = model.rt if model.with_rt() else None
-        rs = model.rs if model.with_rs() else None
+        d0 = model.d0()                            # D, diffusion coefficient
+        f0 = model.f0                              # f(x, t)
+        f1 = model.f1                              # d f(x, t) / d x
+        r0 = model.r0                              # r0(x), initial condition
+        rt = model.rt if model.with_rt() else None # r(x, t), analytic solution
+        rs = model.rs if model.with_rs() else None # rs(x), stationary solution
         self.set_funcs(f0, f1, r0, rt, rs)
         self.set_coefs(d0)
 
@@ -114,6 +117,8 @@ class Solver(object):
         Functions input is X of type ndarray [dimensions, number of points].
         Functions f0 and f1 should return 2D ndarray of the same shape as X.
         Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
+
+        See also function set_model.
 
         TODO! Add support for unknown f1 function.
         '''
@@ -130,6 +135,8 @@ class Solver(object):
         d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
         r(x,0) = r0(x), r(x, +infinity) = rs(x).
 
+        See also function set_model.
+
         INPUT:
 
         Dc - diffusion coefficient D
@@ -139,7 +146,7 @@ class Solver(object):
         TODO! Replace Dc by matrix.
         '''
 
-        self.Dc = Dc if Dc is not None else 1.
+        self.Dc = float(Dc) if Dc is not None else 1.
 
     def set_grid_t(self, t_poi, t_min=0., t_max=1., t_hst=0):
         '''
@@ -200,6 +207,8 @@ class Solver(object):
 
         x_max - max value of the spatial variable for each dimension
         type: float, > x_min
+
+        TODO! Add support for "rectangular" grid.
         '''
 
         if x_poi < 2:
@@ -218,6 +227,47 @@ class Solver(object):
         l_ = np.repeat(np.array([[self.x_min, self.x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
+    def is_inited(self):
+        '''
+        Check if all required equation parameters are set.
+
+        OUTPUT:
+
+        is_inited - result of check
+        type: bool
+        * If is False, then error will be raised.
+
+        TODO! Add more checks.
+        '''
+
+        if not isinstance(self.func_f0, types.FunctionType):
+            s = 'Function f(x, t) for FPE is not set.'
+            raise ValueError(s)
+
+        if not isinstance(self.func_f1, types.FunctionType):
+            s = 'Function d f(x, t) / d x for FPE is not set.'
+            raise ValueError(s)
+
+        if not isinstance(self.func_r0, types.FunctionType):
+            s = 'Initial condition r0(x) is not set.'
+            raise ValueError(s)
+
+        if self.func_rt is not None:
+            if not isinstance(self.func_rt, types.FunctionType):
+                s = 'Invalid analytic real solution r(x, t).'
+                raise ValueError(s)
+
+        if self.func_rs is not None:
+            if not isinstance(self.func_rs, types.FunctionType):
+                s = 'Invalid analytic stationary solution rs(x).'
+                raise ValueError(s)
+
+        if self.Dc is None:
+            s = 'Diffusion coefficient is not set.'
+            raise ValueError(s)
+
+        return True
+
     def prep(self):
         '''
         Init calculation parameters and prepare special matrices.
@@ -226,6 +276,8 @@ class Solver(object):
         '''
 
         _t = time.time()
+
+        self.is_prep = False
 
         self.hst = {      # Saved (history) values
             'T': [],      # time moments
@@ -239,6 +291,11 @@ class Solver(object):
             'spec': 0.,   # special operations (like error computation)
         }
 
+
+        if not self.is_inited():
+            s = 'Equation is not inited. Can not prepare.'
+            raise ValueError(s)
+
         self.t = self.t_min             # Current value of time variable
 
         self.D0 = self.IT.dif2().copy() # Chebyshev diff. matrix d2 / dx2
@@ -246,7 +303,7 @@ class Solver(object):
         self.J0[+0, +0] = 0.
         self.J0[-1, -1] = 0.
         self.h0 = self.h if self.ord == 1 else self.h / 2.
-        self.Z0 = _expm(self.h0 * self.Dc * self.J0 @ self.D0)
+        self.Z0 = sp_expm(self.h0 * self.Dc * self.J0 @ self.D0)
 
         if not self.with_tt:
             self.Z = self.Z0.copy()
@@ -254,16 +311,32 @@ class Solver(object):
 
         self.tms['prep'] = time.time() - _t
 
+        self.is_prep = True
+
     def calc(self, with_print=True):
         '''
         Calculation of the solution.
+
+        INPUT:
+
+        with_print - flag:
+            True  - intermediate calculation results will be printed
+            False - results will not be printed
+        type: bool
         '''
 
-        _tqdm = tqdm(desc='Solve', unit='step', total=self.t_poi-1, ncols=80)
+        if not self.is_prep:
+            s = 'Equation is not prepared. Can not calculate.'
+            raise ValueError(s)
+
+        d, u, t = 'Solve', 'step', self.t_poi-1
+        if with_print: _tqdm = tqdm(desc=d, unit=u, total=t, ncols=80)
 
         self.t = self.t_min
         self.IT.init(self.func_r0)
+
         self.W0 = self.IT.Y.copy() # TODO! Check
+
         for m in range(1, self.t_poi):
             _t = time.time()
 
@@ -279,12 +352,12 @@ class Solver(object):
 
             if self.t_hst and (m % self.t_hst == 0 or m == self.t_poi - 1):
                 _msg = self.step_check()
-                _tqdm.set_postfix_str(_msg, refresh=True)
-            _tqdm.update(1)
+                if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
+            if with_print: _tqdm.update(1)
 
             self.tms['spec']+= time.time() - _t
 
-        _tqdm.close()
+        if with_print: _tqdm.close()
 
         _t = time.time()
 
@@ -1129,7 +1202,6 @@ class Solver(object):
                     return f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
                 return f(y_, t).reshape(-1)
 
-            res = _solve_ivp(func, [t_min, t_max], y[:, j])
-            y[:, j] = res.y[:, -1]
+            y[:, j] = sp_solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]
 
         return y
