@@ -1,6 +1,5 @@
 import time
 import numpy as np
-import scipy as sp
 from scipy.linalg import expm as _expm
 from scipy.integrate import solve_ivp as _solve_ivp
 import matplotlib as mpl
@@ -255,7 +254,7 @@ class Solver(object):
 
         self.tms['prep'] = time.time() - _t
 
-    def calc(self):
+    def calc(self, with_print=True):
         '''
         Calculation of the solution.
         '''
