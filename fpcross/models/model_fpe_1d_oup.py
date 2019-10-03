@@ -2,40 +2,38 @@ import numpy as np
 
 from .model_ import Model as ModelBase
 
-name = 'fpe-1d-oup'
-desc = 'One-dimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
-tags = ['FPE', '1D', 'OUP', 'analyt']
 info = {
-    'markdown': r'''
-
-<div class="head0">
-    <div class="head0__name">
-        Model problem
-    </div>
-    <div class="head0__note">
-        One-dimensional Focker Planck equation with linear drift (Ornstein–Uhlenbeck process)
-    </div>
-</div>
-
-<div class="head2">
-    <div class="head2__name">
-        Parameters
-    </div>
-    <div class="head2__note">
-        <ul>
-            <li>$s$ - variance of the initial condition (float, default $= 1$)</li>
-            <li>$D_c$ - diffusion coefficient (float, default $= 0.5$)</li>
-            <li>$A$ - constant drift coefficient (float, default $= 1$)</li>
-        </ul>
-    </div>
-</div>
-
-<div class="head1">
-    <div class="head1__name">
-        Description
-    </div>
-</div>
-
+    'name': 'fpe-1d-oup',
+    'repr': 'd r(x, t) / d t = D d^2 r(x, t) / d x^2 + A d (x r(x, t)) / d x',
+    'desc': 'One-dimensional Focker Planck equation (Ornstein–Uhlenbeck process)',
+    'tags': ['FPE', '1D', 'analyt', 'OUP'],
+    'pars': {
+        's': {
+            'name': 'Initial variance',
+            'desc': 'Variance of the initial condition',
+            'dflt': 1.,
+            'type': 'float',
+            'frmt': '%8.4f',
+        },
+        'D': {
+            'name': 'Diffusion coefficient',
+            'desc': 'Scalar diffusion coefficient',
+            'dflt': 0.5,
+            'type': 'float',
+            'frmt': '%8.4f',
+        },
+        'A': {
+            'name': 'Drift',
+            'desc': 'Constant drift coefficient',
+            'dflt': 1.,
+            'type': 'float',
+            'frmt': '%8.4f',
+        },
+    },
+    'notes': [
+        'The Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if $A > 0$ and this process at any time is a normal random variable.',
+    ],
+    'text': r'''
 Consider
 $$
     d x = f(x, t) \, dt + S(x, t) \, d \beta,
@@ -141,27 +139,15 @@ $$
         }
         e^{-A x^2}.
 $$
-
-<div class="note">
-    The Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if $A > 0$ and this process at any time is a normal random variable.
-</div>
-
-<div class="end"></div>
     '''
 }
 
 class Model(ModelBase):
 
     def __init__(self):
-        super().__init__(name, desc, tags, info)
+        super().__init__(info, d=1)
 
-    def init(self, s=None, A=None, D=None):
-        self.d = 1
-        self._set('s', s, 1.)
-        self._set('D', D, 0.5)
-        self._set('A', A, 1.)
-
-    def _d0(self):
+    def _Dc(self):
         return self.D
 
     def _f0(self, x, t):
@@ -188,9 +174,3 @@ class Model(ModelBase):
         a = 1. / self.A
         r = np.exp(-x * x / a) / np.sqrt(np.pi * a)
         return r.reshape(-1)
-
-    def _with_rt(self):
-        return True
-
-    def _with_rs(self):
-        return True
