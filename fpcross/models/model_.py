@@ -5,27 +5,22 @@ class Model(object):
     Base (abstract) class for all models of equations.
     '''
 
-    def __init__(self, name, desc, tags, info):
+    def __init__(self, info):
         '''
         Set description of the model.
         '''
 
-        self._name = name
-        self._desc = desc
-        self._tags = tags
         self._info = info
-
         self.d = 0
-
         self.init()
 
-    def init(self):
+    def init(self, *args, **kwargs):
         '''
         Set and prepare (if is needed) parameters of the model.
         '''
 
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
+        for [name, opts] in self._info.get('pars', {}).items():
+            object.__setattr__(self, name, kwargs.get(name, opts.get('dflt')))
 
     def info(self):
         '''
@@ -33,8 +28,34 @@ class Model(object):
         Markdown mode for jupyter lab cells is used.
         '''
 
+        n = self._info['name']
+        d = self._info['desc']
+        t = self._info['tags']
+        s = r'''<div class="head0">
+            <div class="head0__name">Model problem</div>
+            <div class="head0__note">%s :<br>%s [%s].</div>
+        </div>'''%(n, d, ', '.join(t))
+
+        ss = []
+        for [name, opts] in self._info['pars'].items():
+            ss.append('%s - %s (type: %s)'%(name, opts['name'], opts['type']))
+        s+= r'''<div class="head2">
+            <div class="head2__name">Parameters</div>
+            <div class="head2__note"><ul><li>%s</li></ul></div>
+        </div>'''%('</li><li>'.join(ss))
+
+        s+= r'''<div class="head1">
+            <div class="head1__name">Description</div>
+        </div>'''
+        s+= self._info['text']
+
+        for note in self._info.get('notes', []):
+            s+= r'''<div class="note">%s</div>'''%note
+
+        s+= r'''<div class="end"></div>'''
+
         from IPython.display import display, Markdown
-        display(Markdown(self._info['markdown']))
+        display(Markdown(s))
 
     def dim(self):
         '''
@@ -48,7 +69,7 @@ class Model(object):
 
         return self.d
 
-    def d0(self):
+    def Dc(self):
         '''
         Diffusion coefficient D.
 
@@ -58,7 +79,7 @@ class Model(object):
         type: float
         '''
 
-        return self._d0()
+        return self._Dc()
 
     def f0(self, x, t):
         '''
@@ -183,16 +204,12 @@ class Model(object):
 
         return self._with_rs()
 
-    def _set(self, name, v, v0):
-        if v is None: v = v0
-        object.__setattr__(self, name, v)
-
     def _prep_x(self, x):
         if isinstance(x, list): x = np.array(x)
 
         return x
 
-    def _d0(self):
+    def _Dc(self):
         s = 'Is abstract model. Use method of the specific model.'
         raise NotImplementedError(s)
 
