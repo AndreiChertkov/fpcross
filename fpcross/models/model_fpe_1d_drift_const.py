@@ -2,40 +2,38 @@ import numpy as np
 
 from .model_ import Model as ModelBase
 
-name = 'fpe_1d_drift_const'
-desc = 'One-dimensional Focker Planck equation with the constant drift'
-tags = ['FPE', '1D']
 info = {
-    'markdown': r'''
-
-<div class="head0">
-    <div class="head0__name">
-        Model problem
-    </div>
-    <div class="head0__note">
-        One-dimensional Focker Planck equation with the constant drift
-    </div>
-</div>
-
-<div class="head2">
-    <div class="head2__name">
-        Parameters
-    </div>
-    <div class="head2__note">
-        <ul>
-            <li>$s$ - variance of the initial condition (float, default $= 0.1$)</li>
-            <li>$D_c$ - diffusion coefficient (float, default $= 0.02$)</li>
-            <li>$v$ - constant drift value (float, default $= 0.02$)</li>
-        </ul>
-    </div>
-</div>
-
-<div class="head1">
-    <div class="head1__name">
-        Description
-    </div>
-</div>
-
+    'name': 'fpe_1d_drift_const',
+    'repr': 'd r(x, t) / d t = D d^2 r(x, t) / d x^2 - v d r(x, t) / d x',
+    'desc': 'One-dimensional Focker Planck equation with the constant drift',
+    'tags': ['FPE', '1D', 'analyt'],
+    'pars': {
+        's': {
+            'name': 'Initial variance',
+            'desc': 'Variance of the initial condition',
+            'dflt': 0.1,
+            'type': 'float',
+            'frmt': '%8.4f',
+        },
+        'D': {
+            'name': 'Diffusion coefficient',
+            'desc': 'Scalar diffusion coefficient',
+            'dflt': 0.02,
+            'type': 'float',
+            'frmt': '%8.4f',
+        },
+        'v': {
+            'name': 'Drift',
+            'desc': 'Constant drift value',
+            'dflt': 0.02,
+            'type': 'float',
+            'frmt': '%8.4f',
+        },
+    },
+    'notes': [
+        'The final solution is not vanish on the boundary, hence we have significant integral error on the grid. At the same time, on the inner grid points solution is very accurate.',
+    ],
+    'text': r'''
 Consider
 $$
     d x = f(x, t) \, dt + S(x, t) \, d \beta,
@@ -123,27 +121,15 @@ and the stationary solution ($t \rightarrow \infty$) is
 $$
     \rho_{stat}(x) = 0.
 $$
-
-<div class="note">
-    The final solution is not vanish on the boundary, hence we have significant integral error on the grid. At the same time, on the inner grid points solution is very accurate.
-</div>
-
-<div class="end"></div>
     '''
 }
 
 class Model(ModelBase):
 
     def __init__(self):
-        super().__init__(name, desc, tags, info)
+        super().__init__(info, d=1)
 
-    def init(self, s=None, D=None, v=None):
-        self.d = 1
-        self._set('s', s, 0.1)
-        self._set('D', D, 0.02)
-        self._set('v', v, 0.02)
-
-    def _d0(self):
+    def _Dc(self):
         return self.D
 
     def _f0(self, x, t):
@@ -161,13 +147,3 @@ class Model(ModelBase):
         a = 2. * self.s + 4. * self.D * t
         r = np.exp(-(x - self.v * t)**2 / a) / np.sqrt(np.pi * a)
         return r.reshape(-1)
-
-    def _rs(self, x):
-        r = np.zeros(x.shape)
-        return r.reshape(-1)
-
-    def _with_rt(self):
-        return True
-
-    def _with_rs(self):
-        return False
