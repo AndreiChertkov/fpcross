@@ -1,7 +1,5 @@
 from importlib import import_module
 
-from .model_ import Model as ModelBase
-
 class Model(object):
     '''
     Manager for models of equation.
@@ -16,7 +14,6 @@ class Model(object):
         '''
 
         self.md = None
-        self.mds = []
 
         if name is not None: self.select(name)
 
@@ -26,15 +23,11 @@ class Model(object):
 
         INPUT:
 
-        name - name of the model
+        name - name of the model to select
         type: str
 
         TODO! Add try block.
         '''
-
-        #p_fold = os.path.dirname(os.path.abspath(__file__))
-        #p_file = os.path.join(p_fold, './model%d.md'%self.numb)
-        #with open(p_file) as f: info = f.read()
 
         self.md = import_module('.models.model_%s'%name, 'fpcross').Model()
 
@@ -49,7 +42,7 @@ class Model(object):
     def info(self):
         '''
         Present info about the model.
-        Latex mode for jupyter lab cells is used.
+        Markdown mode for jupyter lab cells is used.
         '''
 
         self._check_is_selected()
@@ -68,9 +61,9 @@ class Model(object):
         self._check_is_selected()
         return self.md.dim()
 
-    def d0(self):
+    def Dc(self):
         '''
-        Diffusion coefficient D.
+        Diffusion coefficient Dc.
 
         OUTPUT:
 
@@ -79,7 +72,7 @@ class Model(object):
         '''
 
         self._check_is_selected()
-        return self.md.d0()
+        return self.md.Dc()
 
     def f0(self, x, t):
         '''
