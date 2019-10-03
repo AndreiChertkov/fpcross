@@ -29,7 +29,7 @@ class Solver(object):
      3 Call "set_coefs" to set coefficients for FPE.
      4 Call "set_grid_t" to set the time grid parameters.
      5 Call "set_grid_x" to set the spatial grid parameters.
-     6 Call "prep" for initialization of the solver.
+     6 Call "prep" for initialization and construction of the special matrices.
      7 Call "calc" for calculation process.
      8 Call "comp" to obtain the final solution at any given spatial point.
      9 Call "info" for demonstration of the calculation results.
@@ -67,6 +67,9 @@ class Solver(object):
 
         model - model for equation with functions and coefficients
         type: Model
+
+        TODO! Create init method, where all class variables are inited and
+              values for parameters are set (including model).
         '''
 
         self.d = d
@@ -91,20 +94,23 @@ class Solver(object):
 
         model - model for equation with functions and coefficients
         type: Model
+
+        TODO! Check if we need self.model variable.
         '''
 
         self.model = model
 
-        self.d = model.dim()
-
-        d0 = model.d0()                            # D, diffusion coefficient
+        d_ = model.dim()                           # d, Number of spatial dims
+        Dc = model.Dc()                            # Dc, diffusion coefficient
         f0 = model.f0                              # f(x, t)
         f1 = model.f1                              # d f(x, t) / d x
         r0 = model.r0                              # r0(x), initial condition
         rt = model.rt if model.with_rt() else None # r(x, t), analytic solution
         rs = model.rs if model.with_rs() else None # rs(x), stationary solution
+
+        self.d = d_
         self.set_funcs(f0, f1, r0, rt, rs)
-        self.set_coefs(d0)
+        self.set_coefs(Dc)
 
     def set_funcs(self, f0, f1, r0, rt=None, rs=None):
         '''
@@ -139,7 +145,7 @@ class Solver(object):
 
         INPUT:
 
-        Dc - diffusion coefficient D
+        Dc - diffusion coefficient
         type: float
         default: 1.
 
@@ -227,47 +233,6 @@ class Solver(object):
         l_ = np.repeat(np.array([[self.x_min, self.x_max]]), self.d, axis=0)
         self.IT = Intertrain(n=n_, l=l_, eps=self.eps, with_tt=self.with_tt)
 
-    def is_inited(self):
-        '''
-        Check if all required equation parameters are set.
-
-        OUTPUT:
-
-        is_inited - result of check
-        type: bool
-        * If is False, then error will be raised.
-
-        TODO! Add more checks.
-        '''
-
-        if not isinstance(self.func_f0, types.FunctionType):
-            s = 'Function f(x, t) for FPE is not set.'
-            raise ValueError(s)
-
-        if not isinstance(self.func_f1, types.FunctionType):
-            s = 'Function d f(x, t) / d x for FPE is not set.'
-            raise ValueError(s)
-
-        if not isinstance(self.func_r0, types.FunctionType):
-            s = 'Initial condition r0(x) is not set.'
-            raise ValueError(s)
-
-        if self.func_rt is not None:
-            if not isinstance(self.func_rt, types.FunctionType):
-                s = 'Invalid analytic real solution r(x, t).'
-                raise ValueError(s)
-
-        if self.func_rs is not None:
-            if not isinstance(self.func_rs, types.FunctionType):
-                s = 'Invalid analytic stationary solution rs(x).'
-                raise ValueError(s)
-
-        if self.Dc is None:
-            s = 'Diffusion coefficient is not set.'
-            raise ValueError(s)
-
-        return True
-
     def prep(self):
         '''
         Init calculation parameters and prepare special matrices.
@@ -292,7 +257,7 @@ class Solver(object):
         }
 
 
-        if not self.is_inited():
+        if not self._init_check():
             s = 'Equation is not inited. Can not prepare.'
             raise ValueError(s)
 
@@ -342,16 +307,16 @@ class Solver(object):
 
             self.t = self.t_min + m * self.h
 
-            self.step_v()
-            self.step_w()
-            if self.ord == 2: self.step_v()
+            self._step_v()
+            self._step_w()
+            if self.ord == 2: self._step_v()
 
             self.tms['calc']+= time.time() - _t
 
             _t = time.time()
 
             if self.t_hst and (m % self.t_hst == 0 or m == self.t_poi - 1):
-                _msg = self.step_check()
+                _msg = self._step_check()
                 if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
             if with_print: _tqdm.update(1)
 
@@ -367,145 +332,6 @@ class Solver(object):
             self.hst[n] = np.array(self.hst[n])
 
         self.tms['spec']+= time.time() - _t
-
-    def step_v(self):
-        '''
-        One computation step for the diffusion term.
-        Result is saved to the IT instance.
-        '''
-
-        v0 = self.IT.Y
-
-        if self.with_tt:
-            G = tt.tensor.to_list(v0)
-            for i in range(self.d):
-                G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
-            v = tt.tensor.from_list(G)
-        else:
-            v0 = v0.reshape(-1, order='F')
-            v = self.Z @ v0
-            v = v.reshape(self.IT.n, order='F')
-
-        self.IT.init(Y=v)
-
-    def step_w(self):
-        '''
-        One computation step for the drift term.
-        Result is saved to the IT instance.
-
-        TODO! Check IT.copy() work.
-        TODO! Is it correct to add eps to prevent zero division in cross appr?
-        TODO! Try interpolation of the log.
-        TODO! Try initial guess in the form of the Euler solution.
-        '''
-
-        def func(y, t):
-            '''
-            Compute rhs for the system of convection equations
-            d x / dt = f(x, t)
-            d w / dt = - Tr[ d f(x, t) / d t] w.
-
-            INPUT:
-
-            y - combined values of the spatial variable (x) and PDF (w)
-            type: ndarray [dimensions + 1, number of points] of float
-            * First dimensions rows are related to x and the last row to w.
-
-            t - time
-            type: float
-
-            OUTPUT:
-
-            rhs - rhs of the system
-            type: ndarray [dimensions + 1, number of points] of float
-            '''
-
-            x, r = y[:-1, :], y[-1, :]
-
-            f0 = self.func_f0(x, t)
-            f1 = self.func_f1(x, t)
-
-            return np.vstack([f0, -np.trace(f1) * r])
-
-        def step(x):
-            '''
-            INPUT:
-
-            x - values of the spatial variable
-            type: ndarray [dimensions, number of points] of float
-
-            OUTPUT:
-
-            w - approximated values of the solution in the given points
-            type: ndarray [number of points] of float
-            '''
-
-            sl = Solver.ode_solve_rk4 if self.ord == 2 else Solver.ode_solve_eul
-            x0 = sl(self.func_f0, x, self.t, self.t - self.h, t_poi=2)
-            w0 = IT0.calc(x0)
-            y0 = np.vstack([x0, w0])
-            y1 = sl(func, y0, self.t - self.h, self.t, t_poi=2)
-            w1 = y1[-1, :]
-
-            if self.with_tt and np.linalg.norm(w1) < 1.E-15:
-                w1+= 1.E-15 # To prevent zero division in cross appr.
-
-            return w1
-
-        IT0 = self.IT.copy().prep()
-
-        self.IT.init(step, opts={
-            'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
-        })
-        self.W0 = self.IT.Y.copy()
-
-    def step_check(self):
-        '''
-        Check result of the current calculation step.
-
-        OUTPUT:
-
-        msg - string representation of the current step for print
-        type: str
-
-        TODO! Add initial guess r to rt and maybe rs.
-        '''
-
-        def _err_calc(r_calc, r_real):
-            dr = r_real - r_calc
-            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
-            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
-            return dn / n0 if n0 > 0 else dn
-
-        r = self.IT.Y
-
-        self.hst['T'].append(self.t)
-        self.hst['R'].append(r.copy())
-
-        msg = '| At T=%-6.1e :'%self.t
-
-        IT = self.IT.copy(is_full=False)
-        IT.eps/= 100
-
-        if self.func_rt:
-            def func_rt(x): return self.func_rt(x, self.t)
-            r_real = IT.init(func_rt).Y
-            self.hst['E_real'].append(_err_calc(r, r_real))
-
-            msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
-
-        if self.func_rs:
-            def func_rs(x): return self.func_rs(x)
-            r_stat = IT.init(func_rs).Y
-            self.hst['E_stat'].append(_err_calc(r, r_stat))
-
-            msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
-
-        if not self.func_rt and not self.func_rs:
-            # msg+= ' norm=%-6.1e'%np.linalg.norm(r)
-            pass
-
-        return msg
 
     def comp(self, x):
         '''
@@ -938,6 +764,189 @@ class Solver(object):
             ax2.legend(loc='best')
 
         plt.show()
+
+    def _init_check(self):
+        '''
+        Check if all required equation parameters are set.
+
+        OUTPUT:
+
+        is_inited - result of check
+        type: bool
+        * If is False, then error will be raised.
+
+        TODO! Add correct check to functions.
+        TODO! Add more checks.
+        '''
+
+        return True # TODO! Remove.
+
+        if not isinstance(self.func_f0, types.FunctionType):
+            s = 'Function f(x, t) for FPE is not set.'
+            raise ValueError(s)
+
+        if not isinstance(self.func_f1, types.FunctionType):
+            s = 'Function d f(x, t) / d x for FPE is not set.'
+            raise ValueError(s)
+
+        if not isinstance(self.func_r0, types.FunctionType):
+            s = 'Initial condition r0(x) is not set.'
+            raise ValueError(s)
+
+        if self.func_rt is not None:
+            if not isinstance(self.func_rt, types.FunctionType):
+                s = 'Invalid analytic real solution r(x, t).'
+                raise ValueError(s)
+
+        if self.func_rs is not None:
+            if not isinstance(self.func_rs, types.FunctionType):
+                s = 'Invalid analytic stationary solution rs(x).'
+                raise ValueError(s)
+
+        if self.Dc is None:
+            s = 'Diffusion coefficient is not set.'
+            raise ValueError(s)
+
+        return True
+
+    def _step_check(self):
+        '''
+        Check result of the current calculation step.
+
+        OUTPUT:
+
+        msg - string representation of the current step for print
+        type: str
+
+        TODO! Add initial guess r to rt and maybe rs.
+        '''
+
+        def _err_calc(r_calc, r_real):
+            dr = r_real - r_calc
+            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
+            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
+            return dn / n0 if n0 > 0 else dn
+
+        r = self.IT.Y
+
+        self.hst['T'].append(self.t)
+        self.hst['R'].append(r.copy())
+
+        msg = '| At T=%-6.1e :'%self.t
+
+        IT = self.IT.copy(is_full=False)
+        IT.eps/= 100
+
+        if self.func_rt:
+            def func_rt(x): return self.func_rt(x, self.t)
+            r_real = IT.init(func_rt).Y
+            self.hst['E_real'].append(_err_calc(r, r_real))
+
+            msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
+
+        if self.func_rs:
+            def func_rs(x): return self.func_rs(x)
+            r_stat = IT.init(func_rs).Y
+            self.hst['E_stat'].append(_err_calc(r, r_stat))
+
+            msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
+
+        if not self.func_rt and not self.func_rs:
+            # msg+= ' norm=%-6.1e'%np.linalg.norm(r)
+            pass
+
+        return msg
+
+    def _step_v(self):
+        '''
+        One computation step for the diffusion term.
+        Result is saved to the IT instance.
+        '''
+
+        v0 = self.IT.Y
+
+        if self.with_tt:
+            G = tt.tensor.to_list(v0)
+            for i in range(self.d):
+                G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
+            v = tt.tensor.from_list(G)
+        else:
+            v0 = v0.reshape(-1, order='F')
+            v = self.Z @ v0
+            v = v.reshape(self.IT.n, order='F')
+
+        self.IT.init(Y=v)
+
+    def _step_w(self):
+        '''
+        One computation step for the drift term.
+        Result is saved to the IT instance.
+
+        TODO! Check IT.copy() work.
+        TODO! Is it correct to add eps to prevent zero division in cross appr?
+        TODO! Try interpolation of the log.
+        TODO! Try initial guess in the form of the Euler solution.
+        '''
+
+        def func(y, t):
+            '''
+            Compute rhs for the system of convection equations
+            d x / dt = f(x, t)
+            d w / dt = - Tr[ d f(x, t) / d t] w.
+
+            INPUT:
+
+            y - combined values of the spatial variable (x) and PDF (w)
+            type: ndarray [dimensions + 1, number of points] of float
+            * First dimensions rows are related to x and the last row to w.
+
+            t - time
+            type: float
+
+            OUTPUT:
+
+            rhs - rhs of the system
+            type: ndarray [dimensions + 1, number of points] of float
+            '''
+
+            x, r = y[:-1, :], y[-1, :]
+
+            f0 = self.func_f0(x, t)
+            f1 = self.func_f1(x, t)
+
+            return np.vstack([f0, -np.trace(f1) * r])
+
+        def step(x):
+            '''
+            INPUT:
+
+            x - values of the spatial variable
+            type: ndarray [dimensions, number of points] of float
+
+            OUTPUT:
+
+            w - approximated values of the solution in the given points
+            type: ndarray [number of points] of float
+            '''
+
+            sl = Solver.ode_solve_rk4 if self.ord == 2 else Solver.ode_solve_eul
+            x0 = sl(self.func_f0, x, self.t, self.t - self.h, t_poi=2)
+            w0 = IT0.calc(x0)
+            y0 = np.vstack([x0, w0])
+            y1 = sl(func, y0, self.t - self.h, self.t, t_poi=2)
+            w1 = y1[-1, :]
+
+            if self.with_tt and np.linalg.norm(w1) < 1.E-15:
+                w1+= 1.E-15 # To prevent zero division in cross appr.
+
+            return w1
+
+        IT0 = self.IT.copy().prep()
+
+        self.IT.init(step, opts={
+            'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
+        })
+        self.W0 = self.IT.Y.copy()
 
     def _sind(self, x):
         '''
