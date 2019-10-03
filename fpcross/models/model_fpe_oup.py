@@ -3,41 +3,46 @@ from scipy.linalg import solve_lyapunov as _solve_lyapunov
 
 from .model_ import Model as ModelBase
 
-name = 'fpe-oup'
-desc = 'Multidimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
-tags = ['FPE', 'OUP', 'analyt-stat']
 info = {
-    'markdown': r'''
-
-<div class="head0">
-    <div class="head0__name">
-        Model problem
-    </div>
-    <div class="head0__note">
-        Multidimensional Focker Planck equation with linear drift (Ornstein–Uhlenbeck process)
-    </div>
-</div>
-
-<div class="head2">
-    <div class="head2__name">
-        Parameters
-    </div>
-    <div class="head2__note">
-        <ul>
-            <li>$d$ - spatial dimension (int, default $= 1$)</li>
-            <li>$s$ - variance of the initial condition (float, default $= 1$)</li>
-            <li>$D_c$ - diffusion coefficient (float, default $= 0.5$)</li>
-            <li>$A$ - constant drift matrix (array $d \times d$ of float, default $= I_d$)</li>
-        </ul>
-    </div>
-</div>
-
-<div class="head1">
-    <div class="head1__name">
-        Description
-    </div>
-</div>
-
+    'name': 'fpe-oup',
+    'repr': 'd r(x, t) / d t = D \Delta r(x, t) + A div[ x r(x, t) ]',
+    'desc': 'Multidimensional Focker Planck equation (Ornstein–Uhlenbeck process)',
+    'tags': ['FPE', 'ND', 'analyt-stat', 'OUP'],
+    'pars': {
+        'd': {
+            'name': 'Dimension',
+            'desc': 'Spatial dimension',
+            'dflt': 1,
+            'type': 'int',
+            'frmt': '%3d',
+        },
+        's': {
+            'name': 'Initial variance',
+            'desc': 'Variance of the initial condition',
+            'dflt': 1.,
+            'type': 'float',
+            'frmt': '%8.4f',
+        },
+        'D': {
+            'name': 'Diffusion coefficient',
+            'desc': 'Scalar diffusion coefficient',
+            'dflt': 0.5,
+            'type': 'float',
+            'frmt': '%8.4f',
+        },
+        'A': {
+            'name': 'Drift',
+            'desc': 'Constant drift coefficients ([d x d] matrix)',
+            'dflt': lambda vals: np.eye(vals.get('d', 1)),
+            'type': 'ndarray',
+            'frmt': '%s',
+        },
+    },
+    'notes': [
+        'The multivariate Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if if all eigenvalues of $A$ are positive and this process at any time is a multivariate normal random variable.',
+        'We do not construct analytic solution for this multidimensional case, but use comparison with known stationary solution. The corresponding error will depend on the maximum value for the used time grid.',
+    ],
+    'text': r'''
 Consider
 $$
     d x = f(x, t) \, dt + S(x, t) \, d \beta,
@@ -98,39 +103,26 @@ where matrix $W$ is solution of the matrix equation
 $$
     A W + W A^{\top} = 2 D.
 $$
-
-<div class="note">
-    The multivariate Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if if all eigenvalues of $A$ are positive and this process at any time is a multivariate normal random variable.
-</div>
-
-<div class="note">
-    We do not construct analytic solution for this multidimensional case, but use comparison with known stationary solution. The corresponding error will depend on the maximum value for the used time grid.
-</div>
-
-<div class="end"></div>
     '''
 }
 
 class Model(ModelBase):
 
     def __init__(self):
-        super().__init__(name, desc, tags, info)
+        super().__init__(info, d=None)
 
-    def init(self, d=None, s=None, D=None, A=None):
-        self._set('d', d, 1)
-        self._set('s', s, 1.)
-        self._set('D', D, 0.5)
-        self._set('A', A, np.eye(self.d))
+    def init(self, *args, **kwargs):
+        super().init(*args, **kwargs)
 
         self.W = _solve_lyapunov(self.A, 2. * self.D * np.eye(self.d))
         self.Wi = np.linalg.inv(self.W)
         self.Wd = np.linalg.det(self.W)
 
-    def _d0(self):
+    def _Dc(self):
         return self.D
 
     def _f0(self, x, t):
-        return -self.A  @ x
+        return -self.A @ x
 
     def _f1(self, x, t):
         return -self.A @ np.ones(x.shape)
@@ -144,9 +136,3 @@ class Model(ModelBase):
         r = np.exp(-0.5 * np.diag(x.T @ self.Wi @ x))
         r/= np.sqrt(2**self.d * np.pi**self.d * self.Wd)
         return r
-
-    def _with_rt(self):
-        return False
-
-    def _with_rs(self):
-        return True
