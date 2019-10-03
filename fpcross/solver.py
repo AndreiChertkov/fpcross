@@ -72,10 +72,10 @@ class Solver(object):
               values for parameters are set (including model).
         '''
 
-        self.d = d
-        self.eps = eps
-        self.ord = ord
-        self.with_tt = with_tt
+        self.d = int(d) if d else None
+        self.eps = float(eps)
+        self.ord = int(ord)
+        self.with_tt = bool(with_tt)
 
         if model is not None:
             self.set_model(model)
@@ -294,8 +294,8 @@ class Solver(object):
             s = 'Equation is not prepared. Can not calculate.'
             raise ValueError(s)
 
-        d, u, t = 'Solve', 'step', self.t_poi-1
-        if with_print: _tqdm = tqdm(desc=d, unit=u, total=t, ncols=80)
+        d, u, t, c = 'Solve', 'step', self.t_poi - 1, 80
+        if with_print: _tqdm = tqdm(desc=d, unit=u, total=t, ncols=c)
 
         self.t = self.t_min
         self.IT.init(self.func_r0)
@@ -861,6 +861,8 @@ class Solver(object):
         '''
         One computation step for the diffusion term.
         Result is saved to the IT instance.
+
+        TODO! Check if tt-round is needed.
         '''
 
         v0 = self.IT.Y
@@ -870,6 +872,7 @@ class Solver(object):
             for i in range(self.d):
                 G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
             v = tt.tensor.from_list(G)
+            v = v.round(self.eps)
         else:
             v0 = v0.reshape(-1, order='F')
             v = self.Z @ v0
@@ -886,6 +889,7 @@ class Solver(object):
         TODO! Is it correct to add eps to prevent zero division in cross appr?
         TODO! Try interpolation of the log.
         TODO! Try initial guess in the form of the Euler solution.
+        TODO! Check various numbers of points for ODE solvers.
         '''
 
         def func(y, t):
