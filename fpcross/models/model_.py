@@ -1,3 +1,4 @@
+import types
 import numpy as np
 
 class Model(object):
@@ -5,40 +6,39 @@ class Model(object):
     Base (abstract) class for all models of equations.
     '''
 
-    def __init__(self, info):
+    def __init__(self, info, d=0):
         '''
         Set description of the model.
         '''
 
         self._info = info
-        self.d = 0
+        self.d = d
         self.init()
 
     def init(self, *args, **kwargs):
-        '''
-        Set and prepare (if is needed) parameters of the model.
-        '''
-
         for [name, opts] in self._info.get('pars', {}).items():
-            object.__setattr__(self, name, kwargs.get(name, opts.get('dflt')))
+            v = kwargs.get(name)
+            if v is None:
+                v = opts.get('dflt')
+                if isinstance(v, types.FunctionType):
+                    v = v(kwargs)
+            object.__setattr__(self, name, v)
 
     def info(self):
-        '''
-        Present info about the model.
-        Markdown mode for jupyter lab cells is used.
-        '''
-
         n = self._info['name']
         d = self._info['desc']
         t = self._info['tags']
         s = r'''<div class="head0">
-            <div class="head0__name">Model problem</div>
-            <div class="head0__note">%s :<br>%s [%s].</div>
+            <div class="head0__name">%s</div>
+            <div class="head0__note">%s [%s].</div>
         </div>'''%(n, d, ', '.join(t))
 
         ss = []
         for [name, opts] in self._info['pars'].items():
-            ss.append('%s - %s (type: %s)'%(name, opts['name'], opts['type']))
+            ss.append('%s = %s [%s]<div>%s (type: %s, default: %s)</div>'%(
+                name, opts['frmt']%getattr(self, name), opts['name'],
+                opts['desc'], opts['type'], opts['frmt']%opts['dflt']
+            ))
         s+= r'''<div class="head2">
             <div class="head2__name">Parameters</div>
             <div class="head2__note"><ul><li>%s</li></ul></div>
@@ -58,185 +58,34 @@ class Model(object):
         display(Markdown(s))
 
     def dim(self):
-        '''
-        Dimension of the equation.
-
-        OUTPUT:
-
-        v - corresponding value
-        type: int, >= 1
-        '''
-
         return self.d
 
     def Dc(self):
-        '''
-        Diffusion coefficient D.
-
-        OUTPUT:
-
-        v - corresponding value
-        type: float
-        '''
-
         return self._Dc()
 
     def f0(self, x, t):
-        '''
-        Function f(x, t).
-
-        INPUT:
-
-        x - values of the spatial variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        t - value of the time variable
-        type: float
-
-        OUTPUT:
-
-        v - corresponding values
-        type: ndarray [dimensions, number of points] of float
-        '''
-
-        x = self._prep_x(x)
-        return self._f0(x, t)
+        return self._f0(self._prep_x(x), t)
 
     def f1(self, x, t):
-        '''
-        Spatial derivative d f(x, t) / d x.
-
-        INPUT:
-
-        x - values of the spatial variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        t - value of the time variable
-        type: float
-
-        OUTPUT:
-
-        v - corresponding values
-        type: ndarray [dimensions, number of points] of float
-        '''
-
-        x = self._prep_x(x)
-        return self._f1(x, t)
+        return self._f1(self._prep_x(x), t)
 
     def r0(self, x):
-        '''
-        Initial condition r0(x).
-
-        INPUT:
-
-        x - values of the spatial variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        OUTPUT:
-
-        v - corresponding values
-        type: ndarray [number of points] of float
-        '''
-
-        x = self._prep_x(x)
-        return self._r0(x)
+        return self._r0(self._prep_x(x))
 
     def rt(self, x, t):
-        '''
-        Real (analytic) solution r(x, t) if known.
-
-        INPUT:
-
-        x - values of the spatial variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        t - value of the time variable
-        type: float
-
-        OUTPUT:
-
-        v - corresponding values
-        type: ndarray [number of points] of float
-        '''
-
-        x = self._prep_x(x)
-        return self._rt(x, t)
+        if not self.with_rt: raise ValueError('The model has not rt.')
+        return self._rt(self._prep_x(x), t)
 
     def rs(self, x):
-        '''
-        Stationary (analytic) solution rs(x) if known.
-
-        INPUT:
-
-        x - values of the spatial variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        OUTPUT:
-
-        v - corresponding values
-        type: ndarray [number of points] of float
-        '''
-
-        x = self._prep_x(x)
-        return self._rs(x)
+        if not self.with_rs: raise ValueError('The model has not rs.')
+        return self._rs(self._prep_x(x))
 
     def with_rt(self):
-        '''
-        Check if model has real (analytic) solution r(x, t).
-
-        OUTPUT:
-
-        v - corresponding flag
-        type: bool
-        '''
-
-        return self._with_rt()
+        return getattr(self, '_rt', None) is not None
 
     def with_rs(self):
-        '''
-        Check if model has stationary (analytic) solution rs(x).
-
-        OUTPUT:
-
-        v - corresponding flag
-        type: bool
-        '''
-
-        return self._with_rs()
+        return getattr(self, '_rs', None) is not None
 
     def _prep_x(self, x):
         if isinstance(x, list): x = np.array(x)
-
         return x
-
-    def _Dc(self):
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
-
-    def _f0(self, x, t):
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
-
-    def _f1(self, x, t):
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
-
-    def _r0(self, x):
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
-
-    def _rt(self, x, t):
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
-
-    def _rs(self, x):
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
-
-    def _with_rt(self):
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
-
-    def _with_rs(self):
-        s = 'Is abstract model. Use method of the specific model.'
-        raise NotImplementedError(s)
