@@ -9,69 +9,83 @@ class Grid(object):
 
     def __init__(self, d=None, n=2, l=[-1., 1.], kind='c'):
         '''
+        Init grid parameters.
+
         INPUT:
 
         d - number of dimensions
-        type: None or int, >= 1
-        * If is None, then it will be recovered from n or l shape.
+        type1: None
+        type2: int, >= 1
+        * If is None (type1), then it will be recovered from n or l shape.
+        * If is set (type2), then n and l will be extended (if required)
+        * according to the number of dimensions.
 
         n - total number of points for each dimension
-        type: int or ndarray (or list) [dimensions] of int, >= 2
-        * If has type int, then the same value will be used for each dimension.
+        type1: int
+        type2: list [dimensions] of int, >= 2
+        type3: ndarray [dimensions] of int, >= 2
+        * If is int (type1), then it will be used for each dimension.
 
         l - min-max values of variable for each dimension
-        type: ndarray (or list) [dimensions, 2] of float, [:, 0] < [:, 1]
-              or ndarray (or list) [2] of float, [0] < [1]
-        * Note that [:, 0] (or [0]) are min and [:, 1] (or [1]) are max
-        * values for each dimension.
-        * If it is 1D array or list, then it will be used for each dimension.
+        type1: list [2] of float, [0] < [1]
+        type2: ndarray [2] of float, [0] < [1]
+        type3: list [dimensions, 2] of float, [:, 0] < [:, 1]
+        type4: ndarray [dimensions, 2] of float, [:, 0] < [:, 1]
+        * Note that [:, 0] (or [0]) are min
+        * and [:, 1] (or [1]) are max values for each dimension.
+        * If it is 1D list or array (type1 or type2),
+        * then the same values will be used for each dimension.
 
         kind - kind of the grid.
-        type: str, 'u' (uniform) or 'c' ('chebyshev')
+        type: str
+        enum:
+            - 'u' - uniform
+            - 'c' - chebyshev
         '''
 
-        if d is not None:
-            if not isinstance(n, (int, float)):
+        if d is None:
+            d = 1
+            if isinstance(n, (list, np.ndarray)):
+                if len(n) > 0:
+                    d = len(n)
+            elif isinstance(l, (list, np.ndarray)):
+                if len(l) > 0 and isinstance(l[0], (list, np.ndarray)):
+                    d = len(l)
+        else:
+            if not isinstance(d, (int, float)) or d < 1:
                 raise ValueError('Invalid number of dimensions (d).')
             d = int(d)
-        else:
-            if isinstance(n, (list, np.ndarray)):
-                d = len(n)
-            elif isinstance(l, (list, np.ndarray)):
-                d = len(l)
-            else:
-                raise ValueError('Dimension (d) is not set and can`t be calculated from n and l.')
 
         if isinstance(n, (int, float)):
-            n = [int(n)] * (d or 1)
+            n = [int(n)] * d
         if isinstance(n, list):
             n = np.array(n)
         if not isinstance(n, np.ndarray):
-            raise IndexError('Invalid type for number of points (n).')
+            raise ValueError('Invalid type for number of points (n).')
+        if n.shape[0] != d:
+            raise IndexError('Invalid shape for n parameter.')
 
         if isinstance(l, list):
             l = np.array(l)
         if not isinstance(l, np.ndarray):
-            raise IndexError('Invalid type for limits (l).')
+            raise ValueError('Invalid type for limits (l).')
         if len(l.shape) == 1:
-            l = np.repeat(l.reshape(1, -1), d, axis=1)
+            l = np.repeat(l.reshape(1, -1), d, axis=0)
+        if l.shape[0] != d or l.shape[1] != 2:
+            raise IndexError('Invalid shape for l parameter.')
 
+        self.d = d
         self.n = n
         self.l = l
-        self.d = d or self.n.shape[0]
-
-        if self.n.shape[0] != self.d or self.l.shape[0] != self.d:
-            raise IndexError('Invalid shape for grid parameters.')
-
         self.kind = kind
 
     def copy(self):
         '''
-        Create a copy of the class instance.
+        Create a copy of the grid.
 
         OUTPUT:
 
-        GR - new class instance
+        GR - new class instance with the same parameters
         type: Grid
         '''
 
@@ -89,18 +103,26 @@ class Grid(object):
 
         I - indices of grid points
         type1: None
-        type2: ndarray [dimensions, number of points] of int
-        type3: list [dimensions, number of points] of int
+        type2: int
+        type3: list [number of points] of int
         type4: ndarray [number of points] of int
-        type5: list [number of points] of int
-        type6: int
+        type5: list [dimensions, number of points] of int
+        type6: ndarray [dimensions, number of points] of int
         * If is None (type1), then the full grid will be constructed.
-        * Type4 and type5 are available only for 1D case.
-        * Type6 is available only for 1D case and for only one point.
+        * Type2 is available only for 1D case and for only one point.
+        * Type3 and type4 are available only for 1D case of for only one point.
+
+        is_ind - flag:
+            True  - indices of points will be returned
+            False - spatial grid points will be returned
+        type: bool
 
         OUTPUT:
 
-        X - grid points
+        I - (if is_ind == True) indices of grid points
+        type: ndarray [dimensions, number of points] of int
+
+        X - (if is_ind == False) grid points
         type: ndarray [dimensions, number of points] of float
         '''
 
@@ -114,19 +136,25 @@ class Grid(object):
             I = np.array(I)
         if not isinstance(I, np.ndarray):
             raise ValueError('Invalid grid points.')
-        if len(I.shape) == 1:
+        if len(I.shape) == 1 and self.d >= 2:
+            I = I.reshape(-1, 1)
+        if len(I.shape) == 1 and self.d == 1:
             I = I.reshape(1, -1)
         if I.shape[0] != self.d:
-            raise ValueError('Invalid dimension of grid points.')
+            raise ValueError('Invalid dimension for grid points.')
         if is_ind:
             return I
 
-        n = np.repeat(self.n.reshape((-1, 1)), I.shape[1], axis=1)
-        t = np.cos(np.pi * I / (n - 1))
-
+        n0 = np.repeat(self.n.reshape((-1, 1)), I.shape[1], axis=1)
         l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), I.shape[1], axis=1)
         l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), I.shape[1], axis=1)
-        X = t * (l2 - l1) / 2. + (l2 + l1) / 2.
+
+        if self.kind == 'u':
+            t = I * 1. / (n0 - 1)
+            X = t * (l2 - l1) + l1
+        if self.kind == 'c':
+            t = np.cos(np.pi * I / (n0 - 1))
+            X = t * (l2 - l1) / 2. + (l2 + l1) / 2.
 
         return X
 
@@ -150,7 +178,12 @@ class Grid(object):
         '''
 
         s = '------------------ Grid\n'
-        s+= 'Kind             : %s\n'%('Chebyshev')
+
+        k = '???'
+        if self.kind == 'u': k = 'Uniform'
+        if self.kind == 'c': k = 'Chebyshev'
+        s+= 'Kind             : %s\n'%k
+
         s+= 'Dimension        : %d\n'%self.d
 
         for i, [n, l] in enumerate(zip(self.n, self.l)):
@@ -169,10 +202,10 @@ class Grid(object):
     def plot(self, I=None):
         '''
         Plot the full grid or some grid points.
+        * Only 2-dimensional case is supported.
 
-        I - indices of points for plot
-        type: ndarray [dimensions, number_of_ponts] of int
-        * If it is not set, then the full grid will be used.
+        I - indices of grid points for plot
+        * See description in Grid.comp function.
         '''
 
         if self.d == 2:
