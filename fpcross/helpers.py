@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from . import config
+import tt
 
 css = '''
     div {
@@ -125,129 +125,102 @@ def init_jupyter():
     from IPython.core.display import HTML
     return HTML('<style>%s</style>' %css)
 
-def save_mnet(fpath, DATA, ord, M, N, E, T, opts={}):
-    DATA['ord%d'%ord] = {
-        'opts': opts,
-        'M': M,
-        'N': N,
-        'E': E,
-        'T': T,
-    }
+def func_check(N_tt, N_np, GR, func):
+    from . import Func
 
-    with open(fpath, 'wb') as f:
-        pickle.dump(DATA, f)
+    d = GR.d
+    T_tt, E_tt, C_f_tt, C_a_tt = [], [], [], []
+    T_np, E_np = [], []
 
-def load_mnet(fpath):
-    with open(fpath, 'rb') as f:
-        DATA = pickle.load(f)
-    return DATA
+    if N_tt is not None:
+        for n in (N_tt):
+            GR.n = np.array([n]*d)
+            IT = Func(GR, eps=1.E-6, with_tt=True, log_path='./tmp.txt')
+            IT.init(func).prep().calc().test()
+            T_tt.append(IT.tms.copy())
+            E_tt.append(np.mean(IT.err))
+            c_f = IT.res['evals']
+            for n in list(GR.n): c_f /= n
+            C_f_tt.append(c_f)
+            c_a = sum([G.size for G in tt.tensor.to_list(IT.A)])
+            for n in list(GR.n): c_a /= n
+            C_a_tt.append(c_a)
 
-def show_mnet_ord(DATA, ord, lims={}):
-    M = DATA['ord%d'%ord]['M'].copy()
-    N = DATA['ord%d'%ord]['N'].copy()
-    E = DATA['ord%d'%ord]['E'].copy()
-    T = DATA['ord%d'%ord]['T'].copy()
+    if N_np is not None:
+        for n in N_np:
+            GR.n = np.array([n]*d)
+            IT = Func(GR, eps=1.E-6, with_tt=False, log_path='./tmp.txt')
+            IT.init(func).prep().calc().test()
+            T_np.append(IT.tms.copy())
+            E_np.append(np.mean(IT.err))
 
-    for m in M:
-        x = np.array(N)
-        y = np.array(E[m])
-        t = T[m].copy()
+    fig = plt.figure(figsize=(12, 6))
+    gs = mpl.gridspec.GridSpec(
+        ncols=3, nrows=1, left=0.01, right=0.99, top=0.99, bottom=0.01,
+        wspace=0.3, hspace=0.01, width_ratios=[1, 1, 1], height_ratios=[1]
+    )
 
-        l0 = lims.get(m, [None, None])[0]
-        l1 = lims.get(m, [None, None])[1]
+    ax = fig.add_subplot(gs[0, 0])
+    if N_tt is not None:
+        ax.plot(
+            N_tt, [T['prep'] for T in T_tt], label='Prep (TT)',
+            color='blue', linewidth=3
+        )
+        ax.plot(
+            N_tt, [T['calc'] for T in T_tt], label='Calc (TT)',
+            color='green', linewidth=3
+        )
+        ax.plot(
+            N_tt, [T['comp'] for T in T_tt], label='Comp (TT)',
+            color='orange', linewidth=3
+        )
+    if N_np is not None:
+        ax.plot(
+            N_np, [T['prep'] for T in T_np], '-.', label='Prep (NP)',
+            color='blue', linewidth=1, marker='*', markersize=5
+        )
+        ax.plot(
+            N_np, [T['calc'] for T in T_np], '-.', label='Calc (NP)',
+            color='green', linewidth=1, marker='*', markersize=5
+        )
+        ax.plot(
+            N_np, [T['comp'] for T in T_np], '-.', label='Comp (NP)',
+            color='orange', linewidth=1, marker='*', markersize=5
+        )
+    ax.set_title('Times (%d-dim)'%d)
+    ax.semilogx()
+    ax.semilogy()
+    if N_tt is not None and N_np is not None: ax.legend(loc='best')
 
-        xe = x[l0:l1]
-        ye = y[l0:l1]
+    ax = fig.add_subplot(gs[0, 1])
+    if N_tt is not None:
+        ax.plot(
+            N_tt, E_tt, label='TT',
+            color='black', linewidth=3
+        )
+    if N_np is not None:
+        ax.plot(
+            N_np, E_np, '-.', label='NP',
+            color='black', linewidth=1, marker='*', markersize=5
+        )
+    ax.set_title('Interpolation error (%d-dim)'%d)
+    ax.semilogx()
+    ax.semilogy()
+    if N_tt is not None and N_np is not None: ax.legend(loc='best')
 
-        b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
-        a = np.exp(a)
-        z1 = a * np.exp(b * x)
+    ax = fig.add_subplot(gs[0, 2])
+    if N_tt is not None:
+        ax.plot(
+            N_tt, C_f_tt, label='Function evals',
+            color='brown', linewidth=3
+        )
+        ax.plot(
+            N_tt, C_a_tt, label='Tensor size',
+            color='magenta', linewidth=3
+        )
+        ax.set_title('Compression (tt) factor (%d-dim)'%d)
+        ax.semilogx()
+        ax.semilogy()
+        ax.legend(loc='best')
 
-        fig = plt.figure(**config['plot']['fig']['base_1_2'])
-        grd = mpl.gridspec.GridSpec(**config['plot']['grid']['base_1_2'])
-        ax1 = fig.add_subplot(grd[0, 0])
-        ax2 = fig.add_subplot(grd[0, 1])
-
-        opts = config['plot']['line']['calc'].copy()
-        opts['label'] = 'Solution'
-        ax1.plot(x, y, **opts)
-
-        opts = config['plot']['line']['init'].copy()
-        opts['label'] = '%8.2e * exp[- %8.2e * n]'%(a, -b)
-        ax1.plot(x, z1, **opts)
-
-        ax1.set_title('Relative error at final time step (tpoi=%d)'%m)
-        ax1.set_xlabel('Number of spatial points')
-        ax1.set_ylabel('Relative error')
-        ax1.legend(loc='best')
-        ax1.semilogy()
-
-        opts = config['plot']['line']['calc'].copy()
-        opts['label'] = ''
-        ax2.plot(N, [t_[1] for t_ in t], **opts)
-        ax2.semilogy()
-        ax2.set_title('Calculation time (sec.; tpoi=%d)'%m)
-        ax2.set_xlabel('Number of spatial points')
-        ax2.set_ylabel('Time, sec')
-
-        plt.show()
-
-def show_mnet_ords(DATA, lims):
-    M = DATA['ord%d'%1]['M'].copy()
-
-    for m in M:
-        fig = plt.figure(**config['plot']['fig']['base_1_2'])
-        grd = mpl.gridspec.GridSpec(**config['plot']['grid']['base_1_2'])
-        ax1 = fig.add_subplot(grd[0, 0])
-        ax2 = fig.add_subplot(grd[0, 1])
-
-        for ord in [1, 2]:
-            N = DATA['ord%d'%ord]['N'].copy()
-            E = DATA['ord%d'%ord]['E'].copy()
-            T = DATA['ord%d'%ord]['T'].copy()
-
-            x = np.array(N)
-            y = np.array(E[m])
-            t = T[m].copy()
-
-            l0 = lims.get(m, [None, None])[0]
-            l1 = lims.get(m, [None, None])[1]
-
-            xe = x[l0:l1]
-            ye = y[l0:l1]
-
-            b, a = np.polyfit(xe, np.log(ye), 1, w=np.sqrt(ye))
-            a = np.exp(a)
-            z1 = a * np.exp(b * x)
-
-            if ord == 1:
-                opts = config['plot']['line']['real'].copy()
-            else:
-                opts = config['plot']['line']['calc'].copy()
-            opts['label'] = 'Solution (%dth order)'%ord
-            ax1.plot(x, y, **opts)
-
-            opts = config['plot']['line']['init'].copy()
-            opts['label'] = '%8.2e * exp[- %8.2e * n]'%(a, -b)
-            ax1.plot(x, z1, **opts)
-
-            if ord == 1:
-                opts = config['plot']['line']['real'].copy()
-            else:
-                opts = config['plot']['line']['calc'].copy()
-            opts['label'] = 'Solution (%dth order)'%ord
-            ax2.plot(N, [t_[1] for t_ in t], **opts)
-
-        ax1.set_title('Relative error at final time step (tpoi=%d)'%m)
-        ax1.set_xlabel('Number of spatial points')
-        ax1.set_ylabel('Relative error')
-        ax1.legend(loc='best')
-        ax1.semilogy()
-
-        ax2.semilogy()
-        ax2.set_title('Calculation time (sec.; tpoi=%d)'%m)
-        ax2.set_xlabel('Number of spatial points')
-        ax2.set_ylabel('Time, sec')
-        ax2.legend(loc='best')
-
-        plt.show()
+    plt.show()
