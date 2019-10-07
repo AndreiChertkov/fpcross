@@ -6,6 +6,8 @@ from scipy.linalg import toeplitz as _toeplitz
 import tt
 from tt.cross.rectcross import cross as _cross
 
+from .grid import Grid
+
 class Intertrain(object):
     '''
     Class for the fast multidimensional function interpolation
@@ -65,6 +67,8 @@ class Intertrain(object):
             raise IndexError(s)
 
         self.d = self.n.shape[0]
+
+        self.GR = Grid(n, l)
 
         self.init()
 

@@ -1,6 +1,6 @@
 import unittest
 
-from test_base import *
+from test_grid import *
 
 if __name__ == '__main__':
     unittest.main()
