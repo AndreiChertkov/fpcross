@@ -7,7 +7,7 @@ from scipy.linalg import toeplitz as _toeplitz
 import tt
 from tt.cross.rectcross import cross as _cross
 
-from .grid import Grid
+from . import polynomials_cheb
 
 class Intertrain(object):
     '''
@@ -32,9 +32,12 @@ class Intertrain(object):
     - Call "test" to obtain interpolation accuracy for set of random points.
     '''
 
-    def __init__(self, n, l, eps=1.E-6, log_path='./tmp.txt', with_tt=True):
+    def __init__(self, GR, eps=1.E-6, log_path='./tmp.txt', with_tt=True):
         '''
         INPUT:
+
+        GR - the spatial grid
+        type: Grid
 
         n - total number of points for each dimension
         type: ndarray (or list) [dimensions] of int, >= 2
@@ -57,21 +60,24 @@ class Intertrain(object):
         type: bool
         '''
 
-        self.n = n if isinstance(n, np.ndarray) else np.array(n)
-        self.l = l if isinstance(l, np.ndarray) else np.array(l)
+        self.init(GR, eps, log_path, with_tt)
+
+    def init(self, GR, eps=1.E-6, log_path='./tmp.txt', with_tt=True):
+        '''
+        Init all parameters of the class instance.
+
+        INPUT: see Intertrain.__init__
+
+        OUTPUT:
+
+        self - class instance
+        type: Intertrain
+        '''
+
+        self.GR = GR
         self.eps = eps
         self.log_path = log_path
         self.with_tt = with_tt
-
-        if self.n.shape[0] != self.l.shape[0]:
-            s = 'Shape mismatch for n and l parameters.'
-            raise IndexError(s)
-
-        self.d = self.n.shape[0]
-
-        self.GR = Grid(n, l)
-
-        self.init()
 
     def copy(self, is_full=True):
         '''
@@ -92,9 +98,7 @@ class Intertrain(object):
         TODO! Add argument with changed opts (eps etc).
         '''
 
-        n = self.n.copy()
-        l = self.l.copy()
-        IT = Intertrain(n, l, self.eps, self.log_path, self.with_tt)
+        IT = Intertrain(self.GR.copy(), self.eps, self.log_path, self.with_tt)
 
         if not is_full: return IT
 
@@ -172,14 +176,14 @@ class Intertrain(object):
 
         self - class instance
         type: Intertrain
-
-        TODO! Collect times in the dict tms.
         '''
 
-        self._t_init = 0. # Time of training data collection
-        self._t_prep = 0. # Time of interpolation coefficients calculation
-        self._t_calc = 0. # Average time of interpolation evaluation for 1 poi
-        self._t_func = 0. # Average time of function evaluation for 1 poi
+        self.tms = {      # Saved times (durations)
+            'init': 0.,   # training data collection
+            'prep': 0.,   # interpolation coefficients calculation
+            'calc': 0.,   # interpolation evaluation (average time for 1 poi)
+            'func': 0.,   # function evaluation (average time for 1 poi)
+        }
 
         self.err = None
         self.crs_res = None
@@ -307,7 +311,7 @@ class Intertrain(object):
 
         Y = np.ones(X.shape[1]) * z
         m = np.max(self.n) - 1
-        T = Intertrain.polynomials(X, m, self.l)
+        T = polynomials_cheb(X, m, self.l)
 
         if self.with_tt:
             G = tt.tensor.to_list(self.A)
@@ -334,17 +338,14 @@ class Intertrain(object):
 
         return Y
 
-    def info(self, test_poi=None):
+    def info(self, n=None):
         '''
         Present info about interpolation result, including error check.
 
         INPUT:
 
-        test_poi - number of points for error check
-        type: None or int, >= 0
-        * If set (is not None and is greater than zero) and interpolation is
-        * ready, interpolation result will be checked on a set of random points
-        * from the uniform distribution with a proper limits.
+        n - number of points for error check
+        * See Intertrain.test function.
 
         TODO! Cut lim info if too many dimensions?
         TODO! Replace prints by string construction.
@@ -353,14 +354,11 @@ class Intertrain(object):
         print('------------------ Intertain')
         print('Format           : %1dD, %s'%(self.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP'))
 
-        for i, [n, l] in enumerate(zip(self.n, self.l)):
-            print('Dim %-2d           : Poi %-3d | Min %-6.3f | Max %-6.3f |'%(i+1, n, l[0], l[1]))
-
         print('------------------ Time')
-        print('Init             : %8.2e sec. '%self._t_init)
-        print('Prep             : %8.2e sec. '%self._t_prep)
-        print('Calc (average)   : %8.2e sec. '%self._t_calc)
-        print('Func (average)   : %8.2e sec. '%self._t_func)
+        print('Init             : %8.2e sec. '%self.tms['init'])
+        print('Prep             : %8.2e sec. '%self.tms['prep'])
+        print('Calc (average)   : %8.2e sec. '%self.tms['calc'])
+        print('Func (average)   : %8.2e sec. '%self.tms['func'])
 
         if self.with_tt:
             print('------------------ Cross appr. parameters')
@@ -376,34 +374,34 @@ class Intertrain(object):
             print('Cross err (rel)  : %8.2e'%self.crs_res['err_rel'])
             print('Cross err (abs)  : %8.2e'%self.crs_res['err_abs'])
 
-        test_poi = test_poi if test_poi is not None else -1
-        if self.A is not None and self.f is not None and test_poi > 0:
-            self.test(test_poi)
+        if self.A is not None and self.f is not None and n:
+            self.test(n)
             print('------------------ Test for uniform random points')
-            print('Number of points : %8d'%test_poi)
+            print('Number of points : %8d'%n)
             print('Error (max)      : %8.2e'%np.max(self.err))
             print('Error (mean)     : %8.2e'%np.mean(self.err))
             print('Error (min)      : %8.2e'%np.min(self.err))
 
         print('------------------')
 
-    def test(self, test_poi=100):
+    def test(self, n=100):
         '''
         Calculate interpolation error on a set of random points from the
-        uniform distribution with a proper limits.
+        uniform distribution with proper limits.
 
         INPUT:
 
-        test_poi - number of points for error check
-        type: None or int, >= 0
+        n - number of points for error check
+        type1: None
+        type2: int, >= 0
         * If set (is not None and is greater than zero) and interpolation is
-        * ready, interpolation result will be checked on a set of random points
-        * from the uniform distribution with a proper limits.
+        * ready, then interpolation result will be checked on a set
+        * of random points from the uniform distribution with proper limits.
 
         OUTPUT:
 
         err - absolute value of relative error for the generated random points
-        type: np.ndarray [test_poi] of float
+        type: np.ndarray [n] of float
 
         TODO! Add support for absolute error.
         '''
@@ -416,73 +414,12 @@ class Intertrain(object):
             s = 'Function for interpolation requires indices. Can not test'
             raise ValueError(s)
 
-        l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), test_poi, axis=1)
-        l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), test_poi, axis=1)
-        X = l1 + np.random.random((self.d, test_poi)) * (l2 - l1)
-
-        u_calc = self.calc(X)
-        u_real = self.f(X)
+        X_rand = self.GR.rand(n)
+        u_calc = self.calc(X_rand)
+        u_real = self.f(X_rand)
         self.err = np.abs((u_real - u_calc) / u_real)
 
         return self.err
-
-    def pois(self, I):
-        '''
-        Get points of Chebyshev multidimensional grid for given multi-indices.
-        Points for every axis k are calculated as x = cos(i[k]*pi/(n[k]-1)),
-        where n[k] is a total number of points for selected axis k,
-        then these points are scaled according to the interpolation limits l.
-
-        INPUT:
-
-        I - multi index for the grid points
-        type: ndarray (or list) [dimensions, number of points] of int
-
-        OUTPUT:
-
-        X - grid points
-        type: ndarray [dimensions, number of points] of float
-        '''
-
-        if not isinstance(I, np.ndarray): I = np.array(I)
-
-        n = np.repeat(self.n.reshape((-1, 1)), I.shape[1], axis=1)
-        t = np.cos(np.pi * I / (n - 1))
-
-        l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), I.shape[1], axis=1)
-        l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), I.shape[1], axis=1)
-        X = t * (l2 - l1) / 2. + (l2 + l1) / 2.
-
-        return X
-
-    def grid(self, is_ind=False):
-        '''
-        Get all points of flatten multidimensional Chebyshev grid
-        (from max to min value with Fortran ordering).
-
-        INPUT:
-
-        is_ind - flag:
-            True  - indices of points will be returned
-            False - spatial grid points will be returned
-        type: bool
-
-        OUTPUT:
-
-        I - (if is_ind == True) indices of grid points
-        type: ndarray [dimensions, n1 * n2 * ... * nd] of int
-
-        X - (if is_ind == False) grid points
-        type: ndarray [dimensions, n1 * n2 * ... * nd] of float
-
-        TODO! Check np.arange generation as list.
-        '''
-
-        I = [np.arange(self.n[d]).reshape(1, -1) for d in range(self.d)]
-        I = np.meshgrid(*I, indexing='ij')
-        I = np.array(I).reshape((self.d, -1), order='F')
-
-        return I if is_ind else self.pois(I)
 
     def dif1(self):
         '''
@@ -513,62 +450,6 @@ class Intertrain(object):
         l_min, l_max = self.l[0, 0], self.l[0, 1]
         self.D1, self.D2 = Intertrain.chdiv(self.n[0], 2, l_min, l_max)
         return self.D2
-
-    @staticmethod
-    def polynomials(X, m, l=None):
-        '''
-        Calculate Chebyshev polynomials of order 0, 1, ..., m in given X points.
-
-        INPUT:
-
-        X - values of x variable
-        type: ndarray (or list) [dimensions, number of points] of float
-        * In case of 1D, it may be ndarray (or list) [number of points].
-        * In case of only one point in 1D, it may be float.
-
-        m - max order of polynomial (function will calculate for 0, 1, ..., m)
-        type: int, >= 0
-
-        l - min-max values of variable for each dimension
-        type: ndarray (or list) [dimensions, 2] of float
-        * Default limits are [-1, 1]; if l is given, then X values
-        * will be scaled from l-limits to [-1, 1] limits.
-
-        OUTPUT:
-
-        T - Chebyshev polynomials of order 0, 1, ..., m in given points
-        type: ndarray [m+1, *X.shape] of float
-        * If X is float, it will be ndarray [m+1].
-        '''
-
-        if not isinstance(X, np.ndarray): X = np.array(X)
-
-        if l is not None:
-            if not isinstance(l, np.ndarray): l = np.array(l)
-
-            if len(X.shape) > 1:
-                l1 = np.repeat(l[:, 0].reshape((-1, 1)), X.shape[-1], axis=1)
-                l2 = np.repeat(l[:, 1].reshape((-1, 1)), X.shape[-1], axis=1)
-            elif len(X.shape) == 1:
-                l1 = np.repeat(l[0, 0], X.shape[0], axis=0)
-                l2 = np.repeat(l[0, 1], X.shape[0], axis=0)
-            else:
-                l1 = l[0, 0]
-                l2 = l[0, 1]
-
-            X = (2. * X - l2 - l1) * 1. / (l2 - l1)
-
-        if len(X.shape):
-            T = np.ones([m + 1] + list(X.shape))
-        else:
-            T = np.ones([m + 1, 1])
-
-        if m > 0:
-            T[1, ] = X.copy()
-            for k in range(2, m + 1):
-                T[k, ] = 2. * X * T[k - 1, ] - T[k - 2, ]
-
-        return T if len(X.shape) else T.reshape(-1)
 
     @staticmethod
     def interpolate(Y):
