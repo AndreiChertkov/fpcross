@@ -158,6 +158,24 @@ class Grid(object):
 
         return X
 
+    def rand(self, n):
+        '''
+        Generate random points inside the grid.
+        * Uniform distribution is used.
+
+        INPUT:
+
+        n - total number of points
+        type: int, > 0
+        '''
+
+        n = int(n)
+        if n < 0: raise ValueError('Invalid number of points (n).')
+
+        l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), n, axis=1)
+        l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), n, axis=1)
+        return l1 + np.random.random((self.d, n)) * (l2 - l1)
+
     def info(self, is_print=True):
         '''
         Present info about the grid.
@@ -199,17 +217,22 @@ class Grid(object):
         else:
             return s
 
-    def plot(self, I=None):
+    def plot(self, I=None, n=None):
         '''
-        Plot the full grid or some grid points.
+        Plot the full grid or some grid points or some random points.
         * Only 2-dimensional case is supported.
 
         I - indices of grid points for plot
         * See description in Grid.comp function.
+
+        n - total number of points
+        * See description in Grid.rand function.
+        * If is set, then random points are used.
+
         '''
 
         if self.d == 2:
-            X = self.comp(I)
+            X = self.rand(n) if n is not None else self.comp(I)
             for k in range(X.shape[1]):
                 x = X[:, k]
                 plt.scatter(x[0], x[1])

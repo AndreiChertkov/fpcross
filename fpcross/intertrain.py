@@ -3,6 +3,7 @@ import time
 import numpy as np
 import scipy as sp
 from scipy.linalg import toeplitz as _toeplitz
+
 import tt
 from tt.cross.rectcross import cross as _cross
 
