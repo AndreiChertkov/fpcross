@@ -6,4 +6,4 @@ from .grid import Grid
 from .func import Func
 from .solver import Solver
 from .solvers_check import SolversCheck
-from .models import Model
+from .models import ModelBase, Model

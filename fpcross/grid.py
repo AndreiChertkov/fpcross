@@ -77,6 +77,7 @@ class Grid(object):
         self.d = d
         self.n = n
         self.l = l
+        self.h = (self.l[0, 1] - self.l[0, 0]) / (self.n[0] - 1)
         self.kind = kind
 
     def copy(self):

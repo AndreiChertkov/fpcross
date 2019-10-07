@@ -85,20 +85,167 @@ class Solver(object):
 
         self.FN = Func(self.XG, eps=self.eps, with_tt=self.with_tt)
 
-        t_hst = 10 # TODO! Set as parameter
-        self.t_hst = int(self.TG.n[0] * 1. / t_hst) if t_hst else 0
-
-        self.init()
-
-    def init(self):
+    def set_model(self, model):
         '''
-        Init the main parameters of the class instance.
+        Set functions and coefficients from existing model for equation
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x).
 
-        OUTPUT:
+        See also functions set_funcs and set_coefs.
 
-        self - class instance
-        type: fpcross.Solver
+        INPUT:
+
+        model - model for equation with functions and coefficients
+        type: Model
+
+        TODO! Check if we need self.model variable.
         '''
+
+        self.model = model
+
+        d_ = model.dim()                           # d, Number of spatial dims
+        Dc = model.Dc()                            # Dc, diffusion coefficient
+        f0 = model.f0                              # f(x, t)
+        f1 = model.f1                              # d f(x, t) / d x
+        r0 = model.r0                              # r0(x), initial condition
+        rt = model.rt if model.with_rt() else None # r(x, t), analytic solution
+        rs = model.rs if model.with_rs() else None # rs(x), stationary solution
+
+
+        self.set_funcs(f0, f1, r0, rt, rs)
+        self.set_coefs(Dc)
+
+    def set_funcs(self, f0, f1, r0, rt=None, rs=None):
+        '''
+        Set functions for equation
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x),
+        where f0(x, t) is function f, f1(x, t) is its derivative d f / d x,
+        r0(x) is initial condition, rt(x, t) is optional analytic solution
+        and rs(x) is optional stationary solution.
+        Functions input is X of type ndarray [dimensions, number of points].
+        Functions f0 and f1 should return 2D ndarray of the same shape as X.
+        Functions r0, rt and rs should return 1D ndarray of length X.shape[1].
+
+        See also function set_model.
+
+        TODO! Add support for unknown f1 function.
+        '''
+
+        self.func_f0 = f0
+        self.func_f1 = f1
+        self.func_r0 = r0
+        self.func_rt = rt
+        self.func_rs = rs
+
+    def set_coefs(self, Dc=None):
+        '''
+        Set coefficients for equation
+        d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ),
+        r(x,0) = r0(x), r(x, +infinity) = rs(x).
+
+        See also function set_model.
+
+        INPUT:
+
+        Dc - diffusion coefficient
+        type: float
+        default: 1.
+
+        TODO! Replace Dc by matrix.
+        '''
+
+        self.Dc = float(Dc) if Dc is not None else 1.
+
+    def set_grid_t(self, t_poi, t_min=0., t_max=1., t_hst=0):
+        '''
+        Set parameters of the uniform time grid.
+
+        INPUT:
+
+        t_poi - total number of points
+        type: int, >= 2
+        * The min and max values are included.
+        * If it is equal to 2, then the grid will be [t_min, t_max].
+
+        t_min - min value of the time variable
+        type: float, < t_max
+
+        t_max - max value of the time variable
+        type: float, > t_min
+
+        t_hst - total number of points for history
+        type: int, >= 0, <= t_poi
+        * Solution at this points will be saved to history for further analysis.
+        '''
+
+        if t_poi < 2:
+            s = 'Invalid number of time points (should be at least 2).'
+            raise ValueError(s)
+
+        if t_min >= t_max:
+            s = 'Ivalid time limits (min should be less of max).'
+            raise ValueError(s)
+
+        if t_hst > t_poi:
+            s = 'Invalid number of history time points (should be <= t_poi).'
+            raise ValueError(s)
+
+        self.t_poi = int(t_poi)
+        self.t_min = float(t_min)
+        self.t_max = float(t_max)
+        self.t_hst = int(self.t_poi * 1. / t_hst) if t_hst else 0
+
+        self.h = (self.t_max - self.t_min) / (self.t_poi - 1)
+
+    def set_grid_x(self, x_poi, x_min=-3., x_max=3.):
+        '''
+        Set parameters of the spatial grid.
+        Chebyshev spatial grid is used and for each dimension the same number
+        of points and limits are used.
+
+        INPUT:
+
+        x_poi - total number of points for each dimension
+        type: int, >= 2
+        * The min and max values are included.
+        * If it is equal to 2, then the grid will be [x_max, x_min]^d.
+
+        x_min - min value of the spatial variable for each dimension
+        type: float, < x_max
+
+        x_max - max value of the spatial variable for each dimension
+        type: float, > x_min
+
+        TODO! Add support for "rectangular" grid.
+        '''
+
+        if x_poi < 2:
+            s = 'Invalid number of spatial points (should be at least 2).'
+            raise ValueError(s)
+
+        if x_min >= x_max:
+            s = 'Ivalid spatial limits (min should be less of max).'
+            raise ValueError(s)
+
+        self.x_poi = int(x_poi)
+        self.x_min = float(x_min)
+        self.x_max = float(x_max)
+
+        n_ = np.ones(self.XG.d, dtype='int') * self.x_poi
+        l_ = np.repeat(np.array([[self.x_min, self.x_max]]), self.XG.d, axis=0)
+        self.FN = Func(XG, eps=self.eps, with_tt=self.with_tt)
+
+    def prep(self):
+        '''
+        Init calculation parameters and prepare special matrices.
+
+        TODO! Check usage of J matrix.
+        '''
+
+        _t = time.time()
+
+        self.is_prep = False
 
         self.hst = {      # Saved (history) values
             'T': [],      # time moments
@@ -112,38 +259,27 @@ class Solver(object):
             'spec': 0.,   # special operations (like error computation)
         }
 
-        return self
 
-    def prep(self):
-        '''
-        Prepare special matrices.
+        if not self._init_check():
+            s = 'Equation is not inited. Can not prepare.'
+            raise ValueError(s)
 
-        OUTPUT:
+        self.t = self.t_min             # Current value of time variable
 
-        self - class instance
-        type: fpcross.Solver
+        self.D0 = self.IT.dif2().copy() # Chebyshev diff. matrix d2 / dx2
+        self.J0 = np.eye(self.x_poi)
+        self.J0[+0, +0] = 0.
+        self.J0[-1, -1] = 0.
+        self.h0 = self.h if self.ord == 1 else self.h / 2.
+        self.Z0 = sp_expm(self.h0 * self.Dc * self.J0 @ self.D0)
 
-        TODO! Check usage of J matrix.
-        '''
-
-        _t = time.time()
-
-        D0 = self.FN.dif2().copy()
-        J0 = np.eye(self.XG.n[0])
-        J0[+0, +0] = 0.
-        J0[-1, -1] = 0.
-        h0 = self.TG.h if self.ord == 1 else self.TG.h / 2.
-        Z0 = sp_expm(h0 * self.MD.Dc() * J0 @ D0)
-
-        self.Z0 = Z0
         if not self.with_tt:
-            self.Z = Z0.copy()
-            for _ in range(self.XG.d - 1): self.Z = np.kron(self.Z, Z0)
-
-        self.t = self.t_min
+            self.Z = self.Z0.copy()
+            for _ in range(1, self.XG.d): self.Z = np.kron(self.Z, self.Z0)
 
         self.tms['prep'] = time.time() - _t
-        return self
+
+        self.is_prep = True
 
     def calc(self, with_print=True):
         '''
@@ -155,12 +291,11 @@ class Solver(object):
             True  - intermediate calculation results will be printed
             False - results will not be printed
         type: bool
-
-        OUTPUT:
-
-        self - class instance
-        type: fpcross.Solver
         '''
+
+        if not self.is_prep:
+            s = 'Equation is not prepared. Can not calculate.'
+            raise ValueError(s)
 
         d, u, t, c = 'Solve', 'step', self.t_poi - 1, 80
         if with_print: _tqdm = tqdm(desc=d, unit=u, total=t, ncols=c)
@@ -194,21 +329,20 @@ class Solver(object):
 
         _t = time.time()
 
-        self.FN.prep()
+        self.IT.prep()
 
         for n in ['T', 'R', 'E_real', 'E_stat']:
             self.hst[n] = np.array(self.hst[n])
 
         self.tms['spec']+= time.time() - _t
-        return self
 
-    def comp(self, X):
+    def comp(self, x):
         '''
         Compute calculated solution at given spatial points x.
 
         INPUT:
 
-        X - values of the spatial variable
+        x - values of the spatial variable
         type: ndarray [dimensions, number of points]
 
         OUTPUT:
@@ -219,16 +353,16 @@ class Solver(object):
         TODO! Add support for one-point input.
         '''
 
-        if self.FN.A is None:
+        if self.IT.A is None:
             s = 'Solution of the equation is not calculated yet. '
             s+= 'Call "prep" and "calc" functions before.'
             raise ValueError(s)
 
-        return self.FN.comp(X)
+        return self.IT.calc(x)
 
     def info(self):
         '''
-        Present information about the last computation.
+        Present info about the last computation.
 
         TODO! Replace prints by string construction.
         '''

@@ -110,7 +110,7 @@ class Func(object):
         OUTPUT:
 
         self - class instance
-        type: Func
+        type: fpcross.Func
 
         TODO! Check case for update with Y0 opt changed to None.
         '''
@@ -165,7 +165,7 @@ class Func(object):
         OUTPUT:
 
         IT - new class instance
-        type: Func
+        type: fpcross.Func
 
         TODO! Add argument with changed opts (eps etc).
         '''
@@ -196,7 +196,7 @@ class Func(object):
         OUTPUT:
 
         self - class instance
-        type: Func
+        type: fpcross.Func
         '''
 
         if self.f is None or self.Y is not None: return self
@@ -275,7 +275,7 @@ class Func(object):
         OUTPUT:
 
         self - class instance
-        type: Func
+        type: fpcross.Func
         '''
 
         if self.Y is None:
