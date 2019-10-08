@@ -103,8 +103,12 @@ class TestGrid(unittest.TestCase):
         l = np.array([[-2, 4], [-5, 7]])
 
         GR = Grid(d, n, l, 'u')
+        np.testing.assert_equal(GR.kind, 'u')
+
         GR = Grid(d, n, l, 'c')
-        GR = Grid(d, n, l, 'xxx')
+        np.testing.assert_equal(GR.kind, 'c')
+
+        self.assertRaises(ValueError, lambda: Grid(d, n, l, 'xxx'))
 
     def test_copy(self):
         d = 3
@@ -138,7 +142,10 @@ class TestGrid(unittest.TestCase):
         )
 
     def test_comp_u(self):
-        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='u')
+        GR = Grid(n=[5, 7], l=[
+            [-4., 3.],
+            [-1., 2.],
+        ], kind='u')
 
         X = GR.comp([0, 0])
         np.testing.assert_almost_equal(
@@ -155,11 +162,17 @@ class TestGrid(unittest.TestCase):
             [0, 6],
         ])
         np.testing.assert_almost_equal(
-            X, np.array([[-4., 3.], [-1., 2.]])
+            X, np.array([
+                [-4., 3.],
+                [-1., 2.],
+            ])
         )
 
     def test_comp_c(self):
-        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='c')
+        GR = Grid(n=[5, 7], l=[
+            [-4., 3.],
+            [-1., 2.],
+        ], kind='c')
 
         X = GR.comp([0, 0])
         np.testing.assert_almost_equal(
@@ -176,7 +189,10 @@ class TestGrid(unittest.TestCase):
             [0, 6],
         ])
         np.testing.assert_almost_equal(
-            X, np.array([[3., -4.], [2., -1.]])
+            X, np.array([
+                [3., -4.],
+                [2., -1.],
+            ])
         )
 
     def test_info(self):
@@ -184,9 +200,31 @@ class TestGrid(unittest.TestCase):
         s = GR.info(is_print=False)
 
         self.assertTrue('Kind             : Chebyshev' in s)
-        self.assertTrue('Dimension        : 2' in s)
+        self.assertTrue('Dimensions       : 2' in s)
         self.assertTrue('Poi 5   | Min -4.000 | Max 3.000  |' in s)
         self.assertTrue('Poi 7   | Min -1.000 | Max 2.000  |' in s)
+
+    def test_mean(self):
+        n = np.array([8, 10])
+        l = np.array([
+            [-4., 3.],
+            [-2., 5.],
+        ])
+        GR = Grid(2, n, l)
+
+        np.testing.assert_equal(GR.n0, 9)
+        np.testing.assert_almost_equal(GR.l0, np.array([-3., 4.]))
+        np.testing.assert_equal(GR.h0, 0.5 * (7./7. + 7./9.))
+
+    def test_square(self):
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]])
+        self.assertFalse(GR.is_square())
+
+        GR = Grid(n=[5, 5], l=[[-4., 2.], [-4., 2.]])
+        self.assertTrue(GR.is_square())
+
+        GR = Grid(d=5, n=6, l=[2., 8.])
+        self.assertTrue(GR.is_square())
 
 if __name__ == '__main__':
     unittest.main()
