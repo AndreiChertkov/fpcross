@@ -24,24 +24,16 @@ class Solver(object):
     format may be used for the solution process.
 
     Basic usage:
-     1 Initialize class instance with dimension, format and accuracy parameters.
-     2 Call "set_funcs" to set functions for FPE and analytic solution if known.
-     3 Call "set_coefs" to set coefficients for FPE.
-     4 Call "set_grid_t" to set the time grid parameters.
-     5 Call "set_grid_x" to set the spatial grid parameters.
-     6 Call "prep" for initialization and construction of the special matrices.
-     7 Call "calc" for calculation process.
-     8 Call "comp" to obtain the final solution at any given spatial point.
-     9 Call "info" for demonstration of the calculation results.
-    10 Call "plot_x" for plot of solution and error at selected time moment.
-    11 Call "plot_t" for plot of solution and error at selected spatial point.
-
-    Notes:
-     - Instead of "set_funcs" and "set_coefs" calls, equation parameters may be
-       provided from an existing model while constructor or "set_model" call.
+    1 Initialize class instance with grids, model, format and accuracy.
+    2 Call "prep" for initialization and construction of the special matrices.
+    3 Call "calc" for calculation process.
+    4 Call "comp" to obtain the final solution at any given spatial point.
+    5 Call "info" for demonstration of the calculation results.
+    6 Call "plot_x" for plot of solution and error at selected time moment.
+    7 Call "plot_t" for plot of solution and error at selected spatial point.
     '''
 
-    def __init__(self, TG, XG, MD, eps=1.E-6, ord=2, with_tt=False):
+    def __init__(self, TG, SG, MD, eps=1.E-6, ord=2, with_tt=False):
         '''
         Init solver parameters.
 
@@ -49,15 +41,19 @@ class Solver(object):
 
         TG - one-dimensional time grid
         type: fpcross.Grid
+        * Only uniform grids are supported in the current version.
 
-        XG - one- or multi-dimensional spatial grid
+        SG - one- or multi-dimensional spatial grid
         type: fpcross.Grid
         * Only "square" grids (each dimension have the same total number of
-        * points and limits) are supported.
+        * points and limits) are supported in the current version.
+        * Only Chebyshev grids are supported in the current version.
 
         MD - model for equation with functions and coefficients
         type1: fpcross.Model
         type2: fpcross.ModelBase
+        * It should be instance of the Model class (type1)
+        * or use ModelBase as the parent class (type2).
 
         eps - desired accuracy of the solution
         type: float, > 0
@@ -77,16 +73,28 @@ class Solver(object):
         '''
 
         self.TG = TG
-        self.XG = XG
+        self.SG = SG
         self.MD = MD
         self.eps = float(eps)
         self.ord = int(ord)
         self.with_tt = bool(with_tt)
 
-        self.FN = Func(self.XG, eps=self.eps, with_tt=self.with_tt)
+        if self.TG.d != 1 or self.TG.kind != 'u':
+            raise ValueError('Invalid time grid (should be 1-dim. uniform).')
+
+        if self.SG.kind != 'c' or not self.SG.is_square():
+            raise ValueError('Invalid spatial grid (should be square Cheb.).')
+
+        if self.eps < 1.E-20:
+            raise ValueError('Invalid accuracy parameter (should be > 1.E-20).')
+
+        if self.ord != 1 and self.ord != 2:
+            raise ValueError('Invalid order parameter (should be 1 or 2).')
+
+        self.FN = Func(self.SG, self.eps, self.with_tt)
 
         t_hst = 10 # TODO! Set as parameter
-        self.t_hst = int(self.TG.n[0] * 1. / t_hst) if t_hst else 0
+        self.t_hst = int(self.TG.n0 * 1. / t_hst) if t_hst else 0
 
         self.init()
 
@@ -129,18 +137,18 @@ class Solver(object):
         _t = time.time()
 
         D0 = self.FN.dif2().copy()
-        J0 = np.eye(self.XG.n[0])
+        J0 = np.eye(self.SG.n0)
         J0[+0, +0] = 0.
         J0[-1, -1] = 0.
-        h0 = self.TG.h if self.ord == 1 else self.TG.h / 2.
+        h0 = self.TG.h0 if self.ord == 1 else self.TG.h0 / 2.
         Z0 = sp_expm(h0 * self.MD.Dc() * J0 @ D0)
 
         self.Z0 = Z0
         if not self.with_tt:
             self.Z = Z0.copy()
-            for _ in range(self.XG.d - 1): self.Z = np.kron(self.Z, Z0)
+            for _ in range(self.SG.d - 1): self.Z = np.kron(self.Z, Z0)
 
-        self.t = self.t_min
+        self.t = self.TG.l0[0] # Current time
 
         self.tms['prep'] = time.time() - _t
         return self
@@ -160,20 +168,25 @@ class Solver(object):
 
         self - class instance
         type: fpcross.Solver
+
+        TODO! Check if initial W0 set is correct.
         '''
 
-        d, u, t, c = 'Solve', 'step', self.t_poi - 1, 80
-        if with_print: _tqdm = tqdm(desc=d, unit=u, total=t, ncols=c)
+        M = self.TG.n0
 
-        self.t = self.t_min
-        self.IT.init(self.func_r0)
+        if with_print:
+            _tqdm = tqdm(desc='Solve', unit='step', total=M-1, ncols=80)
 
-        self.W0 = self.IT.Y.copy() # TODO! Check
+        self.t = self.TG.l0[0]
+        self.FN.init(self.func_r0)
+        self.FN.prep()
 
-        for m in range(1, self.t_poi):
+        self.W0 = self.FN.Y.copy()
+
+        for m in range(1, M):
             _t = time.time()
 
-            self.t = self.t_min + m * self.h
+            self.t+= self.TG.h0
 
             self._step_v()
             self._step_w()
@@ -183,7 +196,7 @@ class Solver(object):
 
             _t = time.time()
 
-            if self.t_hst and (m % self.t_hst == 0 or m == self.t_poi - 1):
+            if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
                 _msg = self._step_check()
                 if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
             if with_print: _tqdm.update(1)
@@ -234,7 +247,7 @@ class Solver(object):
         '''
 
         print('----------- Solver')
-        print('Format    : %1dD, %s [order=%d]'%(self.XG.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
+        print('Format    : %1dD, %s [order=%d]'%(self.SG.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
         print('Grid t    : poi = %9d, min = %9.4f, max = %9.4f'%(self.t_poi, self.t_min, self.t_max))
         print('Grid x    : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
         print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self.tms['prep'], self.tms['calc'],self.tms['spec']))
@@ -297,10 +310,10 @@ class Solver(object):
         fig = plt.figure(figsize=(7, 7))
         ax = fig.add_subplot(111)
 
-        if self.XG.d == 1:
+        if self.SG.d == 1:
             run = _anim_1d(ax)
         else:
-            s = 'Dimension number %d is not supported for animation.'%self.XG.d
+            s = 'Dimension number %d is not supported for animation.'%self.SG.d
             raise NotImplementedError(s)
 
         plt.rcParams['animation.ffmpeg_path'] = ffmpeg_path
@@ -362,7 +375,7 @@ class Solver(object):
         i = -1 if t is None else (np.abs(self.T_hst - t)).argmin()
         t = self.T_hst[i]
         x = self.X_hst
-        xg = x.reshape(-1) if self.XG.d == 1 else np.arange(x.shape[1])
+        xg = x.reshape(-1) if self.SG.d == 1 else np.arange(x.shape[1])
 
         r_init, r_stat, r_real, r_calc = None, None, None, None
         if self.func_r0: r_init = self.func_r0(x)
@@ -414,7 +427,7 @@ class Solver(object):
         if opts.get('is_log'): ax1.semilogy()
         ss = ' (abs.)' if opts.get('is_abs') else ''
         ax1.set_title('%s%s%s'%(sett['title-sol'], ss, st))
-        ss = ' (number)' if self.XG.d > 1 else ' coordinate'
+        ss = ' (number)' if self.SG.d > 1 else ' coordinate'
         ax1.set_xlabel(sett['label-sol'][0] + ss)
         ax1.set_ylabel(sett['label-sol'][1])
         ax1.legend(loc='best')
@@ -436,7 +449,7 @@ class Solver(object):
             ax2.semilogy()
             ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
             ax2.set_title('%s%s%s'%(sett['title-err'], ss, st))
-            ss = ' (number)' if self.XG.d > 1 else ' coordinate'
+            ss = ' (number)' if self.SG.d > 1 else ' coordinate'
             ax1.set_xlabel(sett['label-err'][0] + ss)
             ax2.set_ylabel(sett['label-err'][1])
             ax2.legend(loc='best')
@@ -523,7 +536,7 @@ class Solver(object):
 
         if isinstance(x, (int, float)): x = np.array([float(x)])
         if isinstance(x, list): x = np.array(x)
-        if not isinstance(x, np.ndarray) or x.shape[0] != self.XG.d:
+        if not isinstance(x, np.ndarray) or x.shape[0] != self.SG.d:
             s = 'Invalid spatial point.'
             raise ValueError(s)
 
@@ -560,7 +573,7 @@ class Solver(object):
         sx = ', '.join(['%8.1e'%x_ for x_ in list(x.reshape(-1))])
         print('--- Solution at spatial point')
         print('X = [%s]'%sx)
-        sx = ' at x = [%s]'%sx if self.XG.d < 4 else ''
+        sx = ' at x = [%s]'%sx if self.SG.d < 4 else ''
 
         fig = plt.figure(**conf['fig'][sett['fig']])
         grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
@@ -634,50 +647,6 @@ class Solver(object):
 
         plt.show()
 
-    def _init_check(self):
-        '''
-        Check if all required equation parameters are set.
-
-        OUTPUT:
-
-        is_inited - result of check
-        type: bool
-        * If is False, then error will be raised.
-
-        TODO! Add correct check to functions.
-        TODO! Add more checks.
-        '''
-
-        return True # TODO! Remove.
-
-        if not isinstance(self.func_f0, types.FunctionType):
-            s = 'Function f(x, t) for FPE is not set.'
-            raise ValueError(s)
-
-        if not isinstance(self.func_f1, types.FunctionType):
-            s = 'Function d f(x, t) / d x for FPE is not set.'
-            raise ValueError(s)
-
-        if not isinstance(self.func_r0, types.FunctionType):
-            s = 'Initial condition r0(x) is not set.'
-            raise ValueError(s)
-
-        if self.func_rt is not None:
-            if not isinstance(self.func_rt, types.FunctionType):
-                s = 'Invalid analytic real solution r(x, t).'
-                raise ValueError(s)
-
-        if self.func_rs is not None:
-            if not isinstance(self.func_rs, types.FunctionType):
-                s = 'Invalid analytic stationary solution rs(x).'
-                raise ValueError(s)
-
-        if self.Dc is None:
-            s = 'Diffusion coefficient is not set.'
-            raise ValueError(s)
-
-        return True
-
     def _step_check(self):
         '''
         Check result of the current calculation step.
@@ -738,7 +707,7 @@ class Solver(object):
 
         if self.with_tt:
             G = tt.tensor.to_list(v0)
-            for i in range(self.XG.d):
+            for i in range(self.SG.d):
                 G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
             v = tt.tensor.from_list(G)
             v = v.round(self.eps)
@@ -839,7 +808,7 @@ class Solver(object):
         '''
 
         if isinstance(x, list): x = np.array(x)
-        if not isinstance(x, np.ndarray) or x.shape[0] != self.XG.d:
+        if not isinstance(x, np.ndarray) or x.shape[0] != self.SG.d:
             s = 'Invalid spatial point.'
             raise ValueError(s)
 
@@ -875,20 +844,20 @@ class Solver(object):
         r = r.reshape(-1, order='F')
 
         rhs = 0.
-        for k in range(self.XG.d):
-            M = [np.eye(self.x_poi) for _ in range(self.XG.d)]
+        for k in range(self.SG.d):
+            M = [np.eye(self.x_poi) for _ in range(self.SG.d)]
 
-            M[self.XG.d-1-k] = D1.copy(); _D1 = M[0].copy()
-            for k_ in range(1, self.XG.d): _D1 = np.kron(_D1, M[k_])
+            M[self.SG.d-1-k] = D1.copy(); _D1 = M[0].copy()
+            for k_ in range(1, self.SG.d): _D1 = np.kron(_D1, M[k_])
 
-            M[self.XG.d-1-k] = D2.copy(); _D2 = M[0].copy()
-            for k_ in range(1, self.XG.d): _D2 = np.kron(_D2, M[k_])
+            M[self.SG.d-1-k] = D2.copy(); _D2 = M[0].copy()
+            for k_ in range(1, self.SG.d): _D2 = np.kron(_D2, M[k_])
 
             rhs-= _D1 @ (r * f[k, :])
             rhs+= _D2 @ (r * self.Dc)
 
         J0 = np.eye(self.x_poi); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
-        for _ in range(1, self.XG.d): J = np.kron(J, J0)
+        for _ in range(1, self.SG.d): J = np.kron(J, J0)
 
         return np.linalg.norm(rhs) / np.linalg.norm(r)
 
