@@ -1,5 +1,5 @@
 from .config import config
-from .utils import ij, func_check
+from .utils import ij
 from .polynomial import polynomials_cheb
 from .dif import dif_cheb
 from .grid import Grid
