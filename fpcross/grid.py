@@ -5,6 +5,35 @@ class Grid(object):
     '''
     Class for representation and construction of the
     uniform or Chebyshev multidimensional grid.
+
+    PROPS:
+
+    d - dimension of the grid
+    type: int, >= 1
+
+    n - total number of points for each dimension
+    type: ndarray [dimensions] of int, >= 2
+
+    l - min-max values of variable for each dimension
+    type: ndarray [dimensions, 2] of float, [:, 0] < [:, 1]
+
+    h - grid steps (assuming uniformity) for each dimension
+    type: ndarray [dimensions] of float, > 0
+
+    kind - kind of the grid.
+    type: str
+    enum:
+        - 'u' - uniform
+        - 'c' - chebyshev
+
+    n0 - average number of grid points
+    type: int, >= 2
+
+    l0 - average grid limits (min and max)
+    type: ndarray [2] of float, l0[0] < l0[1]
+
+    h0 - average grid step (assuming uniformity)
+    type: float, > 0
     '''
 
     def __init__(self, d=None, n=2, l=[-1., 1.], kind='c'):
@@ -31,9 +60,8 @@ class Grid(object):
         type2: ndarray [2] of float, [0] < [1]
         type3: list [dimensions, 2] of float, [:, 0] < [:, 1]
         type4: ndarray [dimensions, 2] of float, [:, 0] < [:, 1]
-        * Note that [:, 0] (or [0]) are min
-        * and [:, 1] (or [1]) are max values for each dimension.
-        * If it is 1D list or array (type1 or type2),
+        * Note that [:, 0] (or [0]) are min and [:, 1] (or [1]) are max
+        * values for each dimension. If it is 1D list or array (type1 or type2),
         * then the same values will be used for each dimension.
 
         kind - kind of the grid.
@@ -59,7 +87,7 @@ class Grid(object):
         if isinstance(n, (int, float)):
             n = [int(n)] * d
         if isinstance(n, list):
-            n = np.array(n)
+            n = np.array(n, dtype='int')
         if not isinstance(n, np.ndarray) or len(n.shape) != 1:
             raise ValueError('Invalid type for number of points (n).')
         if n.shape[0] != d:
@@ -89,9 +117,9 @@ class Grid(object):
         self.h = (self.l[:, 1] - self.l[:, 0]) / (self.n - 1)
         self.kind = kind
 
-        self.n0 = int(np.mean(self.n))
+        self.n0 = int(np.mean(self.n, axis=0))
         self.l0 = np.mean(self.l, axis=0)
-        self.h0 = float(np.mean(self.h))
+        self.h0 = float(np.mean(self.h, axis=0))
 
     def copy(self):
         '''
@@ -120,12 +148,14 @@ class Grid(object):
         type2: int
         type3: list [number of points] of int
         type4: ndarray [number of points] of int
-        type5: list [dimensions, number of points] of int
-        type6: ndarray [dimensions, number of points] of int
+        type5: list [dimensions] of int
+        type6: ndarray [dimensions] of int
+        type7: list [dimensions, number of points] of int
+        type8: ndarray [dimensions, number of points] of int
         * If is None (type1), then the full grid will be constructed.
         * Type2 is available only for 1D case and for only one point.
-        * Type3 and type4 are available only for 1D case or for only one point
-        * in the multidimensional case.
+        * Type3 and type4 are available only for 1D case.
+        * Type5 and type6 - for only one point in the multidimensional case.
 
         is_ind - flag:
             True  - indices of points will be returned
@@ -145,6 +175,7 @@ class Grid(object):
             I = [np.arange(self.n[d]).reshape(1, -1) for d in range(self.d)]
             I = np.meshgrid(*I, indexing='ij')
             I = np.array(I).reshape((self.d, -1), order='F')
+
         if isinstance(I, (int, float)):
             I = [int(I)]
         if isinstance(I, list):
@@ -157,35 +188,38 @@ class Grid(object):
             I = I.reshape(1, -1)
         if I.shape[0] != self.d:
             raise ValueError('Invalid dimension for grid points.')
+
         if is_ind:
             return I
 
-        n0 = np.repeat(self.n.reshape((-1, 1)), I.shape[1], axis=1)
+        n_ = np.repeat(self.n.reshape((-1, 1)), I.shape[1], axis=1)
         l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), I.shape[1], axis=1)
         l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), I.shape[1], axis=1)
 
         if self.kind == 'u':
-            t = I * 1. / (n0 - 1)
+            t = I * 1. / (n_ - 1)
             X = t * (l2 - l1) + l1
         if self.kind == 'c':
-            t = np.cos(np.pi * I / (n0 - 1))
+            t = np.cos(np.pi * I / (n_ - 1))
             X = t * (l2 - l1) / 2. + (l2 + l1) / 2.
 
         return X
 
     def rand(self, n):
         '''
-        Generate random points inside the grid.
+        Generate random points inside the grid limits.
         * Uniform distribution is used.
 
         INPUT:
 
         n - total number of points
         type: int, > 0
+
+        TODO Maybe change function name (it sounds like random grid points).
         '''
 
         n = int(n)
-        if n < 0: raise ValueError('Invalid number of points (n).')
+        if n <= 0: raise ValueError('Invalid number of points.')
 
         l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), n, axis=1)
         l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), n, axis=1)
@@ -206,8 +240,6 @@ class Grid(object):
 
         s - (if is_print == False) string with info
         type: str
-
-        TODO! Cut lim info if too many dimensions?
         '''
 
         s = '------------------ Grid\n'
@@ -227,17 +259,18 @@ class Grid(object):
         if not self.is_square():
             for i, [n, l] in enumerate(zip(self.n, self.l)):
                 if i >= 5 and i < self.d - 5:
-                    if i == 5: s+= ' ...             : ...\n'
+                    if i == 5:
+                        s+= ' ...             : ...\n'
                     continue
                 s+= 'Dim. # %-2d        : '%(i+1)
                 s+= 'Poi %-3d | '%n
                 s+= 'Min %-6.3f | '%l[0]
                 s+= 'Max %-6.3f |\n'%l[1]
 
-        s+='------------------\n'
-
+        if not s.endswith('\n'):
+            s+= '\n'
         if is_print:
-            print(s)
+            print(s[:-1])
         else:
             return s
 
@@ -268,21 +301,30 @@ class Grid(object):
         else:
             raise NotImplementedError('Invalid dimension for plot.')
 
-    def is_square(self):
+    def is_square(self, eps=1.E-20):
         '''
         Check if grid is square (all dimensions are equal in terms of
         numbers of grid points and limits).
+
+        INPUT:
+
+        eps - accuracy of check
+        type: float, > 0
 
         OUTPUT:
 
         res - True if grid is square and False otherwise
         type: bool
+
+        TODO Maybe replace this function by the corresponding variable
+             (in this case we need to be sure that the parameters n and l
+             do not change externally).
         '''
 
         n0 = self.n0
-        if np.linalg.norm(self.n - n0) > 1.E-16: return False
+        if np.linalg.norm(self.n - n0) > eps: return False
 
         l0 = np.repeat(self.l0.reshape((1, -1)), self.d, axis=0)
-        if np.linalg.norm(self.l - l0) > 1.E-16: return False
+        if np.linalg.norm(self.l - l0) > eps: return False
 
         return True
