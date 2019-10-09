@@ -6,6 +6,17 @@ class Grid(object):
     Class for representation and construction of the
     uniform or Chebyshev multidimensional grid.
 
+    Basic usage:
+    1 Initialize class instance with grid parameters.
+    2 Call "comp" for computation in given indices (or the full grid).
+    3 Call "info" for demonstration of grid parameters.
+    4 Call "copy" to obtain new instance with the same parameters.
+
+    Advanced usage:
+    - Call "rand" to obtain random points inside the grid limits.
+    - Call "plot" for plot of some or all grid points (or random points).
+    - Call "is_square" to check if grid is square.
+
     PROPS:
 
     d - dimension of the grid
@@ -215,7 +226,7 @@ class Grid(object):
         n - total number of points
         type: int, > 0
 
-        TODO Maybe change function name (it sounds like random grid points).
+        TODO: Maybe change function name (it sounds like random grid points).
         '''
 
         n = int(n)
@@ -316,9 +327,9 @@ class Grid(object):
         res - True if grid is square and False otherwise
         type: bool
 
-        TODO Maybe replace this function by the corresponding variable
-             (in this case we need to be sure that the parameters n and l
-             do not change externally).
+        TODO: Maybe replace this function by the corresponding variable
+              (in this case we need to be sure that the parameters n and l
+              do not change externally).
         '''
 
         n0 = self.n0
