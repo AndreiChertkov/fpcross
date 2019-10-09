@@ -6,7 +6,6 @@ import tt
 from tt.cross.rectcross import cross
 
 from . import polynomials_cheb
-from . import dif_cheb
 
 class Func(object):
     '''
@@ -16,34 +15,35 @@ class Func(object):
     using Fast Fourier Transform (FFT).
 
     Basic usage:
-    1 Initialize class instance with grid and accuracy parameters.
+    1 Initialize class instance with grid, format and accuracy parameters.
     2 Call "init" with function of interest and interpolation options.
     3 Call "prep" for construction of the function on the spatial grid.
-    3 Call "calc" for interpolation process.
-    4 Call "comp" for approximation of function values on given points.
+    4 Call "calc" for interpolation process.
+    5 Call "comp" for approximation of function values on any given points.
     6 Call "info" for demonstration of calculation results.
+    7 Call "copy" to obtain new instance with the same parameters and results.
 
     Advanced usage:
-    - Call "dif1" for the 1th order differentiation matrix on Chebyshev grid.
-    - Call "dif2" for the 2th order differentiation matrix on Chebyshev grid.
-    - Call "copy" to obtain new instance with the same parameters and results.
     - Call "test" to obtain interpolation accuracy for set of random points.
+
+    PROPS:
+
+    Y
+
+    A
     '''
 
-    def __init__(self, GR, eps=1.E-6, log_path='./tmp.txt', with_tt=True):
+    def __init__(self, SG, eps=1.E-6, with_tt=True):
         '''
         INPUT:
 
-        GR - spatial grid for function interpolation
+        SG - one- or multi-dimensional spatial grid for function interpolation
         type: fpcross.Grid
+        * Only Chebyshev grids are supported in the current version.
 
         eps - is the desired accuracy of the approximation
         type: float, > 0
         * Is used in tt-round and tt-cross approximation operations.
-
-        log_path - file for output of the computation info
-        type: str
-        * In the current version it is used only for cross approximation output.
 
         with_tt - flag:
             True  - sparse (tensor train, TT) format will be used
@@ -51,10 +51,15 @@ class Func(object):
         type: bool
         '''
 
-        self.GR = GR
-        self.eps = eps
-        self.log_path = log_path
-        self.with_tt = with_tt
+        self.SG = SG
+        self.eps = float(eps)
+        self.with_tt = bool(with_tt)
+
+        if self.SG.kind != 'c':
+            raise ValueError('Invalid spatial grid (should be Chebyshev).')
+
+        if self.eps < 1.E-20:
+            raise ValueError('Invalid accuracy parameter (should be > 1.E-20).')
 
         self.opts = {}
         self.init()
@@ -65,7 +70,7 @@ class Func(object):
 
         INPUT:
 
-        f - function that calculate tensor elements for given points
+        f - function that calculate tensor elements for given spatial points
         type: function
             inp:
                 X - points for calculation
@@ -78,15 +83,15 @@ class Func(object):
                 type: ndarray [number of points] of float
 
         Y - tensor of function values on nodes of the Chebyshev grid
-        type1: ndarray [*n] of float
-        type2: TT-tensor [*n] of float
+        type1: ndarray [*(numbers of points)] of float
+        type2: TT-tensor [*(numbers of points)] of float
         * Should be in the TT-format (type2) if self.with_tt flag is set.
         * If is set, then function f will not be used for train data collection,
         * but may be used in self.test for check of the interpolation result.
 
         opts - dictionary with optional parameters
         type: dict
-        fld:is_f_with_i - flag:
+        fld: is_f_with_i - flag:
                 True  - while function call the second argument with points
                         indices will be provided
                 False - only points will be provided
@@ -107,20 +112,12 @@ class Func(object):
         * Only provided fields will be used. Values of the missed fields will
         * not be changed and will be the same as after the previous call.
 
-        OUTPUT:
-
-        self - class instance
-        type: fpcross.Func
-
-        TODO! Check case for update with Y0 opt changed to None.
+        TODO: Check case for update with Y0 opt changed to None.
         '''
 
         self.f = f
         self.Y = Y
         self.A = None
-
-        self.D1 = None
-        self.D2 = None
 
         self.tms = {      # Saved times (durations)
             'prep': 0.,   # training data collection
@@ -149,8 +146,6 @@ class Func(object):
         set_opt('rf', 2)
         set_opt('Y0', None)
 
-        return self
-
     def copy(self, is_full=True):
         '''
         Create a copy of the class instance.
@@ -164,42 +159,34 @@ class Func(object):
 
         OUTPUT:
 
-        IT - new class instance
+        FN - new class instance
         type: fpcross.Func
 
-        TODO! Add argument with changed opts (eps etc).
+        TODO: Add argument with changed opts (eps etc) ?
         '''
 
-        IT = Func(self.GR.copy(), self.eps, self.log_path, self.with_tt)
+        FN = Func(self.SG.copy(), self.eps, self.with_tt)
 
-        if not is_full: return IT
+        if not is_full: return FN
 
-        IT.f = self.f
-        IT.Y = self.Y.copy() if self.Y is not None else None
-        IT.A = self.A.copy() if self.A is not None else None
+        FN.f = self.f
+        FN.Y = self.Y.copy() if self.Y is not None else None
+        FN.A = self.A.copy() if self.A is not None else None
 
-        IT.D1 = self.D1.copy() if self.D1 is not None else None
-        IT.D2 = self.D2.copy() if self.D2 is not None else None
+        FN.tms = self.tms.copy()
+        FN.res = self.res.copy() if self.res is not None else None
+        FN.err = self.err.copy() if self.err is not None else None
 
-        IT.tms = self.tms.copy()
-        IT.res = self.res.copy() if self.res is not None else None
-        IT.err = self.err.copy() if self.err is not None else None
+        FN.opts = self.opts.copy()
 
-        IT.opts = self.opts.copy()
-
-        return IT
+        return FN
 
     def prep(self):
         '''
         Construct function values on the spatial grid.
-
-        OUTPUT:
-
-        self - class instance
-        type: fpcross.Func
         '''
 
-        if self.f is None or self.Y is not None: return self
+        if self.f is None or self.Y is not None: return
 
         self.tms['prep'] = time.time()
 
@@ -208,7 +195,7 @@ class Func(object):
 
             def func(ind):
                 ind = ind.astype(int)
-                X = self.GR.comp(ind.T)
+                X = self.SG.comp(ind.T)
                 t = time.time()
                 Y = self.f(X, ind.T) if self.opts['is_f_with_i'] else self.f(X)
                 self.res['t_func']+= time.time() - t
@@ -216,17 +203,17 @@ class Func(object):
                 return Y
 
             if self.opts['Y0'] is None:
-                Z = tt.rand(self.GR.n, self.GR.n.shape[0], 1)
+                Z = tt.rand(self.SG.n, self.SG.n.shape[0], 1)
             else:
                 Z = self.opts['Y0'].copy()
 
                 rmax = None
-                for n_, r_ in zip(self.GR.n, Z.r[1:]):
+                for n_, r_ in zip(self.SG.n, Z.r[1:]):
                     if r_ > n_ and (rmax is None or rmax > n_): rmax = n_
                 if rmax is not None: Z = Z.round(rmax=rmax)
 
             try:
-                log = open(self.log_path, 'w')
+                log = open('./tmp.txt', 'w')
                 stdout0 = sys.stdout
                 sys.stdout = log
 
@@ -238,7 +225,7 @@ class Func(object):
                 log.close()
                 sys.stdout = stdout0
 
-            log = open(self.log_path, 'r')
+            log = open('./tmp.txt', 'r')
             res = log.readlines()[-1].split('swp: ')[1]
             self.res['iters'] = int(res.split('/')[0])+1
             res = res.split('er_rel = ')[1]
@@ -254,28 +241,21 @@ class Func(object):
         else:
             self.tms['func'] = time.time()
 
-            X = self.GR.comp()
+            X = self.SG.comp()
             if self.opts['is_f_with_i']:
-                I = self.GR.comp(is_ind=True)
+                I = self.SG.comp(is_ind=True)
                 self.Y = self.f(X, I)
             else:
                 self.Y = self.f(X)
-            self.Y = self.Y.reshape(self.GR.n, order='F')
+            self.Y = self.Y.reshape(self.SG.n, order='F')
 
             self.tms['func'] = (time.time() - self.tms['func']) / X.shape[1]
 
         self.tms['prep'] = time.time() - self.tms['prep']
 
-        return self
-
     def calc(self):
         '''
         Build tensor of interpolation coefficients according to training data.
-
-        OUTPUT:
-
-        self - class instance
-        type: fpcross.Func
         '''
 
         if self.Y is None:
@@ -287,11 +267,11 @@ class Func(object):
         if self.with_tt:
             G = tt.tensor.to_list(self.Y)
 
-            for i in range(self.GR.d):
+            for i in range(self.SG.d):
                 G_sh = G[i].shape
                 G[i] = np.swapaxes(G[i], 0, 1)
                 G[i] = G[i].reshape((G_sh[1], -1))
-                G[i] = Func.interpolate(G[i])
+                G[i] = Func.interpolate_cheb(G[i])
                 G[i] = G[i].reshape((G_sh[1], G_sh[0], G_sh[2]))
                 G[i] = np.swapaxes(G[i], 0, 1)
 
@@ -300,17 +280,15 @@ class Func(object):
         else:
             self.A = self.Y.copy()
 
-            for i in range(self.GR.d):
-                n_ = self.GR.n.copy(); n_[[0, i]] = n_[[i, 0]]
+            for i in range(self.SG.d):
+                n_ = self.SG.n.copy(); n_[[0, i]] = n_[[i, 0]]
                 self.A = np.swapaxes(self.A, 0, i)
-                self.A = self.A.reshape((self.GR.n[i], -1), order='F')
-                self.A = Func.interpolate(self.A)
+                self.A = self.A.reshape((self.SG.n[i], -1), order='F')
+                self.A = Func.interpolate_cheb(self.A)
                 self.A = self.A.reshape(n_, order='F')
                 self.A = np.swapaxes(self.A, 0, i)
 
         self.tms['calc'] = time.time() - self.tms['calc']
-
-        return self
 
     def comp(self, X, z=0.):
         '''
@@ -331,8 +309,8 @@ class Func(object):
         Y - approximated values of the function in given points
         type: ndarray [number of points] of float
 
-        TODO! Vectorize calculations for points vector if possible.
-        TODO! Add more accurate check for outer points if possible.
+        TODO: Vectorize calculations for points vector if possible.
+        TODO: Add more accurate check for outer points if possible.
         '''
 
         if self.A is None:
@@ -342,16 +320,16 @@ class Func(object):
         if not isinstance(X, np.ndarray): X = np.array(X)
 
         def is_out(j):
-            for i in range(self.GR.d):
-                if X[i, j] < self.GR.l[i, 0]: return True
-                if X[i, j] > self.GR.l[i, 1]: return True
+            for i in range(self.SG.d):
+                if X[i, j] < self.SG.l[i, 0]: return True
+                if X[i, j] > self.SG.l[i, 1]: return True
             return False
 
         self.tms['comp'] = time.time()
 
         Y = np.ones(X.shape[1]) * z
-        m = np.max(self.GR.n) - 1
-        T = polynomials_cheb(X, m, self.GR.l)
+        m = np.max(self.SG.n) - 1
+        T = polynomials_cheb(X, m, self.SG.l)
 
         if self.with_tt:
             G = tt.tensor.to_list(self.A)
@@ -359,9 +337,9 @@ class Func(object):
             for j in range(X.shape[1]):
                 if is_out(j): continue
 
-                Q = np.einsum('riq,i->rq', G[0], T[:self.GR.n[0], 0, j])
+                Q = np.einsum('riq,i->rq', G[0], T[:self.SG.n[0], 0, j])
                 for i in range(1, X.shape[0]):
-                    Q = Q @ np.einsum('riq,i->rq', G[i], T[:self.GR.n[i], i, j])
+                    Q = Q @ np.einsum('riq,i->rq', G[i], T[:self.SG.n[i], i, j])
 
                 Y[j] = Q[0, 0]
         else:
@@ -378,7 +356,7 @@ class Func(object):
 
         return Y
 
-    def info(self, n_test=None):
+    def info(self, n_test=None, is_print=True):
         '''
         Present info about interpolation result, including error check.
 
@@ -391,44 +369,57 @@ class Func(object):
         * ready, then interpolation result will be checked on a set
         * of random points from the uniform distribution with proper limits.
 
-        TODO! Cut lim info if too many dimensions?
-        TODO! Replace prints by string construction.
+        is_print - flag:
+            True  - print string info
+            False - return string info
+        type: bool
+
+        OUTPUT:
+
+        s - (if is_print == False) string with info
+        type: str
         '''
 
         if self.A is not None and self.f is not None and n_test:
             self.test(n_test)
 
-        print('------------------ Intertain')
-        print('Format           : %1dD, %s'%(self.GR.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP'))
 
-        print('------------------ Time')
-        print('Prep             : %8.2e sec. '%self.tms['prep'])
-        print('Calc             : %8.2e sec. '%self.tms['calc'])
-        print('Comp (average)   : %8.2e sec. '%self.tms['comp'])
-        print('Func (average)   : %8.2e sec. '%self.tms['func'])
+        s = '------------------ Function\n'
+        s+= 'Format           : %1dD, %s\n'%(self.SG.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP')
+
+        s+= '------------------ Time\n'
+        s+= 'Prep             : %8.2e sec. \n'%self.tms['prep']
+        s+= 'Calc             : %8.2e sec. \n'%self.tms['calc']
+        s+= 'Comp (average)   : %8.2e sec. \n'%self.tms['comp']
+        s+= 'Func (average)   : %8.2e sec. \n'%self.tms['func']
 
         if self.with_tt:
-            print('------------------ Cross appr. parameters')
-            print('nswp             : %8d'%self.opts['nswp'])
-            print('kickrank         : %8d'%self.opts['kickrank'])
-            print('rf               : %8.2e'%self.opts['rf'])
+            s+= '------------------ Cross appr. parameters \n'
+            s+= 'nswp             : %8d \n'%self.opts['nswp']
+            s+= 'kickrank         : %8d \n'%self.opts['kickrank']
+            s+= 'rf               : %8.2e \n'%self.opts['rf']
 
         if self.with_tt and self.res is not None:
-            print('------------------ Cross appr. result')
-            print('Func. evaluations: %8d'%self.res['evals'])
-            print('Cross iterations : %8d'%self.res['iters'])
-            print('Av. tt-rank      : %8.2e'%self.res['erank'])
-            print('Cross err (rel)  : %8.2e'%self.res['err_rel'])
-            print('Cross err (abs)  : %8.2e'%self.res['err_abs'])
+            s+= '------------------ Cross appr. result \n'
+            s+= 'Func. evaluations: %8d \n'%self.res['evals']
+            s+= 'Cross iterations : %8d \n'%self.res['iters']
+            s+= 'Av. tt-rank      : %8.2e \n'%self.res['erank']
+            s+= 'Cross err (rel)  : %8.2e \n'%self.res['err_rel']
+            s+= 'Cross err (abs)  : %8.2e \n'%self.res['err_abs']
 
         if self.A is not None and self.f is not None and n_test:
-            print('------------------ Test for uniform random points')
-            print('Number of points : %8d'%n_test)
-            print('Error (max)      : %8.2e'%np.max(self.err))
-            print('Error (mean)     : %8.2e'%np.mean(self.err))
-            print('Error (min)      : %8.2e'%np.min(self.err))
+            s+= '------------------ Test for uniform random points \n'
+            s+= 'Number of points : %8d \n'%n_test
+            s+= 'Error (max)      : %8.2e \n'%np.max(self.err)
+            s+= 'Error (mean)     : %8.2e \n'%np.mean(self.err)
+            s+= 'Error (min)      : %8.2e \n'%np.min(self.err)
 
-        print('------------------')
+        if not s.endswith('\n'):
+            s+= '\n'
+        if is_print:
+            print(s[:-1])
+        else:
+            return s
 
     def test(self, n=100):
         '''
@@ -449,7 +440,7 @@ class Func(object):
         err - absolute value of relative error for the generated random points
         type: np.ndarray [n] of float
 
-        TODO! Add support for absolute error.
+        TODO: Add support for absolute error.
         '''
 
         if self.f is None:
@@ -460,45 +451,15 @@ class Func(object):
             s = 'Function for interpolation requires indices. Can not test'
             raise ValueError(s)
 
-        X = self.GR.rand(n)
+        X = self.SG.rand(n)
         u = self.f(X)
         v = self.comp(X)
         self.err = np.abs((u - v) / u)
 
         return self.err
 
-    def dif1(self):
-        '''
-        Construct the first order differentiation matrix on Chebyshev grid
-        on interval of the first spatial variable.
-
-        OUTPUT:
-
-        D1 - first order differentiation matrix
-        type: ndarray [n[0], n[0]] of float
-        '''
-
-        n, l_min, l_max = self.GR.n[0], self.GR.l[0, 0], self.GR.l[0, 1]
-        self.D1 = dif_cheb(n, 1, l_min, l_max)[0]
-        return self.D1
-
-    def dif2(self):
-        '''
-        Construct the second order differentiation matrix on Chebyshev grid
-        on interval of the first spatial variable.
-
-        OUTPUT:
-
-        D2 - second order differentiation matrix
-        type: ndarray [n[0], n[0]] of float
-        '''
-
-        n, l_min, l_max = self.GR.n[0], self.GR.l[0, 0], self.GR.l[0, 1]
-        self.D1, self.D2 = dif_cheb(n, 2, l_min, l_max)
-        return self.D2
-
     @staticmethod
-    def interpolate(Y):
+    def interpolate_cheb(Y):
         '''
         Find coefficients a_i for interpolation of 1D functions by Chebyshev
         polynomials f(x) = \sum_{i} (a_i * T_i(x)) using Fast Fourier Transform.
@@ -511,9 +472,11 @@ class Func(object):
         Y - values of function at the nodes of the Chebyshev grid
             x_j = cos(\pi j / (N - 1)), j = 0, 1 ,..., N-1,
             where N is a number of points
-        type: ndarray (or list) [number of points, number of functions] of float
-        * In the case of only one function,
-        * it may be ndarray (or list) [number of points].
+        type1: list [number of points] of float
+        type2: ndarray [number of points] of float
+        type3: list [number of points, number of functions] of float
+        type4: ndarray [number of points, number of functions] of float
+        * It may be of type1 or type2 only in the case of only one function .
 
         OUTPUT:
 
@@ -521,7 +484,9 @@ class Func(object):
         type: ndarray [number of points, number of functions] of float
 
         LINKS:
+
         - https://en.wikipedia.org/wiki/Discrete_Chebyshev_transform
+
         - https://www.mathworks.com/matlabcentral/mlc-downloads/downloads/submissions/23972/versions/22/previews/chebfun/examples/approx/html/ChebfunFFT.html
         '''
 
