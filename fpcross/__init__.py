@@ -1,7 +1,7 @@
 from .config import config
 from .utils import ij
-from .polynomial import polynomials_cheb
-from .dif import dif_cheb
+from .mtr import difscheb, dif1cheb, dif2cheb
+from .tns import polycheb
 from .grid import Grid
 from .func import Func
 from .ord_solver import OrdSolver

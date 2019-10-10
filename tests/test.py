@@ -1,7 +1,6 @@
 import unittest
 
-
-from test_polynomial import *
+from test_tns import *
 from test_grid import *
 from test_func import *
 
