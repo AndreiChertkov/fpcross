@@ -49,8 +49,6 @@ class Grid(object):
 
     def __init__(self, d=None, n=2, l=[-1., 1.], kind='c'):
         '''
-        Init grid parameters.
-
         INPUT:
 
         d - number of dimensions
@@ -339,3 +337,31 @@ class Grid(object):
         if np.linalg.norm(self.l - l0) > eps: return False
 
         return True
+
+    def _sind(self, x):
+        '''
+        Find the nearest flatten grid index for the given spatial point.
+
+        INPUT:
+
+        x - spatial point
+        type: ndarray (or list) [dimensions] of float
+
+        OUTPUT:
+
+        i - flatten grid index
+        type:  float
+
+        TODO! Add support for calculation without explicit spatial grid.
+        '''
+
+        
+        if isinstance(x, list): x = np.array(x)
+        if not isinstance(x, np.ndarray) or x.shape[0] != self.SG.d:
+            s = 'Invalid spatial point.'
+            raise ValueError(s)
+
+        x = np.repeat(x.reshape(-1, 1), self.X_hst.shape[1], axis=1)
+        i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
+
+        return i

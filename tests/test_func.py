@@ -128,7 +128,7 @@ class TestFunc(unittest.TestCase):
         FN.calc()
         err = FN.test(100)
 
-        self.assertTrue(np.max(err) < 1.E-8)
+        self.assertTrue(np.max(err) < 1.E-7)
 
     def test_4d_tt(self):
         GR = Grid(d=4, n=[30, 31, 32, 33], l=[
@@ -143,7 +143,7 @@ class TestFunc(unittest.TestCase):
         FN.calc()
         err = FN.test(100)
 
-        self.assertTrue(np.max(err) < 1.E-8)
+        self.assertTrue(np.max(err) < 1.E-7)
 
     def test_10d_tt(self):
         d = 10
