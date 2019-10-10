@@ -1,12 +1,12 @@
 import numpy as np
-from scipy.integrate import solve_ivp as sp_solve_ivp
-
+from scipy.integrate import solve_ivp
 
 class OrdSolver(object):
     '''
     Class for solution of system of ordinary differential equations (ODE)
     d y / d t = f(y, t)
-    with multiple initial conditions by various methods.
+    with multiple initial conditions (several different initial points)
+    by various methods.
 
     Basic usage:
     1 Initialize class instance with time grid and solver options.
@@ -16,15 +16,13 @@ class OrdSolver(object):
 
     def __init__(self, TG, kind='rk4'):
         '''
-        Init solver parameters.
-
         INPUT:
 
         TG - one-dimensional time grid
         type: fpcross.Grid
-        * Only uniform grids are supported in the current version.
+        * Only uniform grids with 2 points are supported in the current version.
 
-        kind - type of the solver.
+        kind - type of the solver
         type: str
         enum:
             - 'eul' - the 1th order Euler solver
@@ -37,7 +35,8 @@ class OrdSolver(object):
 
         if self.TG.d != 1 or self.TG.kind != 'u':
             raise ValueError('Invalid time grid (should be 1-dim. uniform).')
-
+        if self.TG.n0 != 2:
+            raise ValueError('Invalid time grid (should have only 2 points).')
         if self.kind != 'eul' and self.kind != 'rk4' and self.kind != 'ivp':
             raise ValueError('Invalid solver type.')
 
@@ -75,7 +74,8 @@ class OrdSolver(object):
         INPUT:
 
         y0 - initial values of the variable
-        type: ndarray (or list) [dimensions, number of points] of float
+        type1: list [dimensions, number of points] of float
+        type2: ndarray [dimensions, number of points] of float
 
         OUTPUT:
 
@@ -96,7 +96,7 @@ class OrdSolver(object):
                     if not self.with_y0: return self.f(y_, t).reshape(-1)
                     return self.f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
 
-                y[:, j] = sp_solve_ivp(
+                y[:, j] = solve_ivp(
                     func, [self.TG.l0[0], self.TG.l0[1]], y[:, j]
                 ).y[:, -1]
 
