@@ -1,6 +1,7 @@
 import unittest
 
 from test_tns import *
+from test_mtr import *
 from test_grid import *
 from test_func import *
 
