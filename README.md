@@ -9,7 +9,7 @@ with known f(x, t), initial condition r~0~(x) and scalar diffusion coefficient D
 
 ## Requirements
 
-1. **Python** (version > 3.7).
+1. **Python** (version >= 3.7).
 
 1. Standard python packages like [numpy](https://numpy.org), [scipy](https://www.scipy.org), [matplotlib](https://matplotlib.org), etc. (all of them are included in [anaconda](https://www.anaconda.com/download/) distribution).
 
@@ -19,7 +19,7 @@ with known f(x, t), initial condition r~0~(x) and scalar diffusion coefficient D
 
 ## Installation
 
-1. Install **python** (version > 3.7) and standard python packages listed above. The best way is to use **anaconda** distribution.
+1. Install **python** (version >= 3.7) and standard python packages listed above. The best way is to use **anaconda** distribution.
 
 1. Install **ttpy** python package according to instructions from the corresponding repository.
 

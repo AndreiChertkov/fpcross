@@ -1,5 +1,10 @@
 import os
-from setuptools import setup
+from setuptools import setup #, find_packages
+
+here = os.path.abspath(os.path.dirname(__file__))
+desc = 'Solution of the multidimensional Fokker-Planck equation by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.'
+with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
+    desc_long = f.read()
 
 def find_packages(package, basepath):
     packages = [package]
@@ -12,24 +17,35 @@ def find_packages(package, basepath):
 setup(
     name = 'fpcross',
     version = '0.1',
-    packages = find_packages('fpcross', './fpcross/'),
-    include_package_data = True,
-    requires = ['python (>= 3.5)'],
-    description  = 'Solution of the multidimensional Fokker-Planck equation by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.',
-    long_description =  open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
-    author = 'Andrei Chertkov and Ivan Oseledets',
-    author_email = 'andrei.chertkov@skolkovotech.ru, i.oseledets@skoltech.ru',
-    url = 'https://github.com/AndreiChertkov/fpcross',
-    download_url = 'https://github.com/AndreiChertkov/fpcross',
-    #license = 'BSD License',
-    keywords = 'Fokker-Planck equation, stochastic differential equation, probability density function, low-rank representation, tensor train format, TT-decomposition, cross approximation, Chebyshev polynomial, multivariate Ornstein-–Uhlenbeck process',
-    classifiers = [
-    'Environment :: Web Environment',
-    'Intended Audience :: Developers',
-    'Operating System :: OS Independent',
-    'Programming Language :: Python',
-    'Programming Language :: Python :: 3.5',
-    'Topic :: Solvers',
-    #'License :: OSI Approved :: BSD License',
+    description=desc,
+    long_description=desc_long,
+    long_description_content_type='text/markdown',
+    author='Andrei Chertkov',
+    author_email='andrei.chertkov@skolkovotech.ru',
+    url='https://github.com/AndreiChertkov/fpcross',
+    classifiers=[
+        'Development Status :: 3 - Alpha', # 4 - Beta, 5 - Production/Stable
+        'License :: OSI Approved :: MIT License',
+        'Topic :: Scientific/Engineering',
+        'Topic :: Scientific/Engineering :: Mathematics',
+        'Topic :: Scientific/Engineering :: Information Analysis',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence',
+        'Intended Audience :: Science/Research',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Framework :: Jupyter',
     ],
+    keywords='Fokker-Planck equation stochastic differential equation probability density function low-rank representation tensor train format TT-decomposition cross approximation Chebyshev polynomial multivariate Ornstein-–Uhlenbeck process',
+    packages=find_packages('fpcross', './fpcross/'),
+    python_requires='>=3.5',
+    install_requires=['ttpy'],
+    project_urls={
+        'Source': 'https://github.com/AndreiChertkov/fpcross',
+    },
 )
+
+# See great example https://github.com/pypa/sampleproject
