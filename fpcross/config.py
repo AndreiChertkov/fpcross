@@ -1,6 +1,3 @@
-# import platform
-# print ( '  Python version: %s' % ( platform.python_version ( ) ) )
-
 config = {
     'plot': {
         'time': {
@@ -258,3 +255,5 @@ config = {
         }
     ''',
 }
+
+# TODO: add color dict and generate css, using color names.
