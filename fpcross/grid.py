@@ -41,7 +41,7 @@ class Grid(object):
     type: int, >= 2
 
     l0 - average grid limits (min and max)
-    type: ndarray [2] of float, l0[0] < l0[1]
+    type: ndarray [2] of float
 
     h0 - average grid step (assuming uniformity)
     type: float, > 0
@@ -107,7 +107,7 @@ class Grid(object):
 
         if isinstance(l, list):
             l = np.array(l)
-        if not isinstance(l,np.ndarray) or len(n.shape) < 1 or len(n.shape) > 2:
+        if not isinstance(l,np.ndarray) or len(l.shape) < 1 or len(l.shape) > 2:
             raise ValueError('Invalid type for limits (l).')
         if len(l.shape) == 1:
             l = np.repeat(l.reshape(1, -1), d, axis=0)
@@ -162,7 +162,7 @@ class Grid(object):
         type7: list [dimensions, number of points] of int
         type8: ndarray [dimensions, number of points] of int
         * If is None (type1), then the full grid will be constructed.
-        * Type2 is available only for 1D case and for only one point.
+        * Type2 is available only for the case of only one point in 1D.
         * Type3 and type4 are available only for 1D case.
         * Type5 and type6 - for only one point in the multidimensional case.
 
@@ -173,10 +173,10 @@ class Grid(object):
 
         OUTPUT:
 
-        I - (if is_ind == True) indices of grid points
+        I - (if is_ind == True) prepared indices of grid points
         type: ndarray [dimensions, number of points] of int
 
-        X - (if is_ind == False) grid points
+        X - (if is_ind == False) calculated grid points
         type: ndarray [dimensions, number of points] of float
         '''
 
@@ -213,6 +213,93 @@ class Grid(object):
             X = t * (l2 - l1) / 2. + (l2 + l1) / 2.
 
         return X
+
+    def find(self, x):
+        '''
+        Find the nearest flatten grid index for the given spatial point.
+
+        INPUT:
+
+        x - spatial point
+        type1: float
+        type2: list [dimensions] of float
+        type3: ndarray [dimensions] of float
+        * May be float (type1) for the 1-dimensional case.
+
+        OUTPUT:
+
+        i - flatten index of the grid point
+        type: int
+
+        TODO! Add support for calculation without explicit spatial grid.
+        '''
+
+        if isinstance(x, (int, float)):
+            x = [float(x)]
+        if isinstance(x, list):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            raise ValueError('Invalid type of the spatial point.')
+        if len(x.shape) != 1 or x.shape[0] != self.d:
+            raise ValueError('Invalid shape of the spatial point.')
+
+        l1 = self.l[:, 0]
+        l2 = self.l[:, 1]
+        n = self.n
+
+        if self.kind == 'u':
+            i = (x - l1) * (n - 1) / (l2 - l1)
+        if self.kind == 'c':
+            t = (2. * x - l2 - l1) / (l2 - l1)
+            t[t > +1.] = +1.
+            t[t < -1.] = -1.
+            i = np.arccos(t) * (n - 1) / np.pi
+
+        i = np.rint(i).astype(int)
+        i[i <= 0] = 0.
+        i[i >= n] = n[i >= n] - 1.
+
+        # i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
+        return self.indf(i)
+
+    def indm(self, i_f):
+        '''
+        Construct multi index from the given flatten index
+        of the grid point.
+
+        INPUT:
+
+        i_f - flatten index of the grid point.
+        type:  int, >= 0, < prod(n)
+
+        OUTPUT:
+
+        i_m - multi index of the grid point
+        type:  ndarray [dimensions] of int, >= 0, < n
+        '''
+
+        i_m = np.unravel_index(i_f, self.n, order='F')
+        return i_m
+
+    def indf(self, i_m):
+        '''
+        Construct flatten index from the given multi index
+        of the grid point.
+
+        INPUT:
+
+        i_m - multi index of the grid point
+        type1:  list [dimensions] of int, >= 0, < n
+        type2:  ndarray [dimensions] of int, >= 0, < n
+
+        OUTPUT:
+
+        i_f - flatten index of the grid point.
+        type:  int, >= 0, < prod(n)
+        '''
+
+        i_f = np.ravel_multi_index(i_m, self.n, order='F')
+        return i_f
 
     def rand(self, n):
         '''
@@ -283,7 +370,7 @@ class Grid(object):
         else:
             return s
 
-    def plot(self, I=None, n=None):
+    def plot(self, I=None, n=None, x0=None):
         '''
         Plot the full grid or some grid points or some random points.
         * Only 2-dimensional case is supported.
@@ -295,10 +382,27 @@ class Grid(object):
         * See description in Grid.rand function.
         * If is set, then random points are used.
 
+
+        x0 - special spatial point for present on the plot
+        type1: float
+        type2: list [dimensions] of float
+        type3: ndarray [dimensions] of float
+        * May be float (type1) for the 1-dimensional case.
+
         '''
 
         if I is not None and n is not None:
             raise ValueError('Both I and n are set.')
+
+        if isinstance(x0, (int, float)):
+            x0 = [float(x0)]
+        if isinstance(x0, list):
+            x0 = np.array(x0)
+        if x0 is not None and not isinstance(x0, np.ndarray):
+            raise ValueError('Invalid type of the special spatial point.')
+        if x0 is not None and (len(x0.shape) != 1 or x0.shape[0] != self.d):
+            raise ValueError('Invalid shape of the special spatial point.')
+
 
         if self.d == 2:
             X = self.rand(n) if n is not None else self.comp(I)
@@ -306,6 +410,10 @@ class Grid(object):
                 x = X[:, k]
                 plt.scatter(x[0], x[1])
                 plt.text(x[0]+0.1, x[1]-0.1, '%d'%k)
+            if x0 is not None:
+                plt.scatter(
+                    x0[0], x0[1], s=80., c='#8b1d1d', marker='*', alpha=0.9
+                )
             plt.show()
         else:
             raise NotImplementedError('Invalid dimension for plot.')
@@ -331,37 +439,9 @@ class Grid(object):
         '''
 
         n0 = self.n0
-        if np.linalg.norm(self.n - n0) > eps: return False
+        if np.max(np.abs(self.n - n0)) > eps: return False
 
         l0 = np.repeat(self.l0.reshape((1, -1)), self.d, axis=0)
-        if np.linalg.norm(self.l - l0) > eps: return False
+        if np.max(np.abs(self.l - l0)) > eps: return False
 
         return True
-
-    def _sind(self, x):
-        '''
-        Find the nearest flatten grid index for the given spatial point.
-
-        INPUT:
-
-        x - spatial point
-        type: ndarray (or list) [dimensions] of float
-
-        OUTPUT:
-
-        i - flatten grid index
-        type:  float
-
-        TODO! Add support for calculation without explicit spatial grid.
-        '''
-
-        
-        if isinstance(x, list): x = np.array(x)
-        if not isinstance(x, np.ndarray) or x.shape[0] != self.SG.d:
-            s = 'Invalid spatial point.'
-            raise ValueError(s)
-
-        x = np.repeat(x.reshape(-1, 1), self.X_hst.shape[1], axis=1)
-        i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
-
-        return i

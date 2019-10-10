@@ -226,5 +226,35 @@ class TestGrid(unittest.TestCase):
         GR = Grid(d=5, n=6, l=[2., 8.])
         self.assertTrue(GR.is_square())
 
+    def test_indm(self):
+        GR = Grid(n=[5, 7, 8])
+
+        np.testing.assert_equal(GR.indm(0), np.array([0, 0, 0]))
+        np.testing.assert_equal(GR.indm(1), np.array([1, 0, 0]))
+        np.testing.assert_equal(GR.indm(5), np.array([0, 1, 0]))
+        np.testing.assert_equal(GR.indm(279), np.array([4, 6, 7]))
+
+    def test_indf(self):
+        GR = Grid(n=[5, 7, 8])
+
+        self.assertEqual(GR.indf([0, 0, 0]), 0)
+        self.assertEqual(GR.indf([1, 0, 0]), 1)
+        self.assertEqual(GR.indf([0, 1, 0]), 5)
+        self.assertEqual(GR.indf([4, 6, 7]), 279)
+
+    def test_find_u(self):
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='u')
+
+        self.assertEqual(GR.find([-0.9, -1.2]), 2)
+        self.assertEqual(GR.find([+1.9, -0.1]), 13)
+        self.assertEqual(GR.find([11.9, 22.1]), 34)
+
+    def test_find_c(self):
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='c')
+
+        self.assertEqual(GR.find([-0.9, -1.2]), 32)
+        self.assertEqual(GR.find([+1.9, -0.1]), 21)
+        self.assertEqual(GR.find([11.9, 22.1]), 0)
+
 if __name__ == '__main__':
     unittest.main()
