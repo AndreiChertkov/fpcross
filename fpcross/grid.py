@@ -418,6 +418,38 @@ class Grid(object):
         else:
             raise NotImplementedError('Invalid dimension for plot.')
 
+    def is_out(self, x):
+        '''
+        Check if given point is out of the grid.
+
+        INPUT:
+
+        x - spatial point
+        type1: float
+        type2: list [dimensions] of float
+        type3: ndarray [dimensions] of float
+        * May be float (type1) for the 1-dimensional case.
+
+        OUTPUT:
+
+        res - True if point is out of the grid and False otherwise
+        type: bool
+        '''
+
+        if isinstance(x, (int, float)):
+            x = [float(x)]
+        if isinstance(x, list):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            raise ValueError('Invalid type of the spatial point.')
+        if len(x.shape) != 1 or x.shape[0] != self.d:
+            raise ValueError('Invalid shape of the spatial point.')
+
+        for i in range(self.d):
+            if x[i] < self.l[i, 0]: return True
+            if x[i] > self.l[i, 1]: return True
+        return False
+
     def is_square(self, eps=1.E-20):
         '''
         Check if grid is square (all dimensions are equal in terms of

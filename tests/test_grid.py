@@ -256,5 +256,17 @@ class TestGrid(unittest.TestCase):
         self.assertEqual(GR.find([+1.9, -0.1]), 21)
         self.assertEqual(GR.find([11.9, 22.1]), 0)
 
+    def test_is_out_u(self):
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='u')
+
+        self.assertFalse(GR.is_out([-1., +1.4]))
+        self.assertTrue(GR.is_out([+4., +1.4]))
+
+    def test_is_out_c(self):
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='u')
+
+        self.assertFalse(GR.is_out([-1., +1.4]))
+        self.assertTrue(GR.is_out([+4., +1.4]))
+
 if __name__ == '__main__':
     unittest.main()
