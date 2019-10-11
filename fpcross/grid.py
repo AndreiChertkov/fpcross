@@ -130,9 +130,15 @@ class Grid(object):
         self.l0 = np.mean(self.l, axis=0)
         self.h0 = float(np.mean(self.h, axis=0))
 
-    def copy(self):
+    def copy(self, **kwargs):
         '''
         Create a copy of the grid.
+
+        INPUT:
+
+        **kwargs - some arguments from self.__init__
+        type: dict
+        * These values will replace the corresponding params in the new grid.
 
         OUTPUT:
 
@@ -140,9 +146,14 @@ class Grid(object):
         type: Grid
         '''
 
-        return Grid(self.d, self.n.copy(), self.l.copy(), self.kind)
+        d = kwargs.get('d', self.d)
+        n = kwargs.get('n', self.n.copy())
+        l = kwargs.get('l', self.l.copy())
+        kind = kwargs.get('kind', self.kind)
 
-    def comp(self, I=None, is_ind=False):
+        return Grid(d, n, l, kind)
+
+    def comp(self, I=None, is_ind=False, is_inner=False):
         '''
         Compute grid points for given multi-indices.
         In case of the Chebyshev multidimensional grid points for every axis k
@@ -171,6 +182,11 @@ class Grid(object):
             False - spatial grid points will be returned
         type: bool
 
+        is_inner - flag:
+            True  - only inner grid points will be constructed
+            False - all grid points will be constructed
+        type: bool
+
         OUTPUT:
 
         I - (if is_ind == True) prepared indices of grid points
@@ -181,7 +197,13 @@ class Grid(object):
         '''
 
         if I is None:
-            I = [np.arange(self.n[d]).reshape(1, -1) for d in range(self.d)]
+            I = []
+            for i in range(self.d):
+                if is_inner:
+                    I_ = np.arange(1, self.n[i]-1)
+                else:
+                    I_ = np.arange(self.n[i])
+                I.append(I_.reshape(1, -1))
             I = np.meshgrid(*I, indexing='ij')
             I = np.array(I).reshape((self.d, -1), order='F')
 
@@ -334,7 +356,7 @@ class Grid(object):
 
         OUTPUT:
 
-        s - (if is_print == False) string with info
+        s - (if is_ret) string with info
         type: str
         '''
 
