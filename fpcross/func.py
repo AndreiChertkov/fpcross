@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import numpy as np
@@ -5,7 +6,7 @@ import numpy as np
 import tt
 from tt.cross.rectcross import cross
 
-from . import polynomials_cheb
+from . import polycheb
 
 class Func(object):
     '''
@@ -15,7 +16,7 @@ class Func(object):
     using Fast Fourier Transform (FFT).
 
     Basic usage:
-    1 Initialize class instance with grid, format and accuracy parameters.
+    1 Initialize class instance with grid, accuracy and format parameters.
     2 Call "init" with function of interest and interpolation options.
     3 Call "prep" for construction of the function on the spatial grid.
     4 Call "calc" for interpolation process.
@@ -28,12 +29,16 @@ class Func(object):
 
     PROPS:
 
-    Y
+    Y - tensor of function values on nodes of the Chebyshev grid
+    type: ndarray or TT-tensor [*(numbers of points)] of float
+    * Is set in self.init or calculated in self.prep.
 
-    A
+    A - tensor of interpolation coefficients
+    type: ndarray or TT-tensor [*(numbers of points)] of float
+    * Is calculated in self.calc.
     '''
 
-    def __init__(self, SG, eps=1.E-6, with_tt=True):
+    def __init__(self, SG, eps=1.E-6, with_tt=False):
         '''
         INPUT:
 
@@ -42,7 +47,7 @@ class Func(object):
         * Only Chebyshev grids are supported in the current version.
 
         eps - is the desired accuracy of the approximation
-        type: float, > 0
+        type: float, >= 1.E-20
         * Is used in tt-round and tt-cross approximation operations.
 
         with_tt - flag:
@@ -63,6 +68,44 @@ class Func(object):
 
         self.opts = {}
         self.init()
+
+    def copy(self, opts=None, is_init=False):
+        '''
+        Create a copy of the class instance.
+
+        INPUT:
+
+        opts - dictionary with optional parameters
+        type1: None
+        type2: dict (see self.init for details)
+        * If is set (type2), then init method with this dict will be called.
+
+        is_init - flag:
+            True  - interpolation result will not be copied
+            False - interpolation result (if exists) will be also copied
+        type: bool
+
+        OUTPUT:
+
+        FN - new class instance
+        type: fpcross.Func
+        '''
+
+        FN = Func(self.SG.copy(), self.eps, self.with_tt)
+        FN.init(opts=self.opts)
+        FN.init(opts=opts)
+
+        if is_init: return FN
+
+        FN.f = self.f
+        FN.Y = self.Y.copy() if self.Y is not None else None
+        FN.A = self.A.copy() if self.A is not None else None
+
+        FN.tms = self.tms.copy()
+        FN.res = self.res.copy() if self.res is not None else None
+        FN.err = self.err.copy() if self.err is not None else None
+
+        return FN
 
     def init(self, f=None, Y=None, opts={}):
         '''
@@ -91,54 +134,49 @@ class Func(object):
 
         opts - dictionary with optional parameters
         type: dict
-        fld: is_f_with_i - flag:
+        fld : is_f_with_i - flag:
                 True  - while function call the second argument with points
                         indices will be provided
                 False - only points will be provided
             default: False
             type: bool
-        fld:nswp - for cross approximation
+        fld : nswp - for cross approximation
             default: 200
             type: int, > 0
-        fld:kickrank - for cross approximation
+        fld : kickrank - for cross approximation
             default: 1
             type: int, > 0
-        fld:rf - for cross approximation
+        fld : rf - for cross approximation
             default: 2
             type: int, > 0
-        fld:Y0 - initial guess for cross approximation
+        fld : Y0 - initial guess for cross approximation
             default: None (random TT-tensor will be used)
             type: ndarray or TT-tensor [*n] of float
         * Only provided fields will be used. Values of the missed fields will
         * not be changed and will be the same as after the previous call.
 
-        TODO: Check case for update with Y0 opt changed to None.
+        TODO:
+
+        - Add support for functions that can calculate only one point
+          by one function call.
         '''
 
         self.f = f
         self.Y = Y
         self.A = None
 
-        self.tms = {      # Saved times (durations)
-            'prep': 0.,   # training data collection
-            'calc': 0.,   # interpolation coefficients calculation
-            'comp': 0.,   # interpolation computation (average time for 1 poi)
-            'func': 0.,   # function computation (average time for 1 poi)
+        self.tms = {
+            'prep': 0., 'calc': 0., 'comp': 0., 'func': 0.
         }
-        self.res = None
+        self.res = {
+            'evals': 0, 't_func': 0., 'iters': 0,
+            'err_rel': 0., 'err_abs': 0., 'erank': 0.
+        }
         self.err = None
 
         def set_opt(name, dflt=None):
-            v = (opts or {}).get(name)
-            if v is not None:
-                self.opts[name] = v
-                return
-
-            v = self.opts.get(name)
-            if v is not None:
-                return
-
-            self.opts[name] = dflt
+            if name in (opts or {}): self.opts[name] = opts[name]
+            elif not name in self.opts: self.opts[name] = dflt
 
         set_opt('is_f_with_i', False)
         set_opt('nswp', 200)
@@ -146,60 +184,36 @@ class Func(object):
         set_opt('rf', 2)
         set_opt('Y0', None)
 
-    def copy(self, is_full=True):
-        '''
-        Create a copy of the class instance.
-
-        INPUT:
-
-        is_full - flag:
-            True  - interpolation result (if exists) will be also copied
-            False - only parameters will be copied
-        type: bool
-
-        OUTPUT:
-
-        FN - new class instance
-        type: fpcross.Func
-
-        TODO: Add argument with changed opts (eps etc) ?
-        '''
-
-        FN = Func(self.SG.copy(), self.eps, self.with_tt)
-
-        if not is_full: return FN
-
-        FN.f = self.f
-        FN.Y = self.Y.copy() if self.Y is not None else None
-        FN.A = self.A.copy() if self.A is not None else None
-
-        FN.tms = self.tms.copy()
-        FN.res = self.res.copy() if self.res is not None else None
-        FN.err = self.err.copy() if self.err is not None else None
-
-        FN.opts = self.opts.copy()
-
-        return FN
-
     def prep(self):
         '''
         Construct function values on the spatial grid.
+
+        TODO:
+
+        - If Y0 is not set, how select best random value (rank, etc.)?
+
+        - Set more accurate algorithm for tt-round of initial guess.
         '''
 
-        if self.f is None or self.Y is not None: return
+        if self.Y is not None:
+            raise ValueError('Function values are already prepared.')
+
+        if self.f is None:
+            raise ValueError('Function is not set. Can not prepare.')
+
 
         self.tms['prep'] = time.time()
 
-        if self.with_tt:
-            self.res = { 'evals': 0, 't_func': 0. }
+        if self.with_tt: # TT-format
+            log_file = './__tt-cross_tmp.txt'
 
             def func(ind):
                 ind = ind.astype(int)
                 X = self.SG.comp(ind.T)
                 t = time.time()
                 Y = self.f(X, ind.T) if self.opts['is_f_with_i'] else self.f(X)
-                self.res['t_func']+= time.time() - t
-                self.res['evals']+= ind.shape[0]
+                self.tms['func']+= time.time() - t
+                self.res['evals']+= X.shape[1]
                 return Y
 
             if self.opts['Y0'] is None:
@@ -208,12 +222,12 @@ class Func(object):
                 Z = self.opts['Y0'].copy()
 
                 rmax = None
-                for n_, r_ in zip(self.SG.n, Z.r[1:]):
-                    if r_ > n_ and (rmax is None or rmax > n_): rmax = n_
+                for n, r in zip(self.SG.n, Z.r[1:]):
+                    if r > n and (rmax is None or rmax > n): rmax = n
                 if rmax is not None: Z = Z.round(rmax=rmax)
 
             try:
-                log = open('./tmp.txt', 'w')
+                log = open(log_file, 'w')
                 stdout0 = sys.stdout
                 sys.stdout = log
 
@@ -225,7 +239,9 @@ class Func(object):
                 log.close()
                 sys.stdout = stdout0
 
-            log = open('./tmp.txt', 'r')
+            self.tms['func']/= (self.res['evals'] or 1)
+
+            log = open(log_file, 'r')
             res = log.readlines()[-1].split('swp: ')[1]
             self.res['iters'] = int(res.split('/')[0])+1
             res = res.split('er_rel = ')[1]
@@ -235,10 +251,8 @@ class Func(object):
             res = res.split('erank = ')[1]
             self.res['erank'] = float(res.split('fun_eval')[0])
             log.close()
-
-            self.res['t_func']/= self.res['evals']
-            self.tms['func'] = self.res['t_func']
-        else:
+            os.remove(log_file)
+        else:            # NP-format
             self.tms['func'] = time.time()
 
             X = self.SG.comp()
@@ -256,15 +270,18 @@ class Func(object):
     def calc(self):
         '''
         Build tensor of interpolation coefficients according to training data.
+
+        TODO:
+
+        - Should we round A tensor after construction?
         '''
 
         if self.Y is None:
-            s = 'Train data is not set. Can not prep. Call "init" before.'
-            raise ValueError(s)
+            raise ValueError('Train data is not set. Can not build interpolation coefficients. Call "prep" before.')
 
         self.tms['calc'] = time.time()
 
-        if self.with_tt:
+        if self.with_tt: # TT-format
             G = tt.tensor.to_list(self.Y)
 
             for i in range(self.SG.d):
@@ -277,11 +294,12 @@ class Func(object):
 
             self.A = tt.tensor.from_list(G)
             self.A = self.A.round(self.eps)
-        else:
+        else:            # NP-format
             self.A = self.Y.copy()
 
             for i in range(self.SG.d):
-                n_ = self.SG.n.copy(); n_[[0, i]] = n_[[i, 0]]
+                n_ = self.SG.n.copy()
+                n_[[0, i]] = n_[[i, 0]]
                 self.A = np.swapaxes(self.A, 0, i)
                 self.A = self.A.reshape((self.SG.n[i], -1), order='F')
                 self.A = Func.interpolate_cheb(self.A)
@@ -292,62 +310,59 @@ class Func(object):
 
     def comp(self, X, z=0.):
         '''
-        Calculate values of interpolated function in given X points.
+        Compute values of interpolated function in given X points.
 
         INPUT:
 
-        X - values of x variable
-        type: ndarray (or list) [dimensions, number of points] of float
+        X - values of the spatial variable
+        type1: list [dimensions, number of points] of float
+        type2: ndarray [dimensions, number of points] of float
 
         z - value for points outside the interpolation limits
         type: float
-        * If some point is not belongs to the interpolation limits, then
-        * the corresponding value will be set to the z-value.
+        * If some points are not belong to the interpolation limits, then
+        * the corresponding values will be set to the z-value.
 
         OUTPUT:
 
         Y - approximated values of the function in given points
         type: ndarray [number of points] of float
 
-        TODO: Vectorize calculations for points vector if possible.
-        TODO: Add more accurate check for outer points if possible.
+        TODO:
+
+        - Vectorize calculations for points vector if possible.
+
+        - Add support for 1D input.
         '''
 
         if self.A is None:
-            s = 'Interpolation is not done. Can not calc. Call "prep" before.'
-            raise ValueError(s)
+            raise ValueError('Interpolation is not done. Can not compute values of the function. Call "calc" before.')
 
         if not isinstance(X, np.ndarray): X = np.array(X)
-
-        def is_out(j):
-            for i in range(self.SG.d):
-                if X[i, j] < self.SG.l[i, 0]: return True
-                if X[i, j] > self.SG.l[i, 1]: return True
-            return False
 
         self.tms['comp'] = time.time()
 
         Y = np.ones(X.shape[1]) * z
-        m = np.max(self.SG.n) - 1
-        T = polynomials_cheb(X, m, self.SG.l)
+        T = polycheb(X, np.max(self.SG.n), self.SG.l)
 
-        if self.with_tt:
+        if self.with_tt: # TT-format
             G = tt.tensor.to_list(self.A)
 
             for j in range(X.shape[1]):
-                if is_out(j): continue
+                if self.SG.is_out(X[:, j]): continue
 
-                Q = np.einsum('riq,i->rq', G[0], T[:self.SG.n[0], 0, j])
-                for i in range(1, X.shape[0]):
+                i = 0
+                Q = np.einsum('riq,i->rq', G[i], T[:self.SG.n[i], i, j])
+                for i in range(1, self.SG.d):
                     Q = Q @ np.einsum('riq,i->rq', G[i], T[:self.SG.n[i], i, j])
 
                 Y[j] = Q[0, 0]
-        else:
+        else:            # NP-format
             for j in range(X.shape[1]):
-                if is_out(j): continue
+                if self.SG.is_out(X[:, j]): continue
 
                 Q = self.A.copy()
-                for i in range(X.shape[0]):
+                for i in range(self.SG.d):
                     Q = np.tensordot(Q, T[:Q.shape[0], i, j], axes=([0], [0]))
 
                 Y[j] = Q
@@ -356,7 +371,7 @@ class Func(object):
 
         return Y
 
-    def info(self, n_test=None, is_print=True):
+    def info(self, n_test=None, is_ret=False):
         '''
         Present info about interpolation result, including error check.
 
@@ -365,18 +380,18 @@ class Func(object):
         n_test - number of points for error check
         type1: None
         type2: int, >= 0
-        * If set (is not None and is greater than zero) and interpolation is
+        * If is set (is not None and is greater than zero) and interpolation is
         * ready, then interpolation result will be checked on a set
         * of random points from the uniform distribution with proper limits.
 
-        is_print - flag:
-            True  - print string info
-            False - return string info
+        is_ret - flag:
+            True  - return string info
+            False - print string info
         type: bool
 
         OUTPUT:
 
-        s - (if is_print == False) string with info
+        s - (if is_out) string with info
         type: str
         '''
 
@@ -387,71 +402,79 @@ class Func(object):
         s = '------------------ Function\n'
         s+= 'Format           : %1dD, %s\n'%(self.SG.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP')
 
-        s+= '------------------ Time\n'
-        s+= 'Prep             : %8.2e sec. \n'%self.tms['prep']
-        s+= 'Calc             : %8.2e sec. \n'%self.tms['calc']
-        s+= 'Comp (average)   : %8.2e sec. \n'%self.tms['comp']
-        s+= 'Func (average)   : %8.2e sec. \n'%self.tms['func']
+        if True:
+            s+= '--> Time         | \n'
+            s+= 'Prep             : %8.2e sec. \n'%self.tms['prep']
+            s+= 'Calc             : %8.2e sec. \n'%self.tms['calc']
+            s+= 'Comp (average)   : %8.2e sec. \n'%self.tms['comp']
+            s+= 'Func (average)   : %8.2e sec. \n'%self.tms['func']
+
+        if self.A is not None and self.f is not None and n_test:
+            s+= '--> Test         | \n'
+            s+= 'Number of points : %8d \n'%n_test
+            s+= 'Error (max)      : %8.2e \n'%np.max(self.err)
+            s+= 'Error (mean)     : %8.2e \n'%np.mean(self.err)
+            s+= 'Error (min)      : %8.2e \n'%np.min(self.err)
 
         if self.with_tt:
-            s+= '------------------ Cross appr. parameters \n'
+            s+= '--> Cross params | \n'
             s+= 'nswp             : %8d \n'%self.opts['nswp']
             s+= 'kickrank         : %8d \n'%self.opts['kickrank']
             s+= 'rf               : %8.2e \n'%self.opts['rf']
 
-        if self.with_tt and self.res is not None:
-            s+= '------------------ Cross appr. result \n'
+        if self.with_tt:
+            s+= '--> Cross result | \n'
             s+= 'Func. evaluations: %8d \n'%self.res['evals']
             s+= 'Cross iterations : %8d \n'%self.res['iters']
             s+= 'Av. tt-rank      : %8.2e \n'%self.res['erank']
             s+= 'Cross err (rel)  : %8.2e \n'%self.res['err_rel']
             s+= 'Cross err (abs)  : %8.2e \n'%self.res['err_abs']
 
-        if self.A is not None and self.f is not None and n_test:
-            s+= '------------------ Test for uniform random points \n'
-            s+= 'Number of points : %8d \n'%n_test
-            s+= 'Error (max)      : %8.2e \n'%np.max(self.err)
-            s+= 'Error (mean)     : %8.2e \n'%np.mean(self.err)
-            s+= 'Error (min)      : %8.2e \n'%np.min(self.err)
+        if not s.endswith('\n'): s+= '\n'
+        if is_ret: return s
+        print(s[:-1])
 
-        if not s.endswith('\n'):
-            s+= '\n'
-        if is_print:
-            print(s[:-1])
-        else:
-            return s
-
-    def test(self, n=100):
+    def test(self, n=100, is_u=False):
         '''
-        Calculate interpolation error on a set of random points from the
-        uniform distribution with proper limits.
+        Calculate interpolation error on a set of random (from the uniform
+        distribution) or uniform points with proper limits.
 
         INPUT:
 
         n - number of points for error check
-        type1: None
-        type2: int, >= 0
-        * If set (is not None and is greater than zero) and interpolation is
-        * ready, then interpolation result will be checked on a set
-        * of random points from the uniform distribution with proper limits.
+        type: int, > 0
+
+        is_u - flag:
+            True  - uniform points will be used
+            False - random points will be used
+        type: bool
+        * Note that if this flag is set, then less than n points will be used
+        * for the test due to rounding of the d-root and using of the only
+        * inner grid points.
 
         OUTPUT:
 
         err - absolute value of relative error for the generated random points
         type: np.ndarray [n] of float
 
-        TODO: Add support for absolute error.
+        TODO:
+
+        - Add support for absolute error.
         '''
 
         if self.f is None:
-            s = 'Function for interpolation is not set. Can not test'
+            s = 'Function for interpolation is not set. Can not test.'
             raise ValueError(s)
 
         if self.opts['is_f_with_i']:
-            s = 'Function for interpolation requires indices. Can not test'
+            s = 'Function for interpolation requires indices. Can not test.'
             raise ValueError(s)
 
-        X = self.SG.rand(n)
+        if is_u:
+            X = self.SG.copy(n=n**(1./self.SG.d), kind='u').comp(is_inner=True)
+        else:
+            X = self.SG.rand(n)
+
         u = self.f(X)
         v = self.comp(X)
         self.err = np.abs((u - v) / u)
@@ -476,7 +499,7 @@ class Func(object):
         type2: ndarray [number of points] of float
         type3: list [number of points, number of functions] of float
         type4: ndarray [number of points, number of functions] of float
-        * It may be of type1 or type2 only in the case of only one function .
+        * It may be of type1 or type2 only in the case of only one function.
 
         OUTPUT:
 
