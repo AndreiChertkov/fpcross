@@ -27,8 +27,8 @@ def difscheb(SG, m):
 
 
     n = SG.n0
-    l_min = SG.l0[0]
-    l_max = SG.l0[1]
+    l_min = SG.l1
+    l_max = SG.l2
 
     n1 = np.int(np.floor(n / 2))
     n2 = np.int(np.ceil(n / 2))

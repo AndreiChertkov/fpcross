@@ -213,7 +213,8 @@ class TestGrid(unittest.TestCase):
         GR = Grid(2, n, l)
 
         np.testing.assert_equal(GR.n0, 9)
-        np.testing.assert_almost_equal(GR.l0, np.array([-3., 4.]))
+        np.testing.assert_almost_equal(GR.l1, -3.)
+        np.testing.assert_almost_equal(GR.l2, +4.)
         np.testing.assert_equal(GR.h0, 0.5 * (7./7. + 7./9.))
 
     def test_square(self):

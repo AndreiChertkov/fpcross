@@ -36,6 +36,25 @@ class Func(object):
     A - tensor of interpolation coefficients
     type: ndarray or TT-tensor [*(numbers of points)] of float
     * Is calculated in self.calc.
+
+    tms - saved durations of the main operations
+    type: dict
+    fld : prep - construction of the function values on the Chebyshev grid
+        type: float, >= 0
+    fld : calc - construction of interpolation coefficients
+        type: float, >= 0
+    fld : comp - computation of the interpolant in one given spatial point
+        type: float, >= 0
+    fld : func - computation of the base function in one given spatial point
+        type: float, >= 0
+
+    res - results of the computations (tt-ranks, etc.)
+    type: dict
+
+    err - absolute value of the relative error of result for some points
+    type: np.ndarray [number of test points] of float, >= 0.
+    * Is calculated in self.test.
+
     '''
 
     def __init__(self, SG, eps=1.E-6, with_tt=False):

@@ -40,8 +40,11 @@ class Grid(object):
     n0 - average number of grid points
     type: int, >= 2
 
-    l0 - average grid limits (min and max)
-    type: ndarray [2] of float
+    l1 - average min grid limit
+    type: float
+
+    l2 - average max grid limit
+    type: float
 
     h0 - average grid step (assuming uniformity)
     type: float, > 0
@@ -127,7 +130,8 @@ class Grid(object):
         self.kind = kind
 
         self.n0 = int(np.mean(self.n, axis=0))
-        self.l0 = np.mean(self.l, axis=0)
+        self.l1 = np.mean(self.l, axis=0)[0]
+        self.l2 = np.mean(self.l, axis=0)[1]
         self.h0 = float(np.mean(self.h, axis=0))
 
     def copy(self, **kwargs):
@@ -371,8 +375,8 @@ class Grid(object):
 
         s+= '%s             : '%('Mean' if not self.is_square() else '    ')
         s+= 'Poi %-3d | '%self.n0
-        s+= 'Min %-6.3f | '%self.l0[0]
-        s+= 'Max %-6.3f |\n'%self.l0[1]
+        s+= 'Min %-6.3f | '%self.l1
+        s+= 'Max %-6.3f |\n'%self.l2
 
         if not self.is_square():
             for i, [n, l] in enumerate(zip(self.n, self.l)):
@@ -492,7 +496,8 @@ class Grid(object):
         n0 = self.n0
         if np.max(np.abs(self.n - n0)) > eps: return False
 
-        l0 = np.repeat(self.l0.reshape((1, -1)), self.d, axis=0)
+        l0 = np.array([self.l1, self.l2]).reshape((1, -1))
+        l0 = np.repeat(l0, self.d, axis=0)
         if np.max(np.abs(self.l - l0)) > eps: return False
 
         return True

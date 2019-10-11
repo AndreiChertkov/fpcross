@@ -86,7 +86,7 @@ class OrdSolver(object):
         if not isinstance(y0, np.ndarray):
             y0 = np.array(y0)
 
-        t = self.TG.l0[0]
+        t = self.TG.l1
         y = y0.copy()
 
         if self.kind == 'ivp':
@@ -97,7 +97,7 @@ class OrdSolver(object):
                     return self.f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
 
                 y[:, j] = solve_ivp(
-                    func, [self.TG.l0[0], self.TG.l0[1]], y[:, j]
+                    func, [self.TG.l1, self.TG.l2], y[:, j]
                 ).y[:, -1]
 
             return y
