@@ -321,15 +321,15 @@ class Grid(object):
         l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), n, axis=1)
         return l1 + np.random.random((self.d, n)) * (l2 - l1)
 
-    def info(self, is_print=True):
+    def info(self, is_ret=False):
         '''
         Present info about the grid.
 
         INPUT:
 
-        is_print - flag:
-            True  - print string info
-            False - return string info
+        is_ret - flag:
+            True  - return string info
+            False - print string info
         type: bool
 
         OUTPUT:
@@ -363,12 +363,9 @@ class Grid(object):
                 s+= 'Min %-6.3f | '%l[0]
                 s+= 'Max %-6.3f |\n'%l[1]
 
-        if not s.endswith('\n'):
-            s+= '\n'
-        if is_print:
-            print(s[:-1])
-        else:
-            return s
+        if not s.endswith('\n'): s+= '\n'
+        if is_ret: return s
+        print(s[:-1])
 
     def plot(self, I=None, n=None, x0=None):
         '''

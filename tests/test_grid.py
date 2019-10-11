@@ -197,7 +197,7 @@ class TestGrid(unittest.TestCase):
 
     def test_info(self):
         GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]])
-        s = GR.info(is_print=False)
+        s = GR.info(is_ret=True)
 
         self.assertTrue('Kind             : Chebyshev' in s)
         self.assertTrue('Dimensions       : 2' in s)
