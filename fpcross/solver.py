@@ -115,6 +115,7 @@ class Solver(object):
         TODO:
 
         - Set t_hst as parameter.
+
         - Check model type.
         '''
 
@@ -197,9 +198,10 @@ class Solver(object):
 
         TODO:
 
-        - Check if tt-round is needed for step_v.
+        - Check if initial W0 set as r0 is correct.
 
-        - Check if initial W0 set is correct.
+
+        - Check if tt-round is needed for step_v.
 
         - Add initial guess r to rt and maybe rs in step_check.
 
@@ -209,50 +211,6 @@ class Solver(object):
         TODO! Try initial guess in the form of the Euler solution.
         TODO! Check various numbers of points for ODE solvers.
         '''
-
-        def step_check():
-            '''
-            Check result of the current calculation step.
-
-            OUTPUT:
-
-            msg - string representation of the current step for print
-            type: str
-
-            TODO! Add initial guess r to rt and maybe rs.
-            '''
-
-            def _err_calc(r_calc, r_real):
-                dr = r_real - r_calc
-                n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
-                dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
-                return dn / n0 if n0 > 0 else dn
-
-            r = self.FN.Y
-
-            self.hst['T'].append(self.t)
-            self.hst['R'].append(r.copy())
-
-            msg = '| At T=%-6.1e :'%self.t
-
-            FN = self.FN.copy(is_full=False)
-            FN.eps/= 100
-
-            if self.MD.with_rt():
-                def func(x): return self.MD.rt(x, self.t)
-                r_real = FN.init(func).prep().Y
-                self.hst['E_real'].append(_err_calc(r, r_real))
-
-                msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
-
-            if self.MD.with_rs():
-                def func(x): return self.MD.rs(x)
-                r_stat = FN.init(func).prep().Y
-                self.hst['E_stat'].append(_err_calc(r, r_stat))
-
-                msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
-
-            return msg
 
         def step_v():
             ''' One computation step for the diffusion term. '''
@@ -344,16 +302,66 @@ class Solver(object):
 
             self.W0 = self.FN.Y.copy()
 
+        def step_f():
+            '''
+            Check result of the current calculation step.
+
+            OUTPUT:
+
+            msg - string representation of the current step for print
+            type: str
+
+            TODO:
+
+            - Add initial guess r to rt and maybe rs.
+            '''
+
+            def _err_calc(r_calc, r_real):
+                dr = r_real - r_calc
+                n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
+                dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
+                return dn / n0 if n0 > 0 else dn
+
+            r = self.FN.Y
+
+            self.hst['T'].append(self.t)
+            self.hst['R'].append(r.copy())
+
+            msg = '| At T=%-6.1e :'%self.t
+
+            FN = self.FN.copy(is_full=False)
+            FN.eps/= 100
+
+            if self.MD.with_rt():
+                def func(x): return self.MD.rt(x, self.t)
+                r_real = FN.init(func).prep().Y
+                self.hst['E_real'].append(_err_calc(r, r_real))
+
+                msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
+
+            if self.MD.with_rs():
+                def func(x): return self.MD.rs(x)
+                r_stat = FN.init(func).prep().Y
+                self.hst['E_stat'].append(_err_calc(r, r_stat))
+
+                msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
+
+            return msg
+
         M = self.TG.n0
 
         if with_print:
             _tqdm = tqdm(desc='Solve', unit='step', total=M-1, ncols=80)
+
+        _t = time.time()
 
         self.t = self.TG.l1
         self.FN.init(self.MD.r0)
         self.FN.prep()
 
         self.W0 = self.FN.Y.copy()
+
+        self.tms['calc']+= time.time() - _t
 
         for m in range(1, M):
             _t = time.time()
@@ -366,14 +374,10 @@ class Solver(object):
 
             self.tms['calc']+= time.time() - _t
 
-            _t = time.time()
-
             if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
-                _msg = step_check()
+                _msg = step_f()
                 if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
             if with_print: _tqdm.update(1)
-
-            self.tms['spec']+= time.time() - _t
 
         if with_print: _tqdm.close()
 
@@ -381,10 +385,7 @@ class Solver(object):
 
         self.FN.prep()
 
-        for n in ['T', 'R', 'E_real', 'E_stat']:
-            self.hst[n] = np.array(self.hst[n])
-
-        self.tms['spec']+= time.time() - _t
+        self.tms['calc']+= time.time() - _t
 
     def comp(self, X):
         '''
@@ -400,13 +401,13 @@ class Solver(object):
         r - calculated solution in the given points
         type: ndarray [number of points] of float
 
-        TODO! Add support for one-point input.
+        TODO:
+
+        - Add support for one-point input.
         '''
 
         if self.FN.A is None:
-            s = 'Solution of the equation is not calculated yet. '
-            s+= 'Call "prep" and "calc" functions before.'
-            raise ValueError(s)
+            raise ValueError('Solution of the equation is not calculated yet. Call "prep" and "calc" functions before.')
 
         return self.FN.comp(X)
 
@@ -508,9 +509,7 @@ class Solver(object):
 
         s+='Time sec  : '
         s+= 'prep = %8.2e, '%self.tms['prep']
-        s+= 'calc = %8.2e, '%self.tms['calc']
-        s+= 'spec = %8.2e\n'%self.tms['spec']
-
+        s+= 'calc = %8.2e\n'%self.tms['calc']
 
         if len(self.hst['E_real']):
             s+= 'Err real  : %8.2e\n'%self.hst['E_real'][-1]
