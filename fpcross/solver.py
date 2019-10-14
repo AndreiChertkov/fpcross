@@ -1,8 +1,7 @@
 import time
 import types
 import numpy as np
-from scipy.linalg import expm as sp_expm
-from scipy.integrate import solve_ivp as sp_solve_ivp
+from scipy.linalg import expm
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
@@ -11,7 +10,10 @@ from tqdm import tqdm
 import tt
 
 from . import config
+from . import difscheb
+from . import Grid
 from . import Func
+from . import OrdSolver
 
 class Solver(object):
     '''
@@ -24,19 +26,56 @@ class Solver(object):
     format may be used for the solution process.
 
     Basic usage:
-    1 Initialize class instance with grids, model, format and accuracy.
-    2 Call "prep" for initialization and construction of the special matrices.
-    3 Call "calc" for calculation process.
-    4 Call "comp" to obtain the final solution at any given spatial point.
-    5 Call "info" for demonstration of the calculation results.
-    6 Call "plot_x" for plot of solution and error at selected time moment.
-    7 Call "plot_t" for plot of solution and error at selected spatial point.
+    1 Initialize class instance with grids, model, accuracy and format.
+    2 Call "init" for initialization of the solver.
+    3 Call "prep" for construction of the special matrices.
+    4 Call "calc" for calculation process.
+    5 Call "comp" to obtain the final solution at any given spatial point.
+    6 Call "info" for demonstration of the calculation results.
+    7 Call "copy" to obtain new instance with the same parameters and results.
+
+    Advanced usage:
+    - Call "plot_x" for plot of solution and error at selected time moment.
+    - Call "plot_t" for plot of solution and error at selected spatial point.
+
+    PROPS:
+
+    TG - one-dimensional uniform time grid
+    type: fpcross.Grid
+
+    SG - one- or multi-dimensional spatial Chebyshev grid
+    type: fpcross.Grid
+
+    MD - model for equation with functions and coefficients
+    type: fpcross.Model
+
+    FN - function class that keep the current solution and its interpolation
+    type: fpcross.Func
+
+    hst - dictionary with saved (history) values
+    type: dict
+    fld : T - time moments
+        type: list of float
+    fld : R - solutions of the FPE on the spatial grid
+        type: list of np.ndarray or tt-tensor [number of points] of float
+    fld : E_real - errors vs analytic (real) solution
+        type: list of float, >= 0
+    fld : E_stat - errors vs stationary solution
+        type: list of float, >= 0
+    * Each field is a list of length t_hst.
+
+    tms - Saved durations of the main operations
+    type: dict
+    fld : prep - time spent to prepare special matrices
+        type: float, >= 0
+    fld : calc - time spent to perform calculations
+        type: float, >= 0
+    fld : spec - time spent to perform special operations (error comp., etc)
+        type: float, >= 0
     '''
 
     def __init__(self, TG, SG, MD, eps=1.E-6, ord=2, with_tt=False):
         '''
-        Init solver parameters.
-
         INPUT:
 
         TG - one-dimensional time grid
@@ -45,7 +84,7 @@ class Solver(object):
 
         SG - one- or multi-dimensional spatial grid
         type: fpcross.Grid
-        * Only "square" grids (each dimension have the same total number of
+        * Only "square" grids (each dimension has the same total number of
         * points and limits) are supported in the current version.
         * Only Chebyshev grids are supported in the current version.
 
@@ -56,7 +95,7 @@ class Solver(object):
         * or use ModelBase as the parent class (type2).
 
         eps - desired accuracy of the solution
-        type: float, > 0
+        type: float, >= 1.E-20
         * Is used only for TT-rounding operations and cross approximation
         * in the TT-format (is actual only if with_tt flag is set).
 
@@ -70,6 +109,10 @@ class Solver(object):
             True  - sparse (tensor train, TT) format will be used
             False - dense (numpy, NP) format will be used
         type: bool
+
+        TODO:
+
+        - Set t_hst as parameter.
         '''
 
         self.TG = TG
@@ -86,14 +129,14 @@ class Solver(object):
             raise ValueError('Invalid spatial grid (should be square Cheb.).')
 
         if self.eps < 1.E-20:
-            raise ValueError('Invalid accuracy parameter (should be > 1.E-20).')
+            raise ValueError('Invalid accuracy parameter (should be >=1.E-20).')
 
         if self.ord != 1 and self.ord != 2:
             raise ValueError('Invalid order parameter (should be 1 or 2).')
 
         self.FN = Func(self.SG, self.eps, self.with_tt)
 
-        t_hst = 10 # TODO! Set as parameter
+        t_hst = 10
         self.t_hst = int(self.TG.n0 * 1. / t_hst) if t_hst else 0
 
         self.init()
@@ -102,56 +145,40 @@ class Solver(object):
         '''
         Init the main parameters of the class instance.
 
-        OUTPUT:
+        TODO:
 
-        self - class instance
-        type: fpcross.Solver
+        - Maybe move some params from __init__ here.
         '''
 
-        self.hst = {      # Saved (history) values
-            'T': [],      # time moments
-            'R': [],      # solution on the spatial grid
-            'E_real': [], # error vs analytic (real) solution
-            'E_stat': [], # error vs stationary solution
-        }
-        self.tms = {      # Saved times (durations)
-            'prep': 0.,   # prepare special matrices
-            'calc': 0.,   # calculations
-            'spec': 0.,   # special operations (like error computation)
-        }
-
-        return self
+        self.hst = { 'T': [], 'R': [], 'E_real': [], 'E_stat': [] }
+        self.tms = { 'prep': 0., 'calc': 0., 'spec': 0. }
 
     def prep(self):
         '''
         Prepare special matrices.
 
-        OUTPUT:
+        TODO:
 
-        self - class instance
-        type: fpcross.Solver
-
-        TODO! Check usage of J matrix.
+        - Check usage of J matrix.
         '''
 
         _t = time.time()
 
-        D0 = self.FN.dif2().copy()
+        D0 = difscheb(self.SG, 2)[-1]
         J0 = np.eye(self.SG.n0)
         J0[+0, +0] = 0.
         J0[-1, -1] = 0.
         h0 = self.TG.h0 if self.ord == 1 else self.TG.h0 / 2.
-        Z0 = sp_expm(h0 * self.MD.Dc() * J0 @ D0)
+        Z0 = expm(h0 * self.MD.Dc() * J0 @ D0)
 
         self.Z0 = Z0
         if not self.with_tt:
             self.Z = Z0.copy()
             for _ in range(self.SG.d - 1): self.Z = np.kron(self.Z, Z0)
 
-        self.t = self.TG.l0[0] # Current time
+        self.t = self.TG.l1 # Current time
 
         self.tms['prep'] = time.time() - _t
-        return self
 
     def calc(self, with_print=True):
         '''
@@ -164,11 +191,6 @@ class Solver(object):
             False - results will not be printed
         type: bool
 
-        OUTPUT:
-
-        self - class instance
-        type: fpcross.Solver
-
         TODO! Check if initial W0 set is correct.
         '''
 
@@ -177,8 +199,8 @@ class Solver(object):
         if with_print:
             _tqdm = tqdm(desc='Solve', unit='step', total=M-1, ncols=80)
 
-        self.t = self.TG.l0[0]
-        self.FN.init(self.func_r0)
+        self.t = self.TG.l1
+        self.FN.init(self.MD.r0)
         self.FN.prep()
 
         self.W0 = self.FN.Y.copy()
@@ -213,7 +235,6 @@ class Solver(object):
             self.hst[n] = np.array(self.hst[n])
 
         self.tms['spec']+= time.time() - _t
-        return self
 
     def comp(self, X):
         '''
@@ -246,10 +267,8 @@ class Solver(object):
         TODO! Replace prints by string construction.
         '''
 
-        print('----------- Solver')
+        print('------------------ Solver')
         print('Format    : %1dD, %s [order=%d]'%(self.SG.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
-        print('Grid t    : poi = %9d, min = %9.4f, max = %9.4f'%(self.t_poi, self.t_min, self.t_max))
-        print('Grid x    : poi = %9d, min = %9.4f, max = %9.4f'%(self.x_poi, self.x_min, self.x_max))
         print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self.tms['prep'], self.tms['calc'],self.tms['spec']))
         if len(self.hst['E_real']):
             print('Err real  : %8.2e'%self.hst['E_real'][-1])
@@ -665,45 +684,41 @@ class Solver(object):
             dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
             return dn / n0 if n0 > 0 else dn
 
-        r = self.IT.Y
+        r = self.FN.Y
 
         self.hst['T'].append(self.t)
         self.hst['R'].append(r.copy())
 
         msg = '| At T=%-6.1e :'%self.t
 
-        IT = self.IT.copy(is_full=False)
-        IT.eps/= 100
+        FN = self.FN.copy(is_full=False)
+        FN.eps/= 100
 
-        if self.func_rt:
-            def func_rt(x): return self.func_rt(x, self.t)
-            r_real = IT.init(func_rt).Y
+        if self.MD.with_rt():
+            def func(x): return self.MD.rt(x, self.t)
+            r_real = FN.init(func).prep().Y
             self.hst['E_real'].append(_err_calc(r, r_real))
 
             msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
 
-        if self.func_rs:
-            def func_rs(x): return self.func_rs(x)
-            r_stat = IT.init(func_rs).Y
+        if self.MD.with_rs():
+            def func(x): return self.MD.rs(x)
+            r_stat = FN.init(func).prep().Y
             self.hst['E_stat'].append(_err_calc(r, r_stat))
 
             msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
-
-        if not self.func_rt and not self.func_rs:
-            # msg+= ' norm=%-6.1e'%np.linalg.norm(r)
-            pass
 
         return msg
 
     def _step_v(self):
         '''
         One computation step for the diffusion term.
-        Result is saved to the IT instance.
+        Result is saved to the FN instance.
 
         TODO! Check if tt-round is needed.
         '''
 
-        v0 = self.IT.Y
+        v0 = self.FN.Y
 
         if self.with_tt:
             G = tt.tensor.to_list(v0)
@@ -714,16 +729,16 @@ class Solver(object):
         else:
             v0 = v0.reshape(-1, order='F')
             v = self.Z @ v0
-            v = v.reshape(self.IT.n, order='F')
+            v = v.reshape(self.SG.n, order='F')
 
-        self.IT.init(Y=v)
+        self.FN.init(Y=v)
 
     def _step_w(self):
         '''
         One computation step for the drift term.
         Result is saved to the IT instance.
 
-        TODO! Check IT.copy() work.
+        TODO! Check FN.copy() work.
         TODO! Is it correct to add eps to prevent zero division in cross appr?
         TODO! Try interpolation of the log.
         TODO! Try initial guess in the form of the Euler solution.
@@ -753,16 +768,16 @@ class Solver(object):
 
             x, r = y[:-1, :], y[-1, :]
 
-            f0 = self.func_f0(x, t)
-            f1 = self.func_f1(x, t)
+            f0 = self.MD.f0(x, t)
+            f1 = self.MD.f1(x, t)
 
             return np.vstack([f0, -np.trace(f1) * r])
 
-        def step(x):
+        def step(X):
             '''
             INPUT:
 
-            x - values of the spatial variable
+            X - values of the spatial variable
             type: ndarray [dimensions, number of points] of float
 
             OUTPUT:
@@ -771,11 +786,17 @@ class Solver(object):
             type: ndarray [number of points] of float
             '''
 
-            sl = Solver.ode_solve_rk4 if self.ord == 2 else Solver.ode_solve_eul
-            x0 = sl(self.func_f0, x, self.t, self.t - self.h, t_poi=2)
-            w0 = IT0.calc(x0)
+            TG = Grid(1, 2, [self.t, self.t - self.TG.h0], kind='u')
+            SL = OrdSolver(TG, kind='eul' if self.ord == 1 else 'rk4')
+            SL.init(self.MD.f0)
+            X0 = SL.comp(X)
+            w0 = FN.comp(X0)
             y0 = np.vstack([x0, w0])
-            y1 = sl(func, y0, self.t - self.h, self.t, t_poi=2)
+
+            TG = Grid(1, 2, [self.t - self.TG.h0, self.t], kind='u')
+            SL = OrdSolver(TG, kind='eul' if self.ord == 1 else 'rk4')
+            SL.init(func)
+            y1 = SL.comp(np.vstack([x0, w0]))
             w1 = y1[-1, :]
 
             if self.with_tt and np.linalg.norm(w1) < 1.E-15:
@@ -783,39 +804,15 @@ class Solver(object):
 
             return w1
 
-        IT0 = self.IT.copy().prep()
+        FN = self.FN.copy()
+        FN.calc()
 
-        self.IT.init(step, opts={
+        self.FN.init(step, opts={
             'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
         })
-        self.W0 = self.IT.Y.copy()
+        self.FN.prep()
 
-    def _sind(self, x):
-        '''
-        Find the nearest flatten grid index for the given spatial point.
-
-        INPUT:
-
-        x - spatial point
-        type: ndarray (or list) [dimensions] of float
-
-        OUTPUT:
-
-        i - flatten grid index
-        type:  float
-
-        TODO! Add support for calculation without explicit spatial grid.
-        '''
-
-        if isinstance(x, list): x = np.array(x)
-        if not isinstance(x, np.ndarray) or x.shape[0] != self.SG.d:
-            s = 'Invalid spatial point.'
-            raise ValueError(s)
-
-        x = np.repeat(x.reshape(-1, 1), self.X_hst.shape[1], axis=1)
-        i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
-
-        return i
+        self.W0 = self.FN.Y.copy()
 
     def _calc_rhs(self, t=None, is_real=False, is_stat=False):
         '''
@@ -828,231 +825,39 @@ class Solver(object):
         type:  float, >= 0
         '''
 
-        IT = self.IT.copy()
-        if is_real: IT.init(self.func_rt)
-        if is_stat: IT.init(self.func_rs)
+        FN = self.FN.copy()
+        if is_real: FN.init(self.MD.rt)
+        if is_stat: FN.init(self.MD.rs)
 
-        I0 = np.eye(self.x_poi)
-        D1 = IT.dif1()
-        D2 = IT.dif2()
+        I0 = np.eye(self.SG.n0)
+        D1, D2 = difscheb(self.SG, 2)
 
         if not t: t = self.t
-        x = IT.grid()
-        f = self.func_f0(x, t)
-        r = IT.Y
+        x = self.SG.comp()
+        f = self.MD.f0(x, t)
+        r = FN.Y
         if self.with_tt: r = r.full()
         r = r.reshape(-1, order='F')
 
         rhs = 0.
         for k in range(self.SG.d):
-            M = [np.eye(self.x_poi) for _ in range(self.SG.d)]
+            M = [np.eye(self.SG.n0) for _ in range(self.SG.d)]
 
-            M[self.SG.d-1-k] = D1.copy(); _D1 = M[0].copy()
-            for k_ in range(1, self.SG.d): _D1 = np.kron(_D1, M[k_])
+            M[self.SG.d - 1 - k] = D1.copy()
+            _D1 = M[0].copy()
+            for k_ in range(1, self.SG.d):
+                _D1 = np.kron(_D1, M[k_])
 
-            M[self.SG.d-1-k] = D2.copy(); _D2 = M[0].copy()
-            for k_ in range(1, self.SG.d): _D2 = np.kron(_D2, M[k_])
+            M[self.SG.d - 1 - k] = D2.copy()
+            _D2 = M[0].copy()
+            for k_ in range(1, self.SG.d):
+                _D2 = np.kron(_D2, M[k_])
 
             rhs-= _D1 @ (r * f[k, :])
-            rhs+= _D2 @ (r * self.Dc)
+            rhs+= _D2 @ (r * self.MD.Dc())
 
-        J0 = np.eye(self.x_poi); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
-        for _ in range(1, self.SG.d): J = np.kron(J, J0)
+        J0 = np.eye(self.SG.n0); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
+        for _ in range(1, self.SG.d):
+            J = np.kron(J, J0)
 
         return np.linalg.norm(rhs) / np.linalg.norm(r)
-
-    @staticmethod
-    def ode_solve_eul(f, y0, t_min, t_max, t_poi=2, with_y0=False):
-        '''
-        Solve the ordinary differential equation (ODE) d y / d t = f(y, t)
-        with multiple initial conditions by standard Euiler method.
-
-        INPUT:
-
-        f - function that calculate the rhs of the ODE for given points
-        type: function
-            inp:
-                y - values of the spatial variable
-                type: ndarray [dimensions, number of points] of float
-                t - value of the time
-                type: float
-            out:
-                f - function values on y points for time t
-                type: ndarray [dimensions, number of points] of float
-
-        y0 - initial values of the variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        t_min - initial time
-        type: float
-
-        t_max - final time
-        type: float
-
-        t_poi - total number of points
-        type: int, >= 2
-        * The min and max values are included.
-        * If it is equal to 2, then points will be [t_min, t_max].
-
-        with_y0 - flag:
-            True  - the 3th argument y0 for the current points will be passed
-                    to the function f
-            False - without y0 argument
-        type: bool
-
-        OUTPUT:
-
-        y - solution at the final time step
-        type: ndarray [dimensions, number of points] of float
-        '''
-
-        if t_poi < 2:
-            s = 'Invalid number of time points (should be at least 2).'
-            raise ValueError(s)
-
-        if not isinstance(y0, np.ndarray): y0 = np.array(y0)
-
-        h = (t_max - t_min) / (t_poi - 1)
-        t = t_min
-        y = y0.copy()
-
-        def func(y, t):
-            return f(y, t, y0) if with_y0 else f(y, t)
-
-        for _ in range(1, t_poi):
-            y+= h * func(y, t)
-            t+= h
-
-        return y
-
-    @staticmethod
-    def ode_solve_rk4(f, y0, t_min, t_max, t_poi=2, with_y0=False):
-        '''
-        Solve the ordinary differential equation (ODE) d y / d t = f(y, t)
-        with multiple initial conditions by the 4th order Runge-Kutta method.
-
-        INPUT:
-
-        f - function that calculate the rhs of the ODE for given points
-        type: function
-            inp:
-                y - values of the spatial variable
-                type: ndarray [dimensions, number of points] of float
-                t - value of the time
-                type: float
-            out:
-                f - function values on y points for time t
-                type: ndarray [dimensions, number of points] of float
-
-        y0 - initial values of the variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        t_min - initial time
-        type: float
-
-        t_max - final time
-        type: float
-
-        t_poi - total number of points
-        type: int, >= 2
-        * The min and max values are included.
-        * If it is equal to 2, then points will be [t_min, t_max].
-
-        with_y0 - flag:
-            True  - the 3th argument y0 for the current points will be passed
-                    to the function f
-            False - without y0 argument
-        type: bool
-
-        OUTPUT:
-
-        y - solution at the final time step
-        type: ndarray [dimensions, number of points] of float
-        '''
-
-        if t_poi < 2:
-            s = 'Invalid number of time points (should be at least 2).'
-            raise ValueError(s)
-
-        if not isinstance(y0, np.ndarray): y0 = np.array(y0)
-
-        h = (t_max - t_min) / (t_poi - 1)
-        t = t_min
-        y = y0.copy()
-
-        def func(y, t):
-            return f(y, t, y0) if with_y0 else f(y, t)
-
-        for _ in range(1, t_poi):
-            k1 = h * func(y, t)
-            k2 = h * func(y + 0.5 * k1, t + 0.5 * h)
-            k3 = h * func(y + 0.5 * k2, t + 0.5 * h)
-            k4 = h * func(y + k3, t + h)
-            y+= (k1 + k2 + k2 + k3 + k3 + k4) / 6.
-            t+= h
-
-        return y
-
-    @staticmethod
-    def ode_solve_ivp(f, y0, t_min, t_max, t_poi=2, with_y0=False):
-        '''
-        Solve the ordinary differential equation (ODE) d y / d t = f(y, t)
-        with multiple initial conditions by the standard scipy solver.
-
-        INPUT:
-
-        f - function that calculate the rhs of the ODE for given points
-        type: function
-            inp:
-                y - values of the spatial variable
-                type: ndarray [dimensions, number of points] of float
-                t - value of the time
-                type: float
-            out:
-                f - function values on y points for time t
-                type: ndarray [dimensions, number of points] of float
-
-        y0 - initial values of the variable
-        type: ndarray (or list) [dimensions, number of points] of float
-
-        t_min - initial time
-        type: float
-
-        t_max - final time
-        type: float
-
-        t_poi - total number of points
-        type: int, >= 2
-        * Is not used in the current version.
-
-        with_y0 - flag:
-            True  - the 3th argument y0 for the current points will be passed
-                    to the function f
-            False - without y0 argument
-        type: bool
-
-        OUTPUT:
-
-        y - solution at the final time step
-        type: ndarray [dimensions, number of points] of float
-        '''
-
-        if t_poi < 2:
-            s = 'Invalid number of time points (should be at least 2).'
-            raise ValueError(s)
-
-        if not isinstance(y0, np.ndarray): y0 = np.array(y0)
-
-        y = y0.copy()
-
-        for j in range(y.shape[1]):
-
-            def func(t, y):
-                y_ = y.reshape(-1, 1)
-                if with_y0:
-                    return f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
-                return f(y_, t).reshape(-1)
-
-            y[:, j] = sp_solve_ivp(func, [t_min, t_max], y[:, j]).y[:, -1]
-
-        return y
