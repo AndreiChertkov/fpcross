@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.linalg import toeplitz as _toeplitz
+from scipy.linalg import toeplitz
 
 def difscheb(SG, m):
     '''
@@ -44,7 +44,7 @@ def difscheb(SG, m):
     Z = 1. / DX
     Z[range(n), range(n)] = 0.
 
-    C = _toeplitz((-1.)**k)
+    C = toeplitz((-1.)**k)
     C[+0, :]*= 2
     C[-1, :]*= 2
     C[:, +0]*= 0.5

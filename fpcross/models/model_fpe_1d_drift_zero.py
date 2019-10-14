@@ -94,24 +94,27 @@ $$
 
 class Model(ModelBase):
 
-    def __init__(self):
-        super().__init__(info, d=1)
+    def dim(self):
+        return 1
 
-    def _Dc(self):
+    def Dc(self):
         return self.D
 
-    def _f0(self, x, t):
+    def f0(self, x, t):
         return np.zeros(x.shape)
 
-    def _f1(self, x, t):
+    def f1(self, x, t):
         return np.zeros(x.shape)
 
-    def _r0(self, x):
+    def r0(self, x):
         a = 2. * self.s
         r = np.exp(-x * x / a) / np.sqrt(np.pi * a)
         return r.reshape(-1)
 
-    def _rt(self, x, t):
+    def rt(self, x, t):
         a = 2. * self.s + 4. * self.D * t
         r = np.exp(-x * x / a) / np.sqrt(np.pi * a)
         return r.reshape(-1)
+
+    def with_rt(self):
+        return True

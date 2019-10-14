@@ -58,34 +58,68 @@ class Model(object):
         display(Markdown(s))
 
     def dim(self):
-        return self.d
+        '''
+        Spatial dimension.
+        '''
+
+        raise NotImplementedError('This is abstract class.')
 
     def Dc(self):
-        return self._Dc()
+        '''
+        Diffusion coefficient.
+        '''
+
+        raise NotImplementedError('This is abstract class.')
 
     def f0(self, x, t):
-        return self._f0(self._prep_x(x), t)
+        '''
+        Function f(x, t).
+        '''
+
+        raise NotImplementedError('This is abstract class.')
 
     def f1(self, x, t):
-        return self._f1(self._prep_x(x), t)
+        '''
+        Function f(x, t) / d x.
+        '''
+
+        raise NotImplementedError('This is abstract class.')
 
     def r0(self, x):
-        return self._r0(self._prep_x(x))
+        '''
+        Initial condition.
+        '''
+
+        raise NotImplementedError('This is abstract class.')
 
     def rt(self, x, t):
+        '''
+        Exact analytic solution.
+        '''
+
         if not self.with_rt: raise ValueError('The model has not rt.')
-        return self._rt(self._prep_x(x), t)
+        raise NotImplementedError('This is abstract class.')
 
     def rs(self, x):
+        '''
+        Exact stationary solution.
+        '''
+
         if not self.with_rs: raise ValueError('The model has not rs.')
-        return self._rs(self._prep_x(x))
+        raise NotImplementedError('This is abstract class.')
 
     def with_rt(self):
-        return getattr(self, '_rt', None) is not None
+        '''
+        Return True if model has known exact analytic solution.
+        '''
+
+        # return getattr(self, 'rt', None) is not None
+        return False
 
     def with_rs(self):
-        return getattr(self, '_rs', None) is not None
+        '''
+        Return True if model has known exact stationary solution.
+        '''
 
-    def _prep_x(self, x):
-        if isinstance(x, list): x = np.array(x)
-        return x
+        # return getattr(self, 'rs', None) is not None
+        return False
