@@ -72,3 +72,5 @@ All examples are performed as interactive browser-based jupyter lab notebooks. T
 * [ ] Add basic tests for all modules.
 
 * [ ] Find a more suitable name for the package and rename it.
+
+* [ ] Select convection for the doc-strings (functions and classes) and update the corresponding comments in the code.

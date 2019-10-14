@@ -26,7 +26,7 @@ class Solver(object):
     format may be used for the solution process.
 
     Basic usage:
-    1 Initialize class instance with grids, model, accuracy and format.
+    1 Initialize class instance with grids, model, accuracy and format options.
     2 Call "init" for initialization of the solver.
     3 Call "prep" for construction of the special matrices.
     4 Call "calc" for calculation process.
@@ -62,11 +62,13 @@ class Solver(object):
         type: list of float, >= 0
     fld : E_stat - errors vs stationary solution
         type: list of float, >= 0
-    * Each field is a list of length t_hst.
+    * Fields T and R are lists of length t_hst.
+    * Field E_real (E_stat) is a list of length t_hst if real (stationary)
+    * solution is provided and is an empty list otherwise.
 
     tms - Saved durations of the main operations
     type: dict
-    fld : prep - time spent to prepare special matrices
+    fld : prep - time spent to prepare required matrices, etc.
         type: float, >= 0
     fld : calc - time spent to perform calculations
         type: float, >= 0
@@ -99,7 +101,7 @@ class Solver(object):
         * Is used only for TT-rounding operations and cross approximation
         * in the TT-format (is actual only if with_tt flag is set).
 
-        ord - order of approximation
+        ord - order of the approximation
         type: int
         enum:
             - 1 - for the 1th order splitting and Euler ODE solver
@@ -113,6 +115,7 @@ class Solver(object):
         TODO:
 
         - Set t_hst as parameter.
+        - Check model type.
         '''
 
         self.TG = TG
@@ -143,11 +146,11 @@ class Solver(object):
 
     def init(self):
         '''
-        Init the main parameters of the class instance.
+        Init main parameters of the class instance.
 
         TODO:
 
-        - Maybe move some params from __init__ here.
+        - Maybe move some params from __init__ to this function.
         '''
 
         self.hst = { 'T': [], 'R': [], 'E_real': [], 'E_stat': [] }
@@ -169,12 +172,13 @@ class Solver(object):
         J0[+0, +0] = 0.
         J0[-1, -1] = 0.
         h0 = self.TG.h0 if self.ord == 1 else self.TG.h0 / 2.
-        Z0 = expm(h0 * self.MD.Dc() * J0 @ D0)
+        Dc = self.MD.Dc()
+        Z0 = expm(h0 * Dc * J0 @ D0)
 
         self.Z0 = Z0
         if not self.with_tt:
-            self.Z = Z0.copy()
-            for _ in range(self.SG.d - 1): self.Z = np.kron(self.Z, Z0)
+            for i in range(self.SG.d):
+                self.Z = Z0.copy() if i == 0 else np.kron(self.Z, Z0)
 
         self.t = self.TG.l1 # Current time
 
@@ -191,8 +195,154 @@ class Solver(object):
             False - results will not be printed
         type: bool
 
-        TODO! Check if initial W0 set is correct.
+        TODO:
+
+        - Check if tt-round is needed for step_v.
+
+        - Check if initial W0 set is correct.
+
+        - Add initial guess r to rt and maybe rs in step_check.
+
+        TODO! Check FN.copy() work.
+        TODO! Is it correct to add eps to prevent zero division in cross appr?
+        TODO! Try interpolation of the log.
+        TODO! Try initial guess in the form of the Euler solution.
+        TODO! Check various numbers of points for ODE solvers.
         '''
+
+        def step_check():
+            '''
+            Check result of the current calculation step.
+
+            OUTPUT:
+
+            msg - string representation of the current step for print
+            type: str
+
+            TODO! Add initial guess r to rt and maybe rs.
+            '''
+
+            def _err_calc(r_calc, r_real):
+                dr = r_real - r_calc
+                n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
+                dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
+                return dn / n0 if n0 > 0 else dn
+
+            r = self.FN.Y
+
+            self.hst['T'].append(self.t)
+            self.hst['R'].append(r.copy())
+
+            msg = '| At T=%-6.1e :'%self.t
+
+            FN = self.FN.copy(is_full=False)
+            FN.eps/= 100
+
+            if self.MD.with_rt():
+                def func(x): return self.MD.rt(x, self.t)
+                r_real = FN.init(func).prep().Y
+                self.hst['E_real'].append(_err_calc(r, r_real))
+
+                msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
+
+            if self.MD.with_rs():
+                def func(x): return self.MD.rs(x)
+                r_stat = FN.init(func).prep().Y
+                self.hst['E_stat'].append(_err_calc(r, r_stat))
+
+                msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
+
+            return msg
+
+        def step_v():
+            ''' One computation step for the diffusion term. '''
+
+            v0 = self.FN.Y
+
+            if self.with_tt:
+                G = tt.tensor.to_list(v0)
+                for i in range(self.SG.d):
+                    G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
+                v = tt.tensor.from_list(G)
+                v = v.round(self.eps)
+            else:
+                v0 = v0.reshape(-1, order='F')
+                v = self.Z @ v0
+                v = v.reshape(self.SG.n, order='F')
+
+            self.FN.init(Y=v)
+
+        def step_w():
+            ''' One computation step for the drift term. '''
+
+            def func(y, t):
+                '''
+                Compute rhs for the system of convection equations
+                d x / dt = f(x, t)
+                d w / dt = - Tr[ d f(x, t) / d t] w.
+
+                INPUT:
+
+                y - combined values of the spatial variable (x) and PDF (w)
+                type: ndarray [dimensions + 1, number of points] of float
+                * First dimensions rows are related to x and the last row to w.
+
+                t - time
+                type: float
+
+                OUTPUT:
+
+                rhs - rhs of the system
+                type: ndarray [dimensions + 1, number of points] of float
+                '''
+
+                x, r = y[:-1, :], y[-1, :]
+
+                f0 = self.MD.f0(x, t)
+                f1 = self.MD.f1(x, t)
+
+                return np.vstack([f0, -np.trace(f1) * r])
+
+            def step(X):
+                '''
+                INPUT:
+
+                X - values of the spatial variable
+                type: ndarray [dimensions, number of points] of float
+
+                OUTPUT:
+
+                w - approximated values of the solution in the given points
+                type: ndarray [number of points] of float
+                '''
+
+                TG = Grid(1, 2, [self.t, self.t - self.TG.h0], kind='u')
+                SL = OrdSolver(TG, kind='eul' if self.ord == 1 else 'rk4')
+                SL.init(self.MD.f0)
+                X0 = SL.comp(X)
+                w0 = FN.comp(X0)
+                y0 = np.vstack([x0, w0])
+
+                TG = Grid(1, 2, [self.t - self.TG.h0, self.t], kind='u')
+                SL = OrdSolver(TG, kind='eul' if self.ord == 1 else 'rk4')
+                SL.init(func)
+                y1 = SL.comp(np.vstack([x0, w0]))
+                w1 = y1[-1, :]
+
+                if self.with_tt and np.linalg.norm(w1) < 1.E-15:
+                    w1+= 1.E-15 # To prevent zero division in cross appr.
+
+                return w1
+
+            FN = self.FN.copy()
+            FN.calc()
+
+            self.FN.init(step, opts={
+                'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
+            })
+            self.FN.prep()
+
+            self.W0 = self.FN.Y.copy()
 
         M = self.TG.n0
 
@@ -210,16 +360,16 @@ class Solver(object):
 
             self.t+= self.TG.h0
 
-            self._step_v()
-            self._step_w()
-            if self.ord == 2: self._step_v()
+            step_v()
+            step_w()
+            if self.ord == 2: step_v()
 
             self.tms['calc']+= time.time() - _t
 
             _t = time.time()
 
             if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
-                _msg = self._step_check()
+                _msg = step_check()
                 if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
             if with_print: _tqdm.update(1)
 
@@ -260,20 +410,116 @@ class Solver(object):
 
         return self.FN.comp(X)
 
-    def info(self):
+    def comp_rhs(self, t=None, is_real=False, is_stat=False):
+        '''
+        Compute the right hand side of the FPE for the current solution
+        (calculated, real or stationary), using Chebyshev differential matrices.
+        * This function is used only for check of the models for equations.
+        * Full spatial grid (and transformation of the tt-tensor to full
+        format if with_tt) is used in the current version!
+
+        INPUT:
+
+        t - time for computation
+        type1: None
+        type2: float
+        * If is not set (type1), then the current time will be used.
+
+        is_real - flag:
+            True  - use real solution
+            False - do not use real solution
+        type: bool
+
+        is_stat - flag:
+            True  - use stationary solution
+            False - do not use stationary solution
+        type: bool
+
+        OUTPUT:
+
+        e - rhs norm divided by the solution norm
+        type:  float, >= 0
+
+        TODO:
+
+        - Add support for computation in the TT-format.
+        '''
+
+        FN = self.FN.copy()
+        if is_real:
+            FN.init(self.MD.rt)
+            FN.prep()
+        if is_stat:
+            FN.init(self.MD.rs)
+            FN.prep()
+
+        t = self.t if not t else t
+        x = self.SG.comp()
+        f = self.MD.f0(x, t)
+        Dc = self.MD.Dc()
+        r = FN.Y.full() if self.with_tt else FN.Y.copy()
+        r = r.reshape(-1, order='F')
+
+        D1, D2 = difscheb(self.SG, 2)
+        #J0 = np.eye(self.SG.n0); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
+        #for _ in range(1, self.SG.d):
+        #    J = np.kron(J, J0)
+
+        rhs = 0.
+        for k in range(self.SG.d):
+            M = [np.eye(self.SG.n0) for _ in range(self.SG.d)]
+
+            M[self.SG.d - 1 - k] = D1.copy()
+            _D1 = M[0].copy()
+            for k_ in range(1, self.SG.d):
+                _D1 = np.kron(_D1, M[k_])
+
+            M[self.SG.d - 1 - k] = D2.copy()
+            _D2 = M[0].copy()
+            for k_ in range(1, self.SG.d):
+                _D2 = np.kron(_D2, M[k_])
+
+            rhs-= _D1 @ (r * f[k, :])
+            rhs+= _D2 @ (r * Dc)
+
+        return np.linalg.norm(rhs) / np.linalg.norm(r)
+
+    def info(self, is_ret=False):
         '''
         Present information about the last computation.
 
-        TODO! Replace prints by string construction.
+        INPUT:
+
+        is_ret - flag:
+            True  - return string info
+            False - print string info
+        type: bool
+
+        OUTPUT:
+
+        s - (if is_out) string with info
+        type: str
         '''
 
-        print('------------------ Solver')
-        print('Format    : %1dD, %s [order=%d]'%(self.SG.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP', self.ord))
-        print('Time sec  : prep = %8.2e, calc = %8.2e, spec = %8.2e'%(self.tms['prep'], self.tms['calc'],self.tms['spec']))
+        s = '------------------ Solver\n'
+        s+= 'Format    : %1dD, '%self.SG.d
+        s+= 'TT, eps= %8.2e '%self.eps if self.with_tt else 'NP '
+        s+= '[order=%d]\n'%self.ord
+
+        s+='Time sec  : '
+        s+= 'prep = %8.2e, '%self.tms['prep']
+        s+= 'calc = %8.2e, '%self.tms['calc']
+        s+= 'spec = %8.2e\n'%self.tms['spec']
+
+
         if len(self.hst['E_real']):
-            print('Err real  : %8.2e'%self.hst['E_real'][-1])
+            s+= 'Err real  : %8.2e\n'%self.hst['E_real'][-1]
         if len(self.hst['E_stat']):
-            print('Err stat  : %8.2e'%self.hst['E_stat'][-1])
+            s+= 'Err stat  : %8.2e\n'%self.hst['E_stat'][-1]
+
+        if not s.endswith('\n'): s+= '\n'
+        if is_ret: return s
+        print(s[:-1])
 
     def anim(self, ffmpeg_path, delt=50):
         '''
@@ -286,6 +532,10 @@ class Solver(object):
 
         delt - number of frames per second
         type: int, > 0
+
+        TODO:
+
+        - Finilize.
         '''
 
         s = 'Is draft.'
@@ -385,8 +635,13 @@ class Solver(object):
             default: False
             type: bool
 
-        TODO! Build full spatial grid only if plot is required.
+        TODO:
+
+        - Finilize.
         '''
+
+        s = 'Is draft.'
+        raise NotImplementedError(s)
 
         conf = config['opts']['plot']
         sett = config['plot']['spatial']
@@ -550,8 +805,13 @@ class Solver(object):
             default: False
             type: bool
 
-        TODO! Replace full spatial grid by several selected points.
+        TODO:
+
+        - Finilize.
         '''
+
+        s = 'Is draft.'
+        raise NotImplementedError(s)
 
         if isinstance(x, (int, float)): x = np.array([float(x)])
         if isinstance(x, list): x = np.array(x)
@@ -665,199 +925,3 @@ class Solver(object):
             ax2.legend(loc='best')
 
         plt.show()
-
-    def _step_check(self):
-        '''
-        Check result of the current calculation step.
-
-        OUTPUT:
-
-        msg - string representation of the current step for print
-        type: str
-
-        TODO! Add initial guess r to rt and maybe rs.
-        '''
-
-        def _err_calc(r_calc, r_real):
-            dr = r_real - r_calc
-            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
-            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
-            return dn / n0 if n0 > 0 else dn
-
-        r = self.FN.Y
-
-        self.hst['T'].append(self.t)
-        self.hst['R'].append(r.copy())
-
-        msg = '| At T=%-6.1e :'%self.t
-
-        FN = self.FN.copy(is_full=False)
-        FN.eps/= 100
-
-        if self.MD.with_rt():
-            def func(x): return self.MD.rt(x, self.t)
-            r_real = FN.init(func).prep().Y
-            self.hst['E_real'].append(_err_calc(r, r_real))
-
-            msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
-
-        if self.MD.with_rs():
-            def func(x): return self.MD.rs(x)
-            r_stat = FN.init(func).prep().Y
-            self.hst['E_stat'].append(_err_calc(r, r_stat))
-
-            msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
-
-        return msg
-
-    def _step_v(self):
-        '''
-        One computation step for the diffusion term.
-        Result is saved to the FN instance.
-
-        TODO! Check if tt-round is needed.
-        '''
-
-        v0 = self.FN.Y
-
-        if self.with_tt:
-            G = tt.tensor.to_list(v0)
-            for i in range(self.SG.d):
-                G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
-            v = tt.tensor.from_list(G)
-            v = v.round(self.eps)
-        else:
-            v0 = v0.reshape(-1, order='F')
-            v = self.Z @ v0
-            v = v.reshape(self.SG.n, order='F')
-
-        self.FN.init(Y=v)
-
-    def _step_w(self):
-        '''
-        One computation step for the drift term.
-        Result is saved to the IT instance.
-
-        TODO! Check FN.copy() work.
-        TODO! Is it correct to add eps to prevent zero division in cross appr?
-        TODO! Try interpolation of the log.
-        TODO! Try initial guess in the form of the Euler solution.
-        TODO! Check various numbers of points for ODE solvers.
-        '''
-
-        def func(y, t):
-            '''
-            Compute rhs for the system of convection equations
-            d x / dt = f(x, t)
-            d w / dt = - Tr[ d f(x, t) / d t] w.
-
-            INPUT:
-
-            y - combined values of the spatial variable (x) and PDF (w)
-            type: ndarray [dimensions + 1, number of points] of float
-            * First dimensions rows are related to x and the last row to w.
-
-            t - time
-            type: float
-
-            OUTPUT:
-
-            rhs - rhs of the system
-            type: ndarray [dimensions + 1, number of points] of float
-            '''
-
-            x, r = y[:-1, :], y[-1, :]
-
-            f0 = self.MD.f0(x, t)
-            f1 = self.MD.f1(x, t)
-
-            return np.vstack([f0, -np.trace(f1) * r])
-
-        def step(X):
-            '''
-            INPUT:
-
-            X - values of the spatial variable
-            type: ndarray [dimensions, number of points] of float
-
-            OUTPUT:
-
-            w - approximated values of the solution in the given points
-            type: ndarray [number of points] of float
-            '''
-
-            TG = Grid(1, 2, [self.t, self.t - self.TG.h0], kind='u')
-            SL = OrdSolver(TG, kind='eul' if self.ord == 1 else 'rk4')
-            SL.init(self.MD.f0)
-            X0 = SL.comp(X)
-            w0 = FN.comp(X0)
-            y0 = np.vstack([x0, w0])
-
-            TG = Grid(1, 2, [self.t - self.TG.h0, self.t], kind='u')
-            SL = OrdSolver(TG, kind='eul' if self.ord == 1 else 'rk4')
-            SL.init(func)
-            y1 = SL.comp(np.vstack([x0, w0]))
-            w1 = y1[-1, :]
-
-            if self.with_tt and np.linalg.norm(w1) < 1.E-15:
-                w1+= 1.E-15 # To prevent zero division in cross appr.
-
-            return w1
-
-        FN = self.FN.copy()
-        FN.calc()
-
-        self.FN.init(step, opts={
-            'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
-        })
-        self.FN.prep()
-
-        self.W0 = self.FN.Y.copy()
-
-    def _calc_rhs(self, t=None, is_real=False, is_stat=False):
-        '''
-        Helper function that calculates the right hand side of the FPE,
-        using Chebyshev differential matrices.
-
-        OUTPUT:
-
-        e - rhs norm divided by the solution norm
-        type:  float, >= 0
-        '''
-
-        FN = self.FN.copy()
-        if is_real: FN.init(self.MD.rt)
-        if is_stat: FN.init(self.MD.rs)
-
-        I0 = np.eye(self.SG.n0)
-        D1, D2 = difscheb(self.SG, 2)
-
-        if not t: t = self.t
-        x = self.SG.comp()
-        f = self.MD.f0(x, t)
-        r = FN.Y
-        if self.with_tt: r = r.full()
-        r = r.reshape(-1, order='F')
-
-        rhs = 0.
-        for k in range(self.SG.d):
-            M = [np.eye(self.SG.n0) for _ in range(self.SG.d)]
-
-            M[self.SG.d - 1 - k] = D1.copy()
-            _D1 = M[0].copy()
-            for k_ in range(1, self.SG.d):
-                _D1 = np.kron(_D1, M[k_])
-
-            M[self.SG.d - 1 - k] = D2.copy()
-            _D2 = M[0].copy()
-            for k_ in range(1, self.SG.d):
-                _D2 = np.kron(_D2, M[k_])
-
-            rhs-= _D1 @ (r * f[k, :])
-            rhs+= _D2 @ (r * self.MD.Dc())
-
-        J0 = np.eye(self.SG.n0); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
-        for _ in range(1, self.SG.d):
-            J = np.kron(J, J0)
-
-        return np.linalg.norm(rhs) / np.linalg.norm(r)
