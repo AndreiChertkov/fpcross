@@ -221,7 +221,7 @@ class Func(object):
             raise ValueError('Function is not set. Can not prepare.')
 
 
-        self.tms['prep'] = time.time()
+        self.tms['prep'] = time.perf_counter()
 
         if self.with_tt: # TT-format
             log_file = './__tt-cross_tmp.txt'
@@ -229,9 +229,9 @@ class Func(object):
             def func(ind):
                 ind = ind.astype(int)
                 X = self.SG.comp(ind.T)
-                t = time.time()
+                t = time.perf_counter()
                 Y = self.f(X, ind.T) if self.opts['is_f_with_i'] else self.f(X)
-                self.tms['func']+= time.time() - t
+                self.tms['func']+= time.perf_counter() - t
                 self.res['evals']+= X.shape[1]
                 return Y
 
@@ -272,7 +272,7 @@ class Func(object):
             log.close()
             os.remove(log_file)
         else:            # NP-format
-            self.tms['func'] = time.time()
+            self.tms['func'] = time.perf_counter()
 
             X = self.SG.comp()
             if self.opts['is_f_with_i']:
@@ -282,9 +282,9 @@ class Func(object):
                 self.Y = self.f(X)
             self.Y = self.Y.reshape(self.SG.n, order='F')
 
-            self.tms['func'] = (time.time() - self.tms['func']) / X.shape[1]
+            self.tms['func'] = (time.perf_counter()-self.tms['func'])/X.shape[1]
 
-        self.tms['prep'] = time.time() - self.tms['prep']
+        self.tms['prep'] = time.perf_counter() - self.tms['prep']
 
     def calc(self):
         '''
@@ -298,7 +298,7 @@ class Func(object):
         if self.Y is None:
             raise ValueError('Train data is not set. Can not build interpolation coefficients. Call "prep" before.')
 
-        self.tms['calc'] = time.time()
+        self.tms['calc'] = time.perf_counter()
 
         if self.with_tt: # TT-format
             G = tt.tensor.to_list(self.Y)
@@ -325,7 +325,7 @@ class Func(object):
                 self.A = self.A.reshape(n_, order='F')
                 self.A = np.swapaxes(self.A, 0, i)
 
-        self.tms['calc'] = time.time() - self.tms['calc']
+        self.tms['calc'] = time.perf_counter() - self.tms['calc']
 
     def comp(self, X, z=0.):
         '''

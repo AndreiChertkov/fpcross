@@ -166,7 +166,7 @@ class Solver(object):
         - Check usage of J matrix.
         '''
 
-        _t = time.time()
+        _t = time.perf_counter()
 
         D0 = difscheb(self.SG, 2)[-1]
         J0 = np.eye(self.SG.n0)
@@ -183,7 +183,7 @@ class Solver(object):
 
         self.t = self.TG.l1 # Current time
 
-        self.tms['prep'] = time.time() - _t
+        self.tms['prep'] = time.perf_counter() - _t
 
     def calc(self, with_print=True):
         '''
@@ -353,7 +353,7 @@ class Solver(object):
         if with_print:
             _tqdm = tqdm(desc='Solve', unit='step', total=M-1, ncols=80)
 
-        _t = time.time()
+        _t = time.perf_counter()
 
         self.t = self.TG.l1
         self.FN.init(self.MD.r0)
@@ -361,10 +361,10 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
-        self.tms['calc']+= time.time() - _t
+        self.tms['calc']+= time.perf_counter() - _t
 
         for m in range(1, M):
-            _t = time.time()
+            _t = time.perf_counter()
 
             self.t+= self.TG.h0
 
@@ -372,7 +372,7 @@ class Solver(object):
             step_w()
             if self.ord == 2: step_v()
 
-            self.tms['calc']+= time.time() - _t
+            self.tms['calc']+= time.perf_counter() - _t
 
             if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
                 _msg = step_f()
@@ -381,11 +381,11 @@ class Solver(object):
 
         if with_print: _tqdm.close()
 
-        _t = time.time()
+        _t = time.perf_counter()
 
         self.FN.prep()
 
-        self.tms['calc']+= time.time() - _t
+        self.tms['calc']+= time.perf_counter() - _t
 
     def comp(self, X):
         '''

@@ -65,10 +65,15 @@ class SolversCheck(object):
             }
 
         for name in self.res.keys():
-            _t = time.time()
             print('----- Calc for solver | "%s"'%name)
+
+            _t = time.perf_counter()
+
             calc_many(self.res[name])
-            print('----- Done            | Time : %-8.2e sec'%(time.time()-_t))
+
+            _t = time.perf_counter() - _t
+
+            print('----- Done            | Time : %-8.2e sec'%_t)
 
     def save(self):
         data = {
