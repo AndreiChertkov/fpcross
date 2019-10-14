@@ -200,16 +200,17 @@ class Solver(object):
 
         - Check if initial W0 set as r0 is correct.
 
+        - Check if tt-round is needed at the end of step_v.
 
-        - Check if tt-round is needed for step_v.
+        - Try interpolation of the log in step_w.
 
-        - Add initial guess r to rt and maybe rs in step_check.
+        - Is it correct to add eps to prevent zero division in cross for step_w?
 
-        TODO! Check FN.copy() work.
-        TODO! Is it correct to add eps to prevent zero division in cross appr?
-        TODO! Try interpolation of the log.
-        TODO! Try initial guess in the form of the Euler solution.
-        TODO! Check various numbers of points for ODE solvers.
+        - Try initial guess in the form of the Euler solution for step_w.
+
+        - Check various numbers of points for ODE solvers for step_w.
+
+        - Add initial guess r to rt and maybe rs in step_f.
         '''
 
         def step_v():
@@ -217,13 +218,13 @@ class Solver(object):
 
             v0 = self.FN.Y
 
-            if self.with_tt:
+            if self.with_tt:  # TT-format
                 G = tt.tensor.to_list(v0)
                 for i in range(self.SG.d):
                     G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
                 v = tt.tensor.from_list(G)
                 v = v.round(self.eps)
-            else:
+            else:            # NP-format
                 v0 = v0.reshape(-1, order='F')
                 v = self.Z @ v0
                 v = v.reshape(self.SG.n, order='F')
@@ -235,9 +236,9 @@ class Solver(object):
 
             def func(y, t):
                 '''
-                Compute rhs for the system of convection equations
+                Compute rhs for the system of drift equations
                 d x / dt = f(x, t)
-                d w / dt = - Tr[ d f(x, t) / d t] w.
+                d w / dt = - Tr[ d f(x, t) / d t ] w.
 
                 INPUT:
 
@@ -254,12 +255,16 @@ class Solver(object):
                 type: ndarray [dimensions + 1, number of points] of float
                 '''
 
-                x, r = y[:-1, :], y[-1, :]
+                x = y[:-1, :]
+                r = y[-1, :]
 
                 f0 = self.MD.f0(x, t)
                 f1 = self.MD.f1(x, t)
 
-                return np.vstack([f0, -np.trace(f1) * r])
+                return np.vstack([
+                    f0,
+                    -1. * np.trace(f1) * r
+                ])
 
             def step(X):
                 '''
@@ -274,21 +279,23 @@ class Solver(object):
                 type: ndarray [number of points] of float
                 '''
 
-                TG = Grid(1, 2, [self.t, self.t - self.TG.h0], kind='u')
-                SL = OrdSolver(TG, kind='eul' if self.ord == 1 else 'rk4')
+                t0 = self.t - self.TG.h0
+                t1 = self.t
+                kd = 'eul' if self.ord == 1 else 'rk4'
+
+                SL = OrdSolver(Grid(1, 2, [t1, t0], kind='u'), kind=kd)
                 SL.init(self.MD.f0)
                 X0 = SL.comp(X)
                 w0 = FN.comp(X0)
-                y0 = np.vstack([x0, w0])
+                y0 = np.vstack([X0, w0])
 
-                TG = Grid(1, 2, [self.t - self.TG.h0, self.t], kind='u')
-                SL = OrdSolver(TG, kind='eul' if self.ord == 1 else 'rk4')
+                SL = OrdSolver(Grid(1, 2, [t0, t1], kind='u'), kind=kd)
                 SL.init(func)
-                y1 = SL.comp(np.vstack([x0, w0]))
+                y1 = SL.comp(y0)
                 w1 = y1[-1, :]
 
                 if self.with_tt and np.linalg.norm(w1) < 1.E-15:
-                    w1+= 1.E-15 # To prevent zero division in cross appr.
+                    w1+= 1.E-15 # To prevent zero division in the cross appr.
 
                 return w1
 
@@ -303,18 +310,7 @@ class Solver(object):
             self.W0 = self.FN.Y.copy()
 
         def step_f():
-            '''
-            Check result of the current calculation step.
-
-            OUTPUT:
-
-            msg - string representation of the current step for print
-            type: str
-
-            TODO:
-
-            - Add initial guess r to rt and maybe rs.
-            '''
+            ''' Check result of the current computation step. '''
 
             def _err_calc(r_calc, r_real):
                 dr = r_real - r_calc
@@ -322,10 +318,8 @@ class Solver(object):
                 dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
                 return dn / n0 if n0 > 0 else dn
 
-            r = self.FN.Y
-
             self.hst['T'].append(self.t)
-            self.hst['R'].append(r.copy())
+            self.hst['R'].append(self.FN.Y.copy())
 
             msg = '| At T=%-6.1e :'%self.t
 
@@ -333,16 +327,16 @@ class Solver(object):
             FN.eps/= 100
 
             if self.MD.with_rt():
-                def func(x): return self.MD.rt(x, self.t)
-                r_real = FN.init(func).prep().Y
-                self.hst['E_real'].append(_err_calc(r, r_real))
+                FN.init(lambda x: self.MD.rt(x, self.t))
+                FN.prep()
+                self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
 
                 msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
 
             if self.MD.with_rs():
-                def func(x): return self.MD.rs(x)
-                r_stat = FN.init(func).prep().Y
-                self.hst['E_stat'].append(_err_calc(r, r_stat))
+                FN.init(lambda x: self.MD.rs(x))
+                FN.prep()
+                self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
 
                 msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
 
@@ -356,6 +350,7 @@ class Solver(object):
         _t = time.perf_counter()
 
         self.t = self.TG.l1
+
         self.FN.init(self.MD.r0)
         self.FN.prep()
 
