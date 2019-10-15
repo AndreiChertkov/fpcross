@@ -174,6 +174,11 @@ class Func(object):
         * Only provided fields will be used. Values of the missed fields will
         * not be changed and will be the same as after the previous call.
 
+        OUTPUT:
+
+        FN - self
+        type: fpcross.Func
+
         TODO:
 
         - Add support for functions that can calculate only one point
@@ -202,6 +207,8 @@ class Func(object):
         set_opt('kickrank', 1)
         set_opt('rf', 2)
         set_opt('Y0', None)
+
+        return self
 
     def prep(self):
         '''

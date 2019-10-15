@@ -149,6 +149,9 @@ class Solver(object):
         '''
         Init main parameters of the class instance.
 
+        SL - self
+        type: fpcross.Solver
+
         TODO:
 
         - Maybe move some params from __init__ to this function.
@@ -156,6 +159,8 @@ class Solver(object):
 
         self.hst = { 'T': [], 'R': [], 'E_real': [], 'E_stat': [] }
         self.tms = { 'prep': 0., 'calc': 0., 'spec': 0. }
+
+        return self
 
     def prep(self):
         '''
@@ -168,13 +173,14 @@ class Solver(object):
 
         _t = time.perf_counter()
 
+        self.MD.prep()
+
         D0 = difscheb(self.SG, 2)[-1]
         J0 = np.eye(self.SG.n0)
         J0[+0, +0] = 0.
         J0[-1, -1] = 0.
         h0 = self.TG.h0 if self.ord == 1 else self.TG.h0 / 2.
-        Dc = self.MD.Dc()
-        Z0 = expm(h0 * Dc * J0 @ D0)
+        Z0 = expm(h0 * self.MD.D() * J0 @ D0)
 
         self.Z0 = Z0
         if not self.with_tt:
@@ -281,15 +287,16 @@ class Solver(object):
 
                 t0 = self.t - self.TG.h0
                 t1 = self.t
+                TG = Grid(1, 2, [t0, t1], kind='u')
                 kd = 'eul' if self.ord == 1 else 'rk4'
 
-                SL = OrdSolver(Grid(1, 2, [t1, t0], kind='u'), kind=kd)
+                SL = OrdSolver(TG, kind=kd, is_rev=True)
                 SL.init(self.MD.f0)
                 X0 = SL.comp(X)
                 w0 = FN.comp(X0)
                 y0 = np.vstack([X0, w0])
 
-                SL = OrdSolver(Grid(1, 2, [t0, t1], kind='u'), kind=kd)
+                SL = OrdSolver(TG, kind=kd)
                 SL.init(func)
                 y1 = SL.comp(y0)
                 w1 = y1[-1, :]
@@ -323,7 +330,7 @@ class Solver(object):
 
             msg = '| At T=%-6.1e :'%self.t
 
-            FN = self.FN.copy(is_full=False)
+            FN = self.FN.copy(is_init=True)
             FN.eps/= 100
 
             if self.MD.with_rt():
@@ -378,7 +385,7 @@ class Solver(object):
 
         _t = time.perf_counter()
 
-        self.FN.prep()
+        self.FN.calc()
 
         self.tms['calc']+= time.perf_counter() - _t
 
@@ -452,7 +459,7 @@ class Solver(object):
         t = self.t if not t else t
         x = self.SG.comp()
         f = self.MD.f0(x, t)
-        Dc = self.MD.Dc()
+        D = self.MD.D()
         r = FN.Y.full() if self.with_tt else FN.Y.copy()
         r = r.reshape(-1, order='F')
 
@@ -476,7 +483,7 @@ class Solver(object):
                 _D2 = np.kron(_D2, M[k_])
 
             rhs-= _D1 @ (r * f[k, :])
-            rhs+= _D2 @ (r * Dc)
+            rhs+= _D2 @ (r * D)
 
         return np.linalg.norm(rhs) / np.linalg.norm(r)
 
