@@ -7,4 +7,4 @@ from .func import Func
 from .ord_solver import OrdSolver
 from .solver import Solver
 from .solvers_check import SolversCheck
-from .models import ModelBase, Model
+from .models import Model
