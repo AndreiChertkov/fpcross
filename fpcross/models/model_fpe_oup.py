@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.linalg import solve_lyapunov
 
-from .model_ import Model as ModelBase
+from .model import Model as ModelBase
 
 class Model(ModelBase):
 
@@ -15,7 +15,7 @@ class Model(ModelBase):
         return 'Multidimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
 
     def tags(self):
-        return ['FPE', 'ND', 'analyt-stat', 'OUP']
+        return ['FPE', 'ND', 'analytic', 'analyt-stationary', 'OUP']
 
     def pars(self):
         return {
@@ -85,7 +85,7 @@ class Model(ModelBase):
                 \,
                 S(x, t) \equiv \sqrt{2 D_c} I
                 \implies
-                D(x, t) \equiv D_c I,
+                D(x, t) \equiv D I,
             $$
             and
             $$
@@ -120,33 +120,51 @@ class Model(ModelBase):
             $$
         '''
 
-    def init(self, *args, **kwargs):
-        super().init(*args, **kwargs)
+    def prep(self):
+        d = self.d()
+        D = self.D()
+        A = self._A
 
-        self.W = solve_lyapunov(self.A, 2. * self.D * np.eye(self.d))
-        self.Wi = np.linalg.inv(self.W)
-        self.Wd = np.linalg.det(self.W)
+        self._W = solve_lyapunov(A, 2. * D * np.eye(d))
+        self._Wi = np.linalg.inv(self._W)
+        self._Wd = np.linalg.det(self._W)
 
-    def dim(self):
-        return self.d
+    def d(self):
+        return self._d
 
-    def Dc(self):
-        return self.D
+    def D(self):
+        D = self._D
 
-    def f0(self, x, t):
-        return -self.A @ x
+        return D
 
-    def f1(self, x, t):
-        return -self.A @ np.ones(x.shape)
+    def f0(self, X, t):
+        A = self._A
 
-    def r0(self, x):
-        a = 2. * self.s
-        r = np.exp(-np.sum(x*x, axis=0) / a) / (np.pi * a)**(self.d/2)
+        return -A @ X
+
+    def f1(self, X, t):
+        A = self._A
+
+        return -A @ np.ones(X.shape)
+
+    def r0(self, X):
+        d = self.d()
+        s = self._s
+
+        a = 2. * s
+
+        r = np.exp(-np.sum(X*X, axis=0) / a) / (np.pi * a)**(d/2)
+
         return r.reshape(-1)
 
-    def rs(self, x):
-        r = np.exp(-0.5 * np.diag(x.T @ self.Wi @ x))
-        r/= np.sqrt(2**self.d * np.pi**self.d * self.Wd)
+    def rs(self, X):
+        d = self.d()
+        Wi = self._Wi
+        Wd = self._Wd
+
+        r = np.exp(-0.5 * np.diag(X.T @ Wi @ X))
+        r/= np.sqrt(2**d * np.pi**d * Wd)
+
         return r
 
     def with_rs(self):
