@@ -99,7 +99,7 @@ class Model(object):
         OUTPUT:
 
         res - comments
-        type: list of str
+        type: list of str (latex formulas may be used)
         '''
 
         return []
@@ -332,6 +332,7 @@ class Model(object):
 
         name - name of the model to select
         type: str
+        * All '-' will be replaced by '_'.
 
         OUTPUT:
 
@@ -342,6 +343,8 @@ class Model(object):
 
         - Add try block.
         '''
+
+        name = name.replace('-', '_')
 
         MD = import_module('.models.model_%s'%name, 'fpcross').Model()
 
