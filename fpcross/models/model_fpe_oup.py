@@ -9,7 +9,7 @@ class Model(ModelBase):
         return 'fpe-oup'
 
     def repr(self):
-        return 'd r(x, t) / d t = D \Delta r(x, t) + A div[ x r(x, t) ]'
+        return r'd r(x,t) / d t = D \Delta r(x,t) + A div[ x r(x,t) ]'
 
     def desc(self):
         return 'Multidimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
@@ -51,9 +51,9 @@ class Model(ModelBase):
 
     def coms(self):
         return [
-            'The multivariate Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if if all eigenvalues of $A$ are positive and this process at any time is a multivariate normal random variable.',
+            r'The multivariate Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if if all eigenvalues of $A$ are positive and this process at any time is a multivariate normal random variable.',
 
-            'We do not construct analytic solution for this multidimensional case, but use comparison with known stationary solution. The corresponding error will depend on the maximum value for the used time grid.',
+            r'We do not construct analytic solution for this multidimensional case, but use comparison with known stationary solution. The corresponding error will depend on the maximum value for the used time grid.',
         ]
 
     def text(self):

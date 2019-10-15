@@ -8,7 +8,7 @@ class Model(ModelBase):
         return 'fpe_1d_drift_zero'
 
     def repr(self):
-        return 'd r(x, t) / d t = D d^2 r(x, t) / d x^2'
+        return r'd r(x,t) / d t = D d^2 r(x,t) / d x^2'
 
     def desc(self):
         return 'One-dimensional Focker-Planck equation with the zero drift'
@@ -36,7 +36,7 @@ class Model(ModelBase):
 
     def coms(self):
         return [
-            'Since interpolation is not required for the case of the zero drift ($f \equiv 0$), but our solver calculates it by design, then it is expected to operate much slower than another simple solvers.',
+            r'Since interpolation is not required for the case of the zero drift ($f \equiv 0$), but our solver calculates it by design, then it is expected to operate much slower than another simple solvers.',
         ]
 
     def text(self):
@@ -125,7 +125,7 @@ class Model(ModelBase):
         a = 2. * s
 
         r = np.exp(-X * X / a) / np.sqrt(np.pi * a)
-        
+
         return r.reshape(-1)
 
     def rt(self, X, t):

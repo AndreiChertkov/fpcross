@@ -14,6 +14,11 @@ class Model(object):
     def init(self, **kwargs):
         '''
         Set model parameters.
+
+        OUTPUT:
+
+        MD - self
+        type: fpcross.Model
         '''
 
         for [name, opts] in self.pars().items():
@@ -24,6 +29,8 @@ class Model(object):
                 if isinstance(v, types.FunctionType):
                     v = v(kwargs)
             object.__setattr__(self, '_' + name, v)
+
+        return self
 
     def name(self):
         '''

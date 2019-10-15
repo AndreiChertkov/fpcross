@@ -8,7 +8,7 @@ class Model(ModelBase):
         return 'fpe_3d_drift_zero'
 
     def repr(self):
-        return 'd r(x, t) / d t = D \Delta r(x, t)'
+        return r'd r(x,t) / d t = D \Delta r(x,t)'
 
     def desc(self):
         return 'Three-dimensional Focker Planck equation with the zero drift'
@@ -36,7 +36,7 @@ class Model(ModelBase):
 
     def coms(self):
         return [
-            'Since interpolation is not required for the case of the zero drift ($f \equiv 0$), but our solver calculates it by design, then it is expected to operate much slower than another simple solvers.',
+            r'Since interpolation is not required for the case of the zero drift ($f \equiv 0$), but our solver calculates it by design, then it is expected to operate much slower than another simple solvers.',
         ]
 
     def text(self):

@@ -8,7 +8,7 @@ class Model(ModelBase):
         return 'fpe-1d-oup'
 
     def repr(self):
-        return 'd r(x, t) / d t = D d^2 r(x, t) / d x^2 + A d (x r(x, t)) / d x'
+        return r'd r(x,t) / d t = D d^2 r(x,t) / d x^2 + A d (x r(x,t)) / d x'
 
     def desc(self):
         return 'One-dimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
@@ -43,7 +43,7 @@ class Model(ModelBase):
 
     def coms(self):
         return [
-            'The Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if $A > 0$ and this process at any time is a normal random variable.',
+            r'The Ornstein–Uhlenbeck process is mean-reverting (the solution tends to its long-term mean $\mu$ as time $t$ tends to infinity) if $A > 0$ and this process at any time is a normal random variable.',
         ]
 
     def text(self):
@@ -166,7 +166,7 @@ class Model(ModelBase):
     def f0(self, X, t):
         A = self._A
 
-        return -A * x
+        return -A * X
 
     def f1(self, X, t):
         A = self._A

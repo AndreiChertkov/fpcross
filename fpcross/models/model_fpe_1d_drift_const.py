@@ -8,7 +8,7 @@ class Model(ModelBase):
         return 'fpe_1d_drift_const'
 
     def repr(self):
-        return 'd r(x, t) / d t = D d^2 r(x, t) / d x^2 - v d r(x, t) / d x'
+        return r'd r(x,t) / d t = D d^2 r(x,t) / d x^2 - v d r(x,t) / d x'
 
     def desc(self):
         return 'One-dimensional Focker Planck equation with the constant drift'
@@ -43,7 +43,7 @@ class Model(ModelBase):
 
     def coms(self):
         return [
-            'The final solution is not vanish on the boundary, hence we have significant integral error on the grid. At the same time, on the inner grid points solution is very accurate.',
+            r'The final solution is not vanish on the boundary, hence we have significant integral error on the grid. At the same time, on the inner grid points solution is very accurate.',
         ]
 
     def text(self):
