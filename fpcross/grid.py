@@ -81,6 +81,10 @@ class Grid(object):
         enum:
             - 'u' - uniform
             - 'c' - chebyshev
+
+        TODO:
+
+        - Remove default Chebyshev kind of the grid.
         '''
 
         if d is None:

@@ -5,7 +5,7 @@ from fpcross import Grid, difscheb, dif1cheb, dif2cheb
 
 class TestMtrDifscheb(unittest.TestCase):
     '''
-    Construction of the Chebyshev differential matrices.
+    Tests for functions for construction of the Chebyshev differential matrices.
     '''
 
     def test_1ord_elements(self):
