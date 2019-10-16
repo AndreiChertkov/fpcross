@@ -15,6 +15,10 @@ def func_3d(x):
 def func_4d(x):
     return 2.*np.sin(np.pi * x[0, ]) + np.exp(-x[1, ]) + x[2, ]/2. * x[3, ]**2
 
+def func_for_int(X, d, a=2.):
+    r = np.exp(-np.sum(X*X, axis=0) / a) / (np.pi * a)**(d/2)
+    return r.reshape(-1)
+
 class TestFunc(unittest.TestCase):
     '''
     Tests for Func class.
@@ -115,6 +119,44 @@ class TestFunc(unittest.TestCase):
         FN.calc()
 
         self.assertTrue(np.max(FN.test(1000, is_u=True)) < 3.0E-10)
+
+    def test_int_1d_np(self):
+        GR = Grid(n=61, l=[-10., 10.])
+        FN = Func(GR).init(lambda X: func_for_int(X, 1))
+        FN.prep()
+        FN.calc()
+
+        e = np.abs(1. - FN.comp_int()) / np.abs(1.)
+        self.assertTrue(e < 5.5E-13)
+
+    def test_int_2d_np(self):
+        GR = Grid(n=[60, 80], l=[-10., 10.])
+        FN = Func(GR).init(lambda X: func_for_int(X, 2))
+        FN.prep()
+        FN.calc()
+
+        e = np.abs(1. - FN.comp_int()) / np.abs(1.)
+        self.assertTrue(e < 5.1E-13)
+
+    def test_int_3d_np(self):
+        GR = Grid(n=[35, 35, 35], l=[-10., 10.])
+        FN = Func(GR).init(lambda X: func_for_int(X, 3))
+        FN.prep()
+        FN.calc()
+
+        e = np.abs(1. - FN.comp_int()) / np.abs(1.)
+        self.assertTrue(e < 6.0E-7)
+
+    def test_int_3d_tt(self):
+        return # DRAFT
+        GR = Grid(n=[35, 35, 35], l=[-10., 10.])
+        FN = Func(GR, eps=1.E-6, with_tt=True)
+        FN.init(lambda X: func_for_int(X, 3))
+        FN.prep()
+        FN.calc()
+
+        e = np.abs(1. - FN.comp_int()) / np.abs(1.)
+        self.assertTrue(e < 6.0E-7)
 
 if __name__ == '__main__':
     unittest.main()

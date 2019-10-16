@@ -397,6 +397,31 @@ class Func(object):
 
         return Y
 
+    def comp_int(self):
+        '''
+        Compute integral of the function on the full domain.
+
+        OUTPUT:
+
+        v - value of the integral
+        type: float
+        '''
+
+        if self.A is None:
+            raise ValueError('Interpolation is not done. Can not compute integral of the function. Call "calc" before.')
+
+        if not self.SG.is_sym:
+            raise ValueError('Can integrate only for symmetric spatial grid.')
+
+        v = self.A.copy()
+
+        for k in range(self.SG.d):
+            v = v.reshape(self.SG.n[k], -1)
+            v = Func.integrate_cheb(v)
+            v*= (self.SG.l[k, 1] - self.SG.l[k, 0])
+
+        return v
+
     def info(self, n_test=None, is_ret=False):
         '''
         Present info about interpolation result, including error check.
