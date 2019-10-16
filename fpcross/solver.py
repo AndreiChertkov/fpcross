@@ -377,6 +377,10 @@ class Solver(object):
             self.tms['calc']+= time.perf_counter() - _t
 
             if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
+                if True:
+                    self.FN.calc()
+                    nrm = self.FN.comp_int()
+                    self.FN.Y = self.FN.Y / nrm
                 _msg = step_f()
                 if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
             if with_print: _tqdm.update(1)
@@ -386,6 +390,9 @@ class Solver(object):
         _t = time.perf_counter()
 
         self.FN.calc()
+        if True:
+            nrm = self.FN.comp_int()
+            self.FN.Y = self.FN.Y / nrm
 
         self.tms['calc']+= time.perf_counter() - _t
 
