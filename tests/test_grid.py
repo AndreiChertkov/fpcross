@@ -269,5 +269,14 @@ class TestGrid(unittest.TestCase):
         self.assertFalse(GR.is_out([-1., +1.4]))
         self.assertTrue(GR.is_out([+4., +1.4]))
 
+    def test_is_sym(self):
+        self.assertTrue(Grid(n=5, l=[[-3., 3.]], kind='u').is_sym())
+        self.assertFalse(Grid(n=5, l=[[-4., 3.]], kind='u').is_sym())
+        self.assertFalse(Grid(n=5, l=[[1., 3.]], kind='u').is_sym())
+
+        self.assertTrue(Grid(n=5, l=[[-3., 3.], [-4., 4.]], kind='u').is_sym())
+        self.assertFalse(Grid(n=5, l=[[-4., 3.], [-2, 2.]], kind='u').is_sym())
+        self.assertFalse(Grid(n=5, l=[[-2, 2.], [1., 3.]], kind='u').is_sym())
+
 if __name__ == '__main__':
     unittest.main()

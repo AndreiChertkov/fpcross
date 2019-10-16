@@ -505,3 +505,24 @@ class Grid(object):
         if np.max(np.abs(self.l - l0)) > eps: return False
 
         return True
+
+    def is_sym(self, eps=1.E-20):
+        '''
+        Check if grid is symmetric (l_min = - l_max for all dimensions).
+
+        INPUT:
+
+        eps - accuracy of check
+        type: float, > 0
+
+        OUTPUT:
+
+        res - True if grid is symmetric and False otherwise
+        type: bool
+        '''
+
+        for k in range(self.d):
+            if self.l[k, 0] * self.l[k, 1] > 0: return False
+            if np.abs(self.l[k, 0] + self.l[k, 1]) > eps: return False
+
+        return True
