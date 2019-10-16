@@ -550,3 +550,36 @@ class Func(object):
         A[n-1, :] /= 2.
 
         return A
+
+    @staticmethod
+    def integrate_cheb(A):
+        '''
+        Integrate one-dimensional function f(x) = \sum_{i} (A_i * T_i(x)),
+        using known coefficients for interpolation by Chebyshev polynomials,
+        on the interval (-1, 1).
+
+        It can find coefficients for several functions on the one call.
+
+        INPUT:
+
+        A - interpolation coefficients
+        type1: list [number of points] of float
+        type2: ndarray [number of points] of float
+        type3: list [number of points, number of functions] of float
+        type4: ndarray [number of points, number of functions] of float
+        * It may be of type1 or type2 only in the case of only one function.
+
+        OUTPUT:
+
+        v - value of the integral
+        type: float
+        '''
+
+        if not isinstance(A, np.ndarray): A = np.array(A)
+        if len(A.shape) == 1: A = A.reshape(-1, 1)
+
+
+        n = np.arange(A.shape[0])[::2]
+        n = np.repeat(n.reshape(-1, 1), A.shape[1], axis=1)
+
+        return np.sum(A[::2, :] / (1. - n**2), axis=0)
