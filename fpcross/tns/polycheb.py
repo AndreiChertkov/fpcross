@@ -22,7 +22,7 @@ def polycheb(X, m, l=None):
     l - min-max values of variable for each dimension
     type1: list [dimensions, 2] of float
     type2: ndarray [dimensions, 2] of float
-    * Default limits are [-1, 1]; if l is given, then X values
+    * Default limits are [-1, 1]. If l is given, then X values
     * will be scaled from l-limits to [-1, 1] limits.
 
     OUTPUT:

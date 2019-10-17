@@ -4,14 +4,14 @@ from scipy.linalg import toeplitz
 def difscheb(SG, m):
     '''
     Construct differentiation matrices on the Chebyshev grid
-    of order 1, 2, ..., m and size n x n on interval [l_min, l_max].
+    of order 1, 2, ..., m and size n x n on the custom interval (l1, l2).
 
     INPUT:
 
     SG - spatial grid for construction of the matrices
     type: fpcross.Grid
-    * Average limits (l_min, l_max)
-    * and average number of the grid points (n) will be used.
+    * Average limits (l1, l2)
+    * and average number of the grid points (n0) will be used.
 
     m - maximum matrix order (will construct for 1, 2, ..., m)
     type: int, >= 1
@@ -21,8 +21,11 @@ def difscheb(SG, m):
     D - list of differentiation matrices (D1, D2, ..., Dm)
     type: tuple [m] of ndarray [n, n] of float
 
-    TODO: Check and update the code.
-    TODO: Add input check.
+    TODO:
+
+    - Check and update the code.
+
+    - Add input check.
     '''
 
 
@@ -64,14 +67,14 @@ def difscheb(SG, m):
 def dif1cheb(SG):
     '''
     Construct the 1th order differentiation matrix on the Chebyshev grid
-    of size n x n on interval [l_min, l_max].
+    of size n x n on the custom interval (l1, l2).
 
     INPUT:
 
     SG - spatial grid for matrix construction
     type: fpcross.Grid
-    * Average limits (l_min, l_max)
-    * and average number of the grid points (n) will be used.
+    * Average limits (l1, l2)
+    * and average number of the grid points (n0) will be used.
 
     OUTPUT:
 
@@ -84,14 +87,14 @@ def dif1cheb(SG):
 def dif2cheb(SG):
     '''
     Construct the 2th order differentiation matrix on the Chebyshev grid
-    of size n x n on interval [l_min, l_max].
+    of size n x n on the custom interval (l1, l2).
 
     INPUT:
 
     SG - spatial grid for matrix construction
     type: fpcross.Grid
-    * Average limits (l_min, l_max)
-    * and average number of the grid points (n) will be used.
+    * Average limits (l1, l2)
+    * and average number of the grid points (n0) will be used.
 
     OUTPUT:
 

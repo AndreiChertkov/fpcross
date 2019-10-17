@@ -65,6 +65,8 @@ All examples are performed as interactive browser-based jupyter lab notebooks. T
 
 * [x] Convert the code to python package and add setup.py file.
 
+* [ ] Set more accurate form for config file.
+
 * [ ] All flags (bool arguments) should have the same default value (`False`).
 
 * [ ] Add link to our related publication.
