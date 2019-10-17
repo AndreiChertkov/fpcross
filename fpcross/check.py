@@ -5,22 +5,26 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from . import config
+from . import Grid
 from . import Solver
 
-class SolversCheck(object):
+class Check(object):
+    '''
+    Class for multiple computations and result representation.
+    '''
 
     def __init__(self, fpath=None):
         self.fpath = fpath
         self.res = {}
 
-    def set_model(self, model):
-        self.model = model
+    def set_md(self, MD):
+        self.MD = MD
 
-    def set_grid_t(self, t_min=0., t_max=1.):
+    def set_tm_lim(self, t_min=+0., t_max=+1.):
         self.t_min = t_min
         self.t_max = t_max
 
-    def set_grid_x(self, x_min=-3., x_max=3.):
+    def set_sp_lim(self, x_min=-3., x_max=+3.):
         self.x_min = x_min
         self.x_max = x_max
 
@@ -29,8 +33,8 @@ class SolversCheck(object):
             'eps': eps,
             'ord': ord,
             'with_tt': with_tt,
-            'M': list(M),
-            'N': list(N),
+            'M': [int(m) for m in list(M)],
+            'N': [int(n) for n in list(N)],
         }
 
     def calc(self):
@@ -44,13 +48,12 @@ class SolversCheck(object):
             time.sleep(1)
 
         def calc_one(opts, m, n):
-            SL = Solver(model=self.model,
-                eps=opts['eps'], ord=opts['ord'], with_tt=opts['with_tt']
-            )
-            SL.set_grid_t(m, self.t_min, self.t_max, 1)
-            SL.set_grid_x(n, self.x_min, self.x_max)
-            SL.prep()
-            SL.calc()
+            d = self.MD.d()
+            MD = self.MD
+            TG = Grid(d=1, n=m, l=[self.t_min, self.t_max], kind='u')
+            SG = Grid(d=d, n=n, l=[self.x_min, self.x_max], kind='c')
+            SL = Solver(TG, SG, MD, opts['eps'], opts['ord'], opts['with_tt'])
+            SL.init().prep().calc()
 
             tms = SL.tms
             hst = SL.hst
@@ -58,7 +61,6 @@ class SolversCheck(object):
             return {
                 't_prep': tms['prep'],
                 't_calc': tms['calc'],
-                't_spec': tms['spec'],
                 'e_real': hst['E_real'][-1] if len(hst['E_real']) else None,
                 'e_stat': hst['E_stat'][-1] if len(hst['E_stat']) else None,
                 'avrank': hst['R'][-1].erank if opts['with_tt'] else None,
