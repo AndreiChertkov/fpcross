@@ -26,7 +26,7 @@ class OrdSolver(object):
         type: str
         enum:
             - 'eul' - the 1th order Euler solver
-            - 'rk4' - the 4th order Runge-Kutta method.
+            - 'rk4' - the 4th order Runge-Kutta solver.
             - 'ivp' - standard scipy solver
 
         is_rev - flag:
@@ -96,15 +96,14 @@ class OrdSolver(object):
         type: ndarray [dimensions, number of points] of float
         '''
 
-        t0 = self.TG.l2 if self.is_rev else self.TG.l1
-        t1 = self.TG.l1 if self.is_rev else self.TG.l2
+        t1 = self.TG.l2 if self.is_rev else self.TG.l1
+        t2 = self.TG.l1 if self.is_rev else self.TG.l2
         h0 = self.TG.h0
         if self.is_rev: h0 = -h0
 
-        if not isinstance(y0, np.ndarray):
-            y0 = np.array(y0)
+        if not isinstance(y0, np.ndarray): y0 = np.array(y0)
 
-        t = t0
+        t = t1
         y = y0.copy()
 
         if self.kind == 'ivp':
@@ -114,9 +113,7 @@ class OrdSolver(object):
                     if not self.with_y0: return self.f(y_, t).reshape(-1)
                     return self.f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
 
-                y[:, j] = solve_ivp(
-                    func, [t0, t1], y[:, j]
-                ).y[:, -1]
+                y[:, j] = solve_ivp(func, [t1, t2], y[:, j]).y[:, -1]
 
             return y
 
