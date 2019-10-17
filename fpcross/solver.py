@@ -380,7 +380,7 @@ class Solver(object):
                 if True:
                     self.FN.calc()
                     nrm = self.FN.comp_int()
-                    self.FN.Y = self.FN.Y / nrm
+                    self.FN.Y = 1./nrm * self.FN.Y
                 _msg = step_f()
                 if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
             if with_print: _tqdm.update(1)
@@ -392,7 +392,7 @@ class Solver(object):
         self.FN.calc()
         if True:
             nrm = self.FN.comp_int()
-            self.FN.Y = self.FN.Y / nrm
+            self.FN.Y = 1./nrm * self.FN.Y
 
         self.tms['calc']+= time.perf_counter() - _t
 

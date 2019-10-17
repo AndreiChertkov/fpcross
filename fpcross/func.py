@@ -413,12 +413,30 @@ class Func(object):
         if not self.SG.is_sym:
             raise ValueError('Can integrate only for symmetric spatial grid.')
 
-        v = self.A.copy()
+        if self.with_tt: # TT-format
+            G = tt.tensor.to_list(self.A)
+            v = np.array([[1.]])
 
-        for k in range(self.SG.d):
-            v = v.reshape(self.SG.n[k], -1)
-            v = Func.integrate_cheb(v)
-            v*= (self.SG.l[k, 1] - self.SG.l[k, 0])
+            for k in range(self.SG.d):
+                G_sh = G[k].shape                       # ( R_{k-1}, N_k, R_k )
+                G[k] = np.swapaxes(G[k], 0, 1)
+                G[k] = G[k].reshape(G_sh[1], -1)
+                G[k] = Func.integrate_cheb(G[k])
+                G[k] = G[k].reshape(G_sh[0], G_sh[2])
+
+                v = v @ G[k]
+                v*= (self.SG.l[k, 1] - self.SG.l[k, 0]) / 2.
+
+            v = v[0, 0]
+        else:            # NP-format
+            v = self.A.copy()
+
+            for k in range(self.SG.d):
+                v = v.reshape(self.SG.n[k], -1)
+                v = Func.integrate_cheb(v)
+                v*= (self.SG.l[k, 1] - self.SG.l[k, 0]) / 2.
+
+            v = v[0]
 
         return v
 
