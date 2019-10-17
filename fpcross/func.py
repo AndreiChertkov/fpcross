@@ -25,7 +25,7 @@ class Func(object):
     7 Call "copy" to obtain new instance with the same parameters and results.
 
     Advanced usage:
-    - Call "test" to obtain interpolation accuracy for set of random points.
+    - Call "test" to obtain interpolation accuracy for set of non grid points.
 
     PROPS:
 
@@ -51,10 +51,9 @@ class Func(object):
     res - results of the computations (tt-ranks, etc.)
     type: dict
 
-    err - absolute value of the relative error of result for some points
+    err - abs. value of the relative error of result for some non grid points
     type: np.ndarray [number of test points] of float, >= 0.
     * Is calculated in self.test.
-
     '''
 
     def __init__(self, SG, eps=1.E-6, with_tt=False):
@@ -108,11 +107,14 @@ class Func(object):
 
         FN - new class instance
         type: fpcross.Func
+
+        TODO:
+
+        - Add support for new parameters for __init__.
         '''
 
         FN = Func(self.SG.copy(), self.eps, self.with_tt)
-        FN.init(opts=self.opts)
-        FN.init(opts=opts)
+        FN.init(opts=self.opts).init(opts=opts)
 
         if is_init: return FN
 
@@ -121,7 +123,7 @@ class Func(object):
         FN.A = self.A.copy() if self.A is not None else None
 
         FN.tms = self.tms.copy()
-        FN.res = self.res.copy() if self.res is not None else None
+        FN.res = self.res.copy()
         FN.err = self.err.copy() if self.err is not None else None
 
         return FN
@@ -133,7 +135,8 @@ class Func(object):
         INPUT:
 
         f - function that calculate tensor elements for given spatial points
-        type: function
+        type1: None
+        type2: function
             inp:
                 X - points for calculation
                 type: ndarray [dimensions, number of points] of float
@@ -145,11 +148,12 @@ class Func(object):
                 type: ndarray [number of points] of float
 
         Y - tensor of function values on nodes of the Chebyshev grid
-        type1: ndarray [*(numbers of points)] of float
-        type2: TT-tensor [*(numbers of points)] of float
-        * Should be in the TT-format (type2) if self.with_tt flag is set.
-        * If is set, then function f will not be used for train data collection,
-        * but may be used in self.test for check of the interpolation result.
+        type1: None
+        type2: ndarray [*(numbers of points)] of float
+        type3: TT-tensor [*(numbers of points)] of float
+        * Should be in the TT-format (type3) if self.with_tt flag is set.
+        * If is set (type2 or type3), then function f will not be used for
+        * train data collection, but may be used in self.test for check.
 
         opts - dictionary with optional parameters
         type: dict
@@ -170,9 +174,12 @@ class Func(object):
             type: int, > 0
         fld : Y0 - initial guess for cross approximation
             default: None (random TT-tensor will be used)
-            type: ndarray or TT-tensor [*n] of float
+            type1: None
+            type2: ndarray [*n] of float
+            type3: TT-tensor [*n] of float
         * Only provided fields will be used. Values of the missed fields will
-        * not be changed and will be the same as after the previous call.
+        * not be changed and will be the same as after the previous call
+        * or will be equal to the corresponding default values.
 
         OUTPUT:
 
@@ -182,7 +189,7 @@ class Func(object):
         TODO:
 
         - Add support for functions that can calculate only one point
-          by one function call.
+          by one function call and for other function inp/out formats.
         '''
 
         self.f = f
@@ -214,6 +221,11 @@ class Func(object):
         '''
         Construct function values on the spatial grid.
 
+        OUTPUT:
+
+        FN - self
+        type: fpcross.Func
+
         TODO:
 
         - If Y0 is not set, how select best random value (rank, etc.)?
@@ -227,7 +239,6 @@ class Func(object):
         if self.f is None:
             raise ValueError('Function is not set. Can not prepare.')
 
-
         self.tms['prep'] = time.perf_counter()
 
         if self.with_tt: # TT-format
@@ -235,15 +246,15 @@ class Func(object):
 
             def func(ind):
                 ind = ind.astype(int)
-                X = self.SG.comp(ind.T)
                 t = time.perf_counter()
+                X = self.SG.comp(ind.T)
                 Y = self.f(X, ind.T) if self.opts['is_f_with_i'] else self.f(X)
                 self.tms['func']+= time.perf_counter() - t
                 self.res['evals']+= X.shape[1]
                 return Y
 
             if self.opts['Y0'] is None:
-                Z = tt.rand(self.SG.n, self.SG.n.shape[0], 1)
+                Z = tt.rand(self.SG.n, self.SG.d, 1)
             else:
                 Z = self.opts['Y0'].copy()
 
@@ -278,6 +289,7 @@ class Func(object):
             self.res['erank'] = float(res.split('fun_eval')[0])
             log.close()
             os.remove(log_file)
+
         else:            # NP-format
             self.tms['func'] = time.perf_counter()
 
@@ -293,9 +305,16 @@ class Func(object):
 
         self.tms['prep'] = time.perf_counter() - self.tms['prep']
 
+        return self
+
     def calc(self):
         '''
         Build tensor of interpolation coefficients according to training data.
+
+        OUTPUT:
+
+        FN - self
+        type: fpcross.Func
 
         TODO:
 
@@ -320,6 +339,7 @@ class Func(object):
 
             self.A = tt.tensor.from_list(G)
             self.A = self.A.round(self.eps)
+
         else:            # NP-format
             self.A = self.Y.copy()
 
@@ -333,6 +353,8 @@ class Func(object):
                 self.A = np.swapaxes(self.A, 0, i)
 
         self.tms['calc'] = time.perf_counter() - self.tms['calc']
+
+        return self
 
     def comp(self, X, z=0.):
         '''
@@ -359,6 +381,8 @@ class Func(object):
         - Vectorize calculations for points vector if possible.
 
         - Add support for 1D input.
+
+        - Check if correct calculate Cheb. pol. until max(n) for all dimensions.
         '''
 
         if self.A is None:
@@ -383,6 +407,7 @@ class Func(object):
                     Q = Q @ np.einsum('riq,i->rq', G[i], T[:self.SG.n[i], i, j])
 
                 Y[j] = Q[0, 0]
+
         else:            # NP-format
             for j in range(X.shape[1]):
                 if self.SG.is_out(X[:, j]): continue
@@ -410,7 +435,7 @@ class Func(object):
         if self.A is None:
             raise ValueError('Interpolation is not done. Can not compute integral of the function. Call "calc" before.')
 
-        if not self.SG.is_sym:
+        if not self.SG.is_sym():
             raise ValueError('Can integrate only for symmetric spatial grid.')
 
         if self.with_tt: # TT-format
@@ -428,6 +453,7 @@ class Func(object):
                 v*= (self.SG.l[k, 1] - self.SG.l[k, 0]) / 2.
 
             v = v[0, 0]
+
         else:            # NP-format
             v = self.A.copy()
 
@@ -440,7 +466,7 @@ class Func(object):
 
         return v
 
-    def info(self, n_test=None, is_ret=False):
+    def info(self, n_test=None, is_test_u=False, is_ret=False):
         '''
         Present info about interpolation result, including error check.
 
@@ -451,7 +477,16 @@ class Func(object):
         type2: int, >= 0
         * If is set (is not None and is greater than zero) and interpolation is
         * ready, then interpolation result will be checked on a set
-        * of random points from the uniform distribution with proper limits.
+        * of random points from the uniform distribution or on a set of
+        * uniform points with proper limits (depends on the value of is_test_u).
+
+        is_test_u - flag:
+            True  - uniform points will be used for error check
+            False - random points will be used for error check
+        type: bool
+        * Note that if this flag is set, then less than n_test points will be
+        * used for the test due to rounding of the d-root and using of the only
+        * inner grid points.
 
         is_ret - flag:
             True  - return string info
@@ -465,36 +500,40 @@ class Func(object):
         '''
 
         if self.A is not None and self.f is not None and n_test:
-            self.test(n_test)
+            self.test(n_test, is_test_u)
 
-
-        s = '------------------ Function\n'
-        s+= 'Format           : %1dD, %s\n'%(self.SG.d, 'TT, eps= %8.2e'%self.eps if self.with_tt else 'NP')
+        s = '------------------ Function  \n'
+        s+= 'Format           : %1dD, '%self.SG.d
+        s+= 'TT, eps= %8.2e\n'%self.eps if self.with_tt else 'NP\n'
 
         if True:
-            s+= '--> Time         | \n'
-            s+= 'Prep             : %8.2e sec. \n'%self.tms['prep']
-            s+= 'Calc             : %8.2e sec. \n'%self.tms['calc']
-            s+= 'Comp (average)   : %8.2e sec. \n'%self.tms['comp']
-            s+= 'Func (average)   : %8.2e sec. \n'%self.tms['func']
+            s+= '--> Time (sec.)  |       \n'
+            s+= 'Prep             : %8.2e \n'%self.tms['prep']
+            s+= 'Calc             : %8.2e \n'%self.tms['calc']
+            s+= 'Comp (average)   : %8.2e \n'%self.tms['comp']
+            s+= 'Func (average)   : %8.2e \n'%self.tms['func']
 
         if self.A is not None and self.f is not None and n_test:
-            s+= '--> Test         | \n'
-            s+= 'Number of points : %8d \n'%n_test
+            s+= '--> Test         |       \n'
+            s+= 'Random points    : %8s   \n'%('No' if is_test_u else 'Yes')
+            s+= 'Number of points : %8d   \n'%self.err.size
             s+= 'Error (max)      : %8.2e \n'%np.max(self.err)
             s+= 'Error (mean)     : %8.2e \n'%np.mean(self.err)
             s+= 'Error (min)      : %8.2e \n'%np.min(self.err)
 
         if self.with_tt:
-            s+= '--> Cross params | \n'
-            s+= 'nswp             : %8d \n'%self.opts['nswp']
-            s+= 'kickrank         : %8d \n'%self.opts['kickrank']
+            with_ig = 'No' if self.opts['Y0'] is None else 'Yes'
+
+            s+= '--> Cross params |       \n'
+            s+= 'Initial guess    : %8s   \n'%with_ig
+            s+= 'nswp             : %8d   \n'%self.opts['nswp']
+            s+= 'kickrank         : %8d   \n'%self.opts['kickrank']
             s+= 'rf               : %8.2e \n'%self.opts['rf']
 
         if self.with_tt:
             s+= '--> Cross result | \n'
-            s+= 'Func. evaluations: %8d \n'%self.res['evals']
-            s+= 'Cross iterations : %8d \n'%self.res['iters']
+            s+= 'Func. evaluations: %8d   \n'%self.res['evals']
+            s+= 'Cross iterations : %8d   \n'%self.res['iters']
             s+= 'Av. tt-rank      : %8.2e \n'%self.res['erank']
             s+= 'Cross err (rel)  : %8.2e \n'%self.res['err_rel']
             s+= 'Cross err (abs)  : %8.2e \n'%self.res['err_abs']
@@ -517,14 +556,14 @@ class Func(object):
             True  - uniform points will be used
             False - random points will be used
         type: bool
-        * Note that if this flag is set, then less than n points will be used
-        * for the test due to rounding of the d-root and using of the only
-        * inner grid points.
 
         OUTPUT:
 
         err - absolute value of relative error for the generated random points
-        type: np.ndarray [n] of float
+        type: np.ndarray [number of points] of float
+        * Note that if is_u flag is set, then less than n points will be used
+        * for the test due to rounding of the d-root and using of the only
+        * inner grid points, hence number of points <= n.
 
         TODO:
 
@@ -574,16 +613,12 @@ class Func(object):
 
         A - constructed matrix of coefficients
         type: ndarray [number of points, number of functions] of float
-
-        LINKS:
-
-        - https://en.wikipedia.org/wiki/Discrete_Chebyshev_transform
-
-        - https://www.mathworks.com/matlabcentral/mlc-downloads/downloads/submissions/23972/versions/22/previews/chebfun/examples/approx/html/ChebfunFFT.html
         '''
 
         if not isinstance(Y, np.ndarray): Y = np.array(Y)
         if len(Y.shape) == 1: Y = Y.reshape(-1, 1)
+        if len(Y.shape) != 2:
+            raise ValueError('Invalid shape for function values.')
 
         n = Y.shape[0]
         V = np.vstack([Y, Y[n-2 : 0 : -1, :]])
@@ -621,8 +656,7 @@ class Func(object):
         if not isinstance(A, np.ndarray): A = np.array(A)
         if len(A.shape) == 1: A = A.reshape(-1, 1)
 
-
         n = np.arange(A.shape[0])[::2]
         n = np.repeat(n.reshape(-1, 1), A.shape[1], axis=1)
 
-        return np.sum(A[::2, :] / (1. - n**2), axis=0)
+        return np.sum(A[::2, :] * 2. / (1. - n**2), axis=0)
