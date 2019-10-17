@@ -19,17 +19,17 @@ class Grid(object):
 
     PROPS:
 
-    d - dimension of the grid
+    d - number of the grid dimensions
     type: int, >= 1
 
     n - total number of points for each dimension
     type: ndarray [dimensions] of int, >= 2
 
-    l - min-max values of variable for each dimension
+    l - min ([:, 0]) and max ([:, 1]) values of variable for each dimension
     type: ndarray [dimensions, 2] of float, [:, 0] < [:, 1]
 
-    h - grid steps (assuming uniformity) for each dimension
-    type: ndarray [dimensions] of float, > 0
+    h - grid steps assuming uniformity for each dimension
+    type: ndarray [dimensions] of float, > 0, <= [:, 1] - [:, 0]
 
     kind - kind of the grid.
     type: str
@@ -37,24 +37,24 @@ class Grid(object):
         - 'u' - uniform
         - 'c' - chebyshev
 
-    n0 - average number of grid points
+    n0 - average number of grid points (mean for n)
     type: int, >= 2
 
-    l1 - average min grid limit
+    l1 - average min grid limit (mean for l[:, 0])
     type: float
 
-    l2 - average max grid limit
+    l2 - average max grid limit (mean for l[:, 1])
     type: float
 
-    h0 - average grid step (assuming uniformity)
-    type: float, > 0
+    h0 - average grid step assuming uniformity (mean for h)
+    type: float, > 0, <= l2 - l1
     '''
 
     def __init__(self, d=None, n=2, l=[-1., 1.], kind='c'):
         '''
         INPUT:
 
-        d - number of dimensions
+        d - number of the grid dimensions
         type1: None
         type2: int, >= 1
         * If is None (type1), then it will be recovered from n or l shape.
@@ -67,7 +67,7 @@ class Grid(object):
         type3: ndarray [dimensions] of int, >= 2
         * If is int (type1), then it will be used for each dimension.
 
-        l - min-max values of variable for each dimension
+        l - min and max values of variable for each dimension
         type1: list [2] of float, [0] < [1]
         type2: ndarray [2] of float, [0] < [1]
         type3: list [dimensions, 2] of float, [:, 0] < [:, 1]
@@ -85,7 +85,10 @@ class Grid(object):
         TODO:
 
         - Remove default Chebyshev kind of the grid.
+        - Ensure that n is array of int (not float).
         '''
+
+        # Check / prepare d
 
         if d is None:
             d = 1
@@ -100,6 +103,8 @@ class Grid(object):
                 raise ValueError('Invalid number of dimensions (d).')
             d = int(d)
 
+        # Check / prepare n
+
         if isinstance(n, (int, float)):
             n = [int(n)] * d
         if isinstance(n, list):
@@ -111,6 +116,8 @@ class Grid(object):
         for i in range(d):
             if n[i] < 2:
                 raise ValueError('Ivalid number of points (should be >= 2).')
+
+        # Check / prepare l
 
         if isinstance(l, list):
             l = np.array(l)
@@ -127,15 +134,19 @@ class Grid(object):
         if kind != 'u' and kind != 'c':
             raise ValueError('Invalid grid kind.')
 
+        # Set parameters
+
         self.d = d
         self.n = n
         self.l = l
         self.h = (self.l[:, 1] - self.l[:, 0]) / (self.n - 1)
         self.kind = kind
 
+        # Set mean values for parameters
+
         self.n0 = int(np.mean(self.n, axis=0))
-        self.l1 = np.mean(self.l, axis=0)[0]
-        self.l2 = np.mean(self.l, axis=0)[1]
+        self.l1 = float(np.mean(self.l, axis=0)[0])
+        self.l2 = float(np.mean(self.l, axis=0)[1])
         self.h0 = float(np.mean(self.h, axis=0))
 
     def copy(self, **kwargs):
@@ -182,16 +193,16 @@ class Grid(object):
         type8: ndarray [dimensions, number of points] of int
         * If is None (type1), then the full grid will be constructed.
         * Type2 is available only for the case of only one point in 1D.
-        * Type3 and type4 are available only for 1D case.
-        * Type5 and type6 - for only one point in the multidimensional case.
+        * Type3 and type4 are available only for 1D case. Type5 and type6
+        * are available for only one point in the multidimensional case.
 
         is_ind - flag:
-            True  - indices of points will be returned
+            True  - prepared indices of points will be returned
             False - spatial grid points will be returned
         type: bool
 
         is_inner - flag:
-            True  - only inner grid points will be constructed
+            True  - only inner (not on boundary) grid points will be constructed
             False - all grid points will be constructed
         type: bool
 
@@ -202,15 +213,17 @@ class Grid(object):
 
         X - (if is_ind == False) calculated grid points
         type: ndarray [dimensions, number of points] of float
+
+        TODO:
+
+        - Ensure that I is array of int (not float).
         '''
 
         if I is None:
             I = []
             for i in range(self.d):
-                if is_inner:
-                    I_ = np.arange(1, self.n[i]-1)
-                else:
-                    I_ = np.arange(self.n[i])
+                I_ = np.arange(self.n[i])
+                if is_inner: I_ = I_[1:-1]
                 I.append(I_.reshape(1, -1))
             I = np.meshgrid(*I, indexing='ij')
             I = np.array(I).reshape((self.d, -1), order='F')
@@ -221,15 +234,14 @@ class Grid(object):
             I = np.array(I, dtype='int')
         if not isinstance(I, np.ndarray):
             raise ValueError('Invalid grid points.')
-        if len(I.shape) == 1 and self.d >= 2:
-            I = I.reshape(-1, 1)
         if len(I.shape) == 1 and self.d == 1:
-            I = I.reshape(1, -1)
+            I = I.reshape(1, -1) # many one-dimensional points
+        if len(I.shape) == 1 and self.d >= 2:
+            I = I.reshape(-1, 1) # one multidimensional point
         if I.shape[0] != self.d:
             raise ValueError('Invalid dimension for grid points.')
 
-        if is_ind:
-            return I
+        if is_ind: return I
 
         n_ = np.repeat(self.n.reshape((-1, 1)), I.shape[1], axis=1)
         l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), I.shape[1], axis=1)
@@ -261,21 +273,15 @@ class Grid(object):
         i - flatten index of the grid point
         type: int
 
-        TODO! Add support for calculation without explicit spatial grid.
+        TODO:
+
+        - Check and maybe remove some parts.
         '''
 
-        if isinstance(x, (int, float)):
-            x = [float(x)]
-        if isinstance(x, list):
-            x = np.array(x)
-        if not isinstance(x, np.ndarray):
-            raise ValueError('Invalid type of the spatial point.')
-        if len(x.shape) != 1 or x.shape[0] != self.d:
-            raise ValueError('Invalid shape of the spatial point.')
-
+        x = self._prep_poi(x)
+        n = self.n
         l1 = self.l[:, 0]
         l2 = self.l[:, 1]
-        n = self.n
 
         if self.kind == 'u':
             i = (x - l1) * (n - 1) / (l2 - l1)
@@ -289,7 +295,6 @@ class Grid(object):
         i[i <= 0] = 0.
         i[i >= n] = n[i >= n] - 1.
 
-        # i = np.linalg.norm(self.X_hst - x, axis=0).argmin()
         return self.indf(i)
 
     def indm(self, i_f):
@@ -341,7 +346,9 @@ class Grid(object):
         n - total number of points
         type: int, > 0
 
-        TODO: Maybe change function name (it sounds like random grid points).
+        TODO:
+
+        - Maybe change function name (it sounds like random grid points).
         '''
 
         n = int(n)
@@ -410,40 +417,37 @@ class Grid(object):
         * If is set, then random points are used.
 
 
-        x0 - special spatial point for present on the plot
-        type1: float
-        type2: list [dimensions] of float
-        type3: ndarray [dimensions] of float
-        * May be float (type1) for the 1-dimensional case.
+        x0 - special spatial point for present on the plot if required
+        type1: None
+        type2: float
+        type3: list [dimensions] of float
+        type4: ndarray [dimensions] of float
+        * May be float (type2) for the 1-dimensional case.
 
         '''
+
+        if self.d != 2:
+            raise NotImplementedError('Invalid dimension for plot.')
 
         if I is not None and n is not None:
             raise ValueError('Both I and n are set.')
 
-        if isinstance(x0, (int, float)):
-            x0 = [float(x0)]
-        if isinstance(x0, list):
-            x0 = np.array(x0)
-        if x0 is not None and not isinstance(x0, np.ndarray):
-            raise ValueError('Invalid type of the special spatial point.')
-        if x0 is not None and (len(x0.shape) != 1 or x0.shape[0] != self.d):
-            raise ValueError('Invalid shape of the special spatial point.')
 
 
-        if self.d == 2:
-            X = self.rand(n) if n is not None else self.comp(I)
-            for k in range(X.shape[1]):
-                x = X[:, k]
-                plt.scatter(x[0], x[1])
-                plt.text(x[0]+0.1, x[1]-0.1, '%d'%k)
-            if x0 is not None:
-                plt.scatter(
-                    x0[0], x0[1], s=80., c='#8b1d1d', marker='*', alpha=0.9
-                )
-            plt.show()
-        else:
-            raise NotImplementedError('Invalid dimension for plot.')
+        X = self.rand(n) if n is not None else self.comp(I)
+
+        for k in range(X.shape[1]):
+            x = X[:, k]
+            plt.scatter(x[0], x[1])
+            plt.text(x[0]+0.1, x[1]-0.1, '%d'%k)
+
+        x0 = self._prep_poi(x0, True)
+        if x0 is not None:
+            plt.scatter(
+                x0[0], x0[1], s=80., c='#8b1d1d', marker='*', alpha=0.9
+            )
+
+        plt.show()
 
     def is_out(self, x):
         '''
@@ -463,14 +467,7 @@ class Grid(object):
         type: bool
         '''
 
-        if isinstance(x, (int, float)):
-            x = [float(x)]
-        if isinstance(x, list):
-            x = np.array(x)
-        if not isinstance(x, np.ndarray):
-            raise ValueError('Invalid type of the spatial point.')
-        if len(x.shape) != 1 or x.shape[0] != self.d:
-            raise ValueError('Invalid shape of the spatial point.')
+        x = self._prep_poi(x)
 
         for i in range(self.d):
             if x[i] < self.l[i, 0]: return True
@@ -484,7 +481,7 @@ class Grid(object):
 
         INPUT:
 
-        eps - accuracy of check
+        eps - accuracy for check
         type: float, > 0
 
         OUTPUT:
@@ -492,9 +489,11 @@ class Grid(object):
         res - True if grid is square and False otherwise
         type: bool
 
-        TODO: Maybe replace this function by the corresponding variable
-              (in this case we need to be sure that the parameters n and l
-              do not change externally).
+        TODO:
+
+        - Maybe replace this function by the corresponding variable
+          (in this case we need to be sure that the parameters n and l
+          do not change externally).
         '''
 
         n0 = self.n0
@@ -512,7 +511,7 @@ class Grid(object):
 
         INPUT:
 
-        eps - accuracy of check
+        eps - accuracy for check
         type: float, > 0
 
         OUTPUT:
@@ -526,3 +525,23 @@ class Grid(object):
             if np.abs(self.l[k, 0] + self.l[k, 1]) > eps: return False
 
         return True
+
+    def _prep_poi(self, x=None, is_opt=False):
+        '''
+        TODO:
+
+        - Add flag for non strict mode (not raise error, but return None).
+        '''
+
+        if x is None:
+            return x
+        if isinstance(x, (int, float)):
+            x = [float(x)]
+        if isinstance(x, list):
+            x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            raise ValueError('Invalid type of the spatial point.')
+        if len(x.shape) != 1 or x.shape[0] != self.d:
+            raise ValueError('Invalid shape of the spatial point.')
+
+        return x
