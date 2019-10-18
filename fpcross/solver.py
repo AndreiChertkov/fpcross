@@ -35,8 +35,8 @@ class Solver(object):
     7 Call "copy" to obtain new instance with the same parameters and results.
 
     Advanced usage:
-    - Call "plot_x" for plot of solution and error at selected time moment.
-    - Call "plot_t" for plot of solution and error at selected spatial point.
+    - Call "plot_tm" for plot of solution and error at selected spatial point.
+    - Call "plot_sp" for plot of solution and error at selected time moment.
 
     PROPS:
 
@@ -72,7 +72,11 @@ class Solver(object):
         type: float, >= 0
     fld : calc - time spent to perform calculations
         type: float, >= 0
-    fld : spec - time spent to perform special operations (error comp., etc)
+    fld : diff - time spent to perform calculations for diffusion term
+        type: float, >= 0
+    fld : conv - time spent to perform calculations for convection term
+        type: float, >= 0
+    fld : post - time spent to perform calculations after each step
         type: float, >= 0
     '''
 
@@ -91,8 +95,7 @@ class Solver(object):
         * Only Chebyshev grids are supported in the current version.
 
         MD - model for equation with functions and coefficients
-        type1: fpcross.Model
-        type2: fpcross.ModelBase
+        type: fpcross.Model
         * It should be instance of the Model class (type1)
         * or use ModelBase as the parent class (type2).
 
@@ -115,8 +118,6 @@ class Solver(object):
         TODO:
 
         - Set t_hst as parameter.
-
-        - Check model type.
         '''
 
         self.TG = TG
@@ -149,6 +150,8 @@ class Solver(object):
         '''
         Init main parameters of the class instance.
 
+        OUTPUT:
+
         SL - self
         type: fpcross.Solver
 
@@ -157,14 +160,19 @@ class Solver(object):
         - Maybe move some params from __init__ to this function.
         '''
 
-        self.hst = { 'T': [], 'R': [], 'E_real': [], 'E_stat': [] }
-        self.tms = { 'prep': 0., 'calc': 0., 'spec': 0. }
+        self.hst = {'T': [], 'R': [], 'E_real': [], 'E_stat': []}
+        self.tms = {'prep': 0., 'calc': 0., 'diff': 0., 'conv': 0., 'post': 0.}
 
         return self
 
     def prep(self):
         '''
         Prepare special matrices.
+
+        OUTPUT:
+
+        SL - self
+        type: fpcross.Solver
 
         TODO:
 
@@ -191,7 +199,9 @@ class Solver(object):
 
         self.tms['prep'] = time.perf_counter() - _t
 
-    def calc(self, with_print=True):
+        return self
+
+    def calc(self, size_max=None, rank_max=None, with_print=True):
         '''
         Calculation of the solution.
 
@@ -202,203 +212,66 @@ class Solver(object):
             False - results will not be printed
         type: bool
 
+        OUTPUT:
+
+        SL - self
+        type: fpcross.Solver
+
         TODO:
 
         - Check if initial W0 set as r0 is correct.
 
-        - Check if tt-round is needed at the end of step_v.
-
-        - Try interpolation of the log in step_w.
-
-        - Is it correct to add eps to prevent zero division in cross for step_w?
-
-        - Try initial guess in the form of the Euler solution for step_w.
-
-        - Check various numbers of points for ODE solvers for step_w.
-
         - Add initial guess r to rt and maybe rs in step_f.
         '''
 
-        def step_v():
-            ''' One computation step for the diffusion term. '''
-
-            v0 = self.FN.Y
-
-            if self.with_tt:  # TT-format
-                G = tt.tensor.to_list(v0)
-                for i in range(self.SG.d):
-                    G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
-                v = tt.tensor.from_list(G)
-                v = v.round(self.eps)
-            else:            # NP-format
-                v0 = v0.reshape(-1, order='F')
-                v = self.Z @ v0
-                v = v.reshape(self.SG.n, order='F')
-
-            self.FN.init(Y=v)
-
-        def step_w():
-            ''' One computation step for the drift term. '''
-
-            def func(y, t):
-                '''
-                Compute rhs for the system of drift equations
-                d x / dt = f(x, t)
-                d w / dt = - Tr[ d f(x, t) / d t ] w.
-
-                INPUT:
-
-                y - combined values of the spatial variable (x) and PDF (w)
-                type: ndarray [dimensions + 1, number of points] of float
-                * First dimensions rows are related to x and the last row to w.
-
-                t - time
-                type: float
-
-                OUTPUT:
-
-                rhs - rhs of the system
-                type: ndarray [dimensions + 1, number of points] of float
-                '''
-
-                x = y[:-1, :]
-                r = y[-1, :]
-
-                f0 = self.MD.f0(x, t)
-                f1 = self.MD.f1(x, t)
-
-                return np.vstack([
-                    f0,
-                    -1. * np.trace(f1) * r
-                ])
-
-            def step(X):
-                '''
-                INPUT:
-
-                X - values of the spatial variable
-                type: ndarray [dimensions, number of points] of float
-
-                OUTPUT:
-
-                w - approximated values of the solution in the given points
-                type: ndarray [number of points] of float
-                '''
-
-                t0 = self.t - self.TG.h0
-                t1 = self.t
-                TG = Grid(1, 2, [t0, t1], kind='u')
-                kd = 'eul' if self.ord == 1 else 'rk4'
-
-                SL = OrdSolver(TG, kind=kd, is_rev=True)
-                SL.init(self.MD.f0)
-                X0 = SL.comp(X)
-                w0 = FN.comp(X0)
-                y0 = np.vstack([X0, w0])
-
-                SL = OrdSolver(TG, kind=kd)
-                SL.init(func)
-                y1 = SL.comp(y0)
-                w1 = y1[-1, :]
-
-                if self.with_tt and np.linalg.norm(w1) < 1.E-15:
-                    w1+= 1.E-15 # To prevent zero division in the cross appr.
-
-                return w1
-
-            FN = self.FN.copy()
-            FN.calc()
-
-            self.FN.init(step, opts={
-                'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
-            })
-            self.FN.prep()
-
-            self.W0 = self.FN.Y.copy()
-
-        def step_f():
-            ''' Check result of the current computation step. '''
-
-            def _err_calc(r_calc, r_real):
-                dr = r_real - r_calc
-                n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
-                dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
-                return dn / n0 if n0 > 0 else dn
-
-            self.hst['T'].append(self.t)
-            self.hst['R'].append(self.FN.Y.copy())
-
-            msg = '| At T=%-6.1e :'%self.t
-
-            FN = self.FN.copy(is_init=True)
-            FN.eps/= 100
-
-            if self.MD.with_rt():
-                FN.init(lambda x: self.MD.rt(x, self.t))
-                FN.prep()
-                self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
-
-                msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
-
-            if self.MD.with_rs():
-                FN.init(lambda x: self.MD.rs(x))
-                FN.prep()
-                self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
-
-                msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
-
-            return msg
-
-        M = self.TG.n0
-
         if with_print:
-            _tqdm = tqdm(desc='Solve', unit='step', total=M-1, ncols=80)
+            _tqdm = tqdm(
+                desc='Solve', unit='step', total=self.TG.n0-1, ncols=80
+            )
 
         _t = time.perf_counter()
-
-        self.t = self.TG.l1
-
-        self.FN.init(self.MD.r0)
-        self.FN.prep()
-
-        self.W0 = self.FN.Y.copy()
-
+        self.step_init()
         self.tms['calc']+= time.perf_counter() - _t
 
-        for m in range(1, M):
+        for m in range(1, self.TG.n0):
             _t = time.perf_counter()
 
             self.t+= self.TG.h0
 
-            step_v()
-            step_w()
-            if self.ord == 2: step_v()
+            __t = time.perf_counter()
+            self.step_diff()
+            self.tms['diff']+= time.perf_counter() - __t
+
+            __t = time.perf_counter()
+            self.step_conv()
+            self.tms['conv']+= time.perf_counter() - __t
+
+            __t = time.perf_counter()
+            if self.ord == 2: self.step_diff()
+            self.tms['diff']+= time.perf_counter() - __t
 
             self.tms['calc']+= time.perf_counter() - _t
 
             if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
-                if True:
-                    self.FN.calc()
-                    nrm = self.FN.comp_int()
-                    self.FN.Y = 1./nrm * self.FN.Y
-                _msg = step_f()
+                _t = time.perf_counter()
+                _msg = self.step_post()
+                self.tms['post']+= time.perf_counter() - _t
+
                 if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
+
             if with_print: _tqdm.update(1)
 
         if with_print: _tqdm.close()
 
         _t = time.perf_counter()
-
-        self.FN.calc()
-        if True:
-            nrm = self.FN.comp_int()
-            self.FN.Y = 1./nrm * self.FN.Y
-
+        self.step_last()
         self.tms['calc']+= time.perf_counter() - _t
+
+        return self
 
     def comp(self, X):
         '''
-        Compute calculated solution at given spatial points x.
+        Compute calculated solution at given spatial points.
 
         INPUT:
 
@@ -423,7 +296,7 @@ class Solver(object):
     def comp_rhs(self, t=None, is_real=False, is_stat=False):
         '''
         Compute the right hand side of the FPE for the current solution
-        (calculated, real or stationary), using Chebyshev differential matrices.
+        (computed, real or stationary), using Chebyshev differential matrices.
         * This function is used only for check of the models for equations.
         * Full spatial grid (and transformation of the tt-tensor to full
         format if with_tt) is used in the current version!
@@ -437,12 +310,12 @@ class Solver(object):
 
         is_real - flag:
             True  - use real solution
-            False - do not use real solution
+            False - do not use real solution (use computed or stat)
         type: bool
 
         is_stat - flag:
             True  - use stationary solution
-            False - do not use stationary solution
+            False - do not use stationary solution (use computed or real)
         type: bool
 
         OUTPUT:
@@ -456,12 +329,8 @@ class Solver(object):
         '''
 
         FN = self.FN.copy()
-        if is_real:
-            FN.init(self.MD.rt)
-            FN.prep()
-        if is_stat:
-            FN.init(self.MD.rs)
-            FN.prep()
+        if is_real: FN.init(self.MD.rt).prep()
+        if is_stat: FN.init(self.MD.rs).prep()
 
         t = self.t if not t else t
         x = self.SG.comp()
@@ -494,6 +363,185 @@ class Solver(object):
 
         return np.linalg.norm(rhs) / np.linalg.norm(r)
 
+    def step_init(self):
+        '''
+        Some operations before the first computation step.
+        '''
+
+        self.t = self.TG.l1
+
+        self.FN.init(self.MD.r0).prep()
+
+        self.W0 = self.FN.Y.copy()
+
+    def step_diff(self):
+        '''
+        One computation step for the diffusion term.
+
+        TODO:
+
+        - Check if tt-round is needed at the end.
+        '''
+
+        v0 = self.FN.Y
+
+        if self.with_tt:  # TT-format
+            G = tt.tensor.to_list(v0)
+            for i in range(self.SG.d):
+                G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
+
+            v = tt.tensor.from_list(G)
+            v = v.round(self.eps)
+
+        else:            # NP-format
+            v0 = v0.reshape(-1, order='F')
+            v = self.Z @ v0
+            v = v.reshape(self.SG.n, order='F')
+
+        self.FN.init(Y=v)
+
+    def step_conv(self):
+        '''
+        One computation step for the drift term.
+
+        TODO:
+
+        - Try interpolation of the log.
+
+        - Is it correct to add eps to prevent zero division in cross?
+
+        - Try initial guess in the form of the Euler solution?
+
+        - Check various numbers of points for ODE solvers.
+        '''
+
+        def func(y, t):
+            '''
+            Compute rhs for the system of drift equations
+            d x / dt = f(x, t)
+            d w / dt = - Tr[ d f(x, t) / d t ] w.
+
+            INPUT:
+
+            y - combined values of the spatial variable (x) and PDF (w)
+            type: ndarray [dimensions + 1, number of points] of float
+            * First dimensions rows are related to x and the last row to w.
+
+            t - time
+            type: float
+
+            OUTPUT:
+
+            rhs - rhs of the system
+            type: ndarray [dimensions + 1, number of points] of float
+            '''
+
+            x = y[:-1, :]
+            r = y[-1, :]
+
+            f0 = self.MD.f0(x, t)
+            f1 = self.MD.f1(x, t)
+
+            return np.vstack([
+                f0,
+                -1. * np.trace(f1) * r
+            ])
+
+        def step(X):
+            '''
+            INPUT:
+
+            X - values of the spatial variable
+            type: ndarray [dimensions, number of points] of float
+
+            OUTPUT:
+
+            w - approximated values of the solution in the given points
+            type: ndarray [number of points] of float
+            '''
+
+            t0 = self.t - self.TG.h0
+            t1 = self.t
+            TG = Grid(1, 2, [t0, t1], kind='u')
+            kd = 'eul' if self.ord == 1 else 'rk4'
+
+            SL = OrdSolver(TG, kind=kd, is_rev=True)
+            SL.init(self.MD.f0)
+            X0 = SL.comp(X)
+            w0 = FN.comp(X0)
+            y0 = np.vstack([X0, w0])
+
+            SL = OrdSolver(TG, kind=kd)
+            SL.init(func)
+            y1 = SL.comp(y0)
+            w1 = y1[-1, :]
+
+            if self.with_tt and np.linalg.norm(w1) < 1.E-15:
+                w1+= 1.E-15 # To prevent zero division in the cross appr.
+
+            return w1
+
+        FN = self.FN.copy()
+        FN.calc()
+
+        self.FN.init(step, opts={
+            'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
+        })
+        self.FN.prep()
+
+        self.W0 = self.FN.Y.copy()
+
+    def step_post(self):
+        ''' Check result of the current computation step. '''
+
+        if True:
+            self.FN.calc()
+            nrm = self.FN.comp_int()
+            self.FN.Y = 1./nrm * self.FN.Y
+
+        def _err_calc(r_calc, r_real):
+            dr = r_real - r_calc
+            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
+            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
+            return dn / n0 if n0 > 0 else dn
+
+        self.hst['T'].append(self.t)
+        self.hst['R'].append(self.FN.Y.copy())
+
+        msg = '| At T=%-6.1e :'%self.t
+
+        FN = self.FN.copy(is_init=True)
+        FN.eps/= 100
+
+        if self.MD.with_rt():
+            FN.init(lambda x: self.MD.rt(x, self.t))
+            FN.prep()
+            self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
+
+            msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
+
+        if self.MD.with_rs():
+            FN.init(lambda x: self.MD.rs(x))
+            FN.prep()
+            self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
+
+            msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
+
+        if self.with_tt:
+            msg+= ' rank=%-6.1e'%self.FN.Y.erank
+
+        return msg
+
+    def step_last(self):
+        '''
+        Some operations after the final computation step.
+        '''
+
+        self.FN.calc()
+        if True:
+            nrm = self.FN.comp_int()
+            self.FN.Y = 1./nrm * self.FN.Y
+
     def info(self, is_ret=False):
         '''
         Present information about the last computation.
@@ -516,9 +564,14 @@ class Solver(object):
         s+= 'TT, eps= %8.2e '%self.eps if self.with_tt else 'NP '
         s+= '[order=%d]\n'%self.ord
 
-        s+='Time sec  : '
+        s+='Time main : '
         s+= 'prep = %8.2e, '%self.tms['prep']
         s+= 'calc = %8.2e\n'%self.tms['calc']
+
+        s+='Time spec : '
+        s+= 'diff = %8.2e, '%self.tms['diff']
+        s+= 'conv = %8.2e  '%self.tms['conv']
+        s+= 'post = %8.2e\n'%self.tms['post']
 
         if len(self.hst['E_real']):
             s+= 'Err real  : %8.2e\n'%self.hst['E_real'][-1]
@@ -601,43 +654,40 @@ class Solver(object):
         from IPython.display import HTML
         return HTML(anim.to_html5_video())
 
-    def plot_x(self, t=None, opts={}):
+    def plot_tm(self, x, opts={}):
         '''
-        Plot solution on the spatial grid at given time t
-        (by default at the final time point):
-        for the given t it finds the closest point on the time history grid.
-        Initial value, analytical solution and stationary solution
-        are also presented on the plot.
+        Plot solution dependence of time at given spatial grid point x: for the
+        given x it finds the closest point on the spatial grid. Initial value,
+        analytical and stationary solution are also presented on the plot.
 
         INPUT:
 
-        t - time point for plot
-        type: float
+        x - spatial point for plot
+        type1: float
+        type2: list [dimensions] of float
+        type3: ndarray [dimensions] of float
+        * In the case of 1D it may be float (type1).
 
         opts - dictionary with optional parameters
-        type: dict with fields:
-
-            is_log - flag:
+        type: dict
+        fld : is_log - flag:
                 True  - log y-axis will be used for PDF values
                 False - linear y-axis will be used for PDF values
             default: False
             type: bool
-
-            is_abs - flag:
+        fld : is_abs - flag:
                 True  - absolute values will be presented for PDF
                 False - original values will be presented for PDF
             default: False
             type: bool
-
-            is_err_abs - flag:
+        fld : is_err_abs - flag:
                 True  - absolute error will be presented on the plot
-                * err = abs(r_real(stat) - r_calc)
+                        ( err = abs(r_real(stat) - r_calc) )
                 False - relative error will be presented on the plot
-                * err = abs(r_real(stat) - r_calc) / abs(r_real(stat))
+                        ( err = abs(r_real(stat) - r_calc) / abs(r_real(stat)) )
             default: False
             type: bool
-
-            with_err_stat - flag:
+        fld : with_err_stat - flag:
                 True  - error vs stationary solution will be presented
                 False - error vs stationary solution will not be presented
             default: False
@@ -648,8 +698,165 @@ class Solver(object):
         - Finilize.
         '''
 
-        s = 'Is draft.'
-        raise NotImplementedError(s)
+        raise NotImplementedError('Is draft.')
+
+        if isinstance(x, (int, float)): x = np.array([float(x)])
+        if isinstance(x, list): x = np.array(x)
+        if not isinstance(x, np.ndarray) or x.shape[0] != self.SG.d:
+            s = 'Invalid spatial point.'
+            raise ValueError(s)
+
+        conf = config['opts']['plot']
+        sett = config['plot']['time']
+
+        i = self._sind(x)
+        x = self.X_hst[:, i].reshape(-1, 1)
+        t = self.T_hst
+        v = np.ones(t.shape[0])
+
+        r_init, r_stat, r_real, r_calc = None, None, None, None
+        if self.func_r0: r_init = v * self.func_r0(x)[0]
+        if self.func_rs: r_stat = v * self.func_rs(x)[0]
+        if self.func_rt: r_real = np.array([self.func_rt(x, t_)[0] for t_ in t])
+        if self.R_hst is not None: r_calc = np.array([r[i] for r in self.R_hst])
+
+        e, e_stat = None, None
+        if r_real is not None and r_calc is not None:
+            e = np.abs(r_real - r_calc)
+            if not opts.get('is_err_abs'): e/= np.abs(r_real)
+            e = np.array([0.] + list(e))
+        if r_stat is not None and r_calc is not None:
+            if opts.get('with_err_stat'):
+                e_stat = np.abs(r_stat - r_calc)
+                e0 = np.abs(r_stat[0] - r_init[0])
+                if opts.get('is_err_abs'):
+                    e_stat = [e0] + list(e_stat)
+                else:
+                    e_stat/= np.abs(r_stat)
+                    e_stat = [e0 / np.abs(r_stat[0])] + list(e_stat)
+                e_stat = np.array(e_stat)
+
+        sx = ', '.join(['%8.1e'%x_ for x_ in list(x.reshape(-1))])
+        print('--- Solution at spatial point')
+        print('X = [%s]'%sx)
+        sx = ' at x = [%s]'%sx if self.SG.d < 4 else ''
+
+        fig = plt.figure(**conf['fig'][sett['fig']])
+        grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
+
+        def _prep(r):
+            if not isinstance(r, np.ndarray): r = np.array(r)
+            return np.abs(r) if opts.get('is_abs') else r
+
+        ax1 = fig.add_subplot(grd[0, 0])
+
+        if r_init is not None:
+            x_ = [self.t_min] + list(t)
+            y_ = [r_init[0]] + list(r_init)
+            ax1.plot(x_, _prep(y_), **{
+                'label': sett['line-sol-init'][1],
+                **conf['line'][sett['line-sol-init'][0]]
+            })
+        if r_calc is not None:
+            x_ = [self.t_min] + list(t)
+            y_ = [r_init[0]] + list(r_calc)
+            ax1.plot(x_, _prep(y_), **{
+                'label': sett['line-sol-calc'][1],
+                **conf['line'][sett['line-sol-calc'][0]]
+            })
+        if r_real is not None:
+            x_ = [self.t_min] + list(t)
+            y_ = [r_init[0]] + list(r_real)
+            ax1.plot(x_, _prep(y_), **{
+                'label': sett['line-sol-real'][1],
+                **conf['line'][sett['line-sol-real'][0]]
+            })
+        if r_stat is not None:
+            x_ = [self.t_min] + list(t)
+            y_ = [r_stat[0]] + list(r_stat)
+            ax1.plot(x_, _prep(y_), **{
+                'label': sett['line-sol-stat'][1],
+                **conf['line'][sett['line-sol-stat'][0]]
+            })
+
+        if opts.get('is_log'): ax1.semilogy()
+        ss = ' (abs.)' if opts.get('is_abs') else ''
+        ax1.set_title('%s%s%s'%(sett['title-sol'], ss, sx))
+        ax1.set_xlabel(sett['label-sol'][0])
+        ax1.set_ylabel(sett['label-sol'][1])
+        ax1.legend(loc='best')
+
+        if e is not None or e_stat is not None:
+            ax2 = fig.add_subplot(grd[0, 1])
+
+            if e is not None:
+                x_ = [self.t_min] + list(t)
+                y_ = e
+                ax2.plot(x_, y_, **{
+                    'label': sett['line-err-real'][1],
+                    **conf['line'][sett['line-err-real'][0]]
+                })
+            if e_stat is not None:
+                x_ = [self.t_min] + list(t)
+                y_ = e_stat
+                ax2.plot(x_, y_, **{
+                    'label': sett['line-err-stat'][1],
+                    **conf['line'][sett['line-err-stat'][0]]
+                })
+
+            ax2.semilogy()
+            ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
+            ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
+            ax2.set_xlabel(sett['label-err'][0])
+            ax2.set_ylabel(sett['label-err'][1])
+            ax2.legend(loc='best')
+
+        plt.show()
+
+    def plot_sp(self, t=None, opts={}):
+        '''
+        Plot solution on the spatial grid at given time t: for the given t it
+        finds the closest point on the time history grid. Initial value,
+        analytical and stationary solution are also presented on the plot.
+
+        INPUT:
+
+        t - time point for plot
+        type1: None
+        type2: float
+        * If is not set (type1), then the final time point will be used.
+
+        opts - dictionary with optional parameters
+        type: dict
+        fld : is_log - flag:
+                True  - log y-axis will be used for PDF values
+                False - linear y-axis will be used for PDF values
+            default: False
+            type: bool
+        fld : is_abs - flag:
+                True  - absolute values will be presented for PDF
+                False - original values will be presented for PDF
+            default: False
+            type: bool
+        fld : is_err_abs - flag:
+                True  - absolute error will be presented on the plot
+                        ( err = abs(r_real(stat) - r_calc) )
+                False - relative error will be presented on the plot
+                        ( err = abs(r_real(stat) - r_calc) / abs(r_real(stat)) )
+            default: False
+            type: bool
+        fld : with_err_stat - flag:
+                True  - error vs stationary solution will be presented
+                False - error vs stationary solution will not be presented
+            default: False
+            type: bool
+
+        TODO:
+
+        - Finilize.
+        '''
+
+        raise NotImplementedError('Is draft.')
 
         conf = config['opts']['plot']
         sett = config['plot']['spatial']
@@ -770,166 +977,3 @@ class Solver(object):
                 cb = plt.colorbar(ct2, cax=ax, orientation='horizontal')
 
             plt.show()
-
-    def plot_t(self, x, opts={}):
-        '''
-        Plot solution dependence of time at given spatial grid point x:
-        for the given x it finds the closest point on the spatial grid.
-        Initial value, analytical solution and stationary solution
-        are also presented on the plot.
-
-        INPUT:
-
-        x - spatial point for plot
-        type: ndarray (or list) [dimensions] of float
-        * In the case of 1D it may be float.
-
-        opts - dictionary with optional parameters
-        type: dict with fields:
-
-            is_log - flag:
-                True  - log y-axis will be used for PDF values
-                False - linear y-axis will be used for PDF values
-            default: False
-            type: bool
-
-            is_abs - flag:
-                True  - absolute values will be presented for PDF
-                False - original values will be presented for PDF
-            default: False
-            type: bool
-
-            is_err_abs - flag:
-                True  - absolute error will be presented on the plot
-                * err = abs(r_real(stat) - r_calc)
-                False - relative error will be presented on the plot
-                * err = abs(r_real(stat) - r_calc) / abs(r_real(stat))
-            default: False
-            type: bool
-
-            with_err_stat - flag:
-                True  - error vs stationary solution will be presented
-                False - error vs stationary solution will not be presented
-            default: False
-            type: bool
-
-        TODO:
-
-        - Finilize.
-        '''
-
-        s = 'Is draft.'
-        raise NotImplementedError(s)
-
-        if isinstance(x, (int, float)): x = np.array([float(x)])
-        if isinstance(x, list): x = np.array(x)
-        if not isinstance(x, np.ndarray) or x.shape[0] != self.SG.d:
-            s = 'Invalid spatial point.'
-            raise ValueError(s)
-
-        conf = config['opts']['plot']
-        sett = config['plot']['time']
-
-        i = self._sind(x)
-        x = self.X_hst[:, i].reshape(-1, 1)
-        t = self.T_hst
-        v = np.ones(t.shape[0])
-
-        r_init, r_stat, r_real, r_calc = None, None, None, None
-        if self.func_r0: r_init = v * self.func_r0(x)[0]
-        if self.func_rs: r_stat = v * self.func_rs(x)[0]
-        if self.func_rt: r_real = np.array([self.func_rt(x, t_)[0] for t_ in t])
-        if self.R_hst is not None: r_calc = np.array([r[i] for r in self.R_hst])
-
-        e, e_stat = None, None
-        if r_real is not None and r_calc is not None:
-            e = np.abs(r_real - r_calc)
-            if not opts.get('is_err_abs'): e/= np.abs(r_real)
-            e = np.array([0.] + list(e))
-        if r_stat is not None and r_calc is not None:
-            if opts.get('with_err_stat'):
-                e_stat = np.abs(r_stat - r_calc)
-                e0 = np.abs(r_stat[0] - r_init[0])
-                if opts.get('is_err_abs'):
-                    e_stat = [e0] + list(e_stat)
-                else:
-                    e_stat/= np.abs(r_stat)
-                    e_stat = [e0 / np.abs(r_stat[0])] + list(e_stat)
-                e_stat = np.array(e_stat)
-
-        sx = ', '.join(['%8.1e'%x_ for x_ in list(x.reshape(-1))])
-        print('--- Solution at spatial point')
-        print('X = [%s]'%sx)
-        sx = ' at x = [%s]'%sx if self.SG.d < 4 else ''
-
-        fig = plt.figure(**conf['fig'][sett['fig']])
-        grd = mpl.gridspec.GridSpec(**conf['grid'][sett['grid']])
-
-        def _prep(r):
-            if not isinstance(r, np.ndarray): r = np.array(r)
-            return np.abs(r) if opts.get('is_abs') else r
-
-        ax1 = fig.add_subplot(grd[0, 0])
-
-        if r_init is not None:
-            x_ = [self.t_min] + list(t)
-            y_ = [r_init[0]] + list(r_init)
-            ax1.plot(x_, _prep(y_), **{
-                'label': sett['line-sol-init'][1],
-                **conf['line'][sett['line-sol-init'][0]]
-            })
-        if r_calc is not None:
-            x_ = [self.t_min] + list(t)
-            y_ = [r_init[0]] + list(r_calc)
-            ax1.plot(x_, _prep(y_), **{
-                'label': sett['line-sol-calc'][1],
-                **conf['line'][sett['line-sol-calc'][0]]
-            })
-        if r_real is not None:
-            x_ = [self.t_min] + list(t)
-            y_ = [r_init[0]] + list(r_real)
-            ax1.plot(x_, _prep(y_), **{
-                'label': sett['line-sol-real'][1],
-                **conf['line'][sett['line-sol-real'][0]]
-            })
-        if r_stat is not None:
-            x_ = [self.t_min] + list(t)
-            y_ = [r_stat[0]] + list(r_stat)
-            ax1.plot(x_, _prep(y_), **{
-                'label': sett['line-sol-stat'][1],
-                **conf['line'][sett['line-sol-stat'][0]]
-            })
-
-        if opts.get('is_log'): ax1.semilogy()
-        ss = ' (abs.)' if opts.get('is_abs') else ''
-        ax1.set_title('%s%s%s'%(sett['title-sol'], ss, sx))
-        ax1.set_xlabel(sett['label-sol'][0])
-        ax1.set_ylabel(sett['label-sol'][1])
-        ax1.legend(loc='best')
-
-        if e is not None or e_stat is not None:
-            ax2 = fig.add_subplot(grd[0, 1])
-
-            if e is not None:
-                x_ = [self.t_min] + list(t)
-                y_ = e
-                ax2.plot(x_, y_, **{
-                    'label': sett['line-err-real'][1],
-                    **conf['line'][sett['line-err-real'][0]]
-                })
-            if e_stat is not None:
-                x_ = [self.t_min] + list(t)
-                y_ = e_stat
-                ax2.plot(x_, y_, **{
-                    'label': sett['line-err-stat'][1],
-                    **conf['line'][sett['line-err-stat'][0]]
-                })
-
-            ax2.semilogy()
-            ss = ' (abs.)' if opts.get('is_err_abs') else ' (rel.)'
-            ax2.set_title('%s%s%s'%(sett['title-err'], ss, sx))
-            ax2.set_xlabel(sett['label-err'][0])
-            ax2.set_ylabel(sett['label-err'][1])
-            ax2.legend(loc='best')
-
-        plt.show()
