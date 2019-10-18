@@ -15,6 +15,31 @@ from . import Grid
 from . import Func
 from . import OrdSolver
 
+def timer(name1, name2=None):
+    '''
+    Save time for function call.
+    '''
+
+    nm1 = name1
+    nm2 = name1 + '_' + name2 if name2 else None
+
+    def timer_(f):
+
+        def timer__(self, *args, **kwargs):
+
+            t = time.perf_counter()
+            r = f(self, *args, **kwargs)
+            t = time.perf_counter() - t
+
+            if nm1: self.tms[nm1]+= t
+            if nm2: self.tms[nm2]+= t
+
+            return r
+
+        return timer__
+
+    return timer_
+
 class Solver(object):
     '''
     Class with the fast solver for multidimensional Fokker-Planck equation (FPE)
@@ -161,10 +186,19 @@ class Solver(object):
         '''
 
         self.hst = {'T': [], 'R': [], 'E_real': [], 'E_stat': [], 'Int': []}
-        self.tms = {'prep': 0., 'calc': 0., 'diff': 0., 'conv': 0., 'post': 0.}
+        self.tms = {
+            'prep': 0.,
+            'calc': 0.,
+            'calc_init': 0.,
+            'calc_diff': 0.,
+            'calc_conv': 0.,
+            'calc_post': 0.,
+            'calc_last': 0.,
+        }
 
         return self
 
+    @timer('prep')
     def prep(self):
         '''
         Prepare special matrices.
@@ -178,8 +212,6 @@ class Solver(object):
 
         - Check usage of J matrix.
         '''
-
-        _t = time.perf_counter()
 
         self.MD.prep()
 
@@ -196,8 +228,6 @@ class Solver(object):
                 self.Z = Z0.copy() if i == 0 else np.kron(self.Z, Z0)
 
         self.t = self.TG.l1 # Current time
-
-        self.tms['prep'] = time.perf_counter() - _t
 
         return self
 
@@ -227,33 +257,16 @@ class Solver(object):
                 desc='Solve', unit='step', total=self.TG.n0-1, ncols=80
             )
 
-        _t = time.perf_counter()
         self.step_init()
-        self.tms['calc']+= time.perf_counter() - _t
 
         for m in range(1, self.TG.n0):
-            _t = time.perf_counter()
-
             self.t+= self.TG.h0
-
-            __t = time.perf_counter()
             self.step_diff()
-            self.tms['diff']+= time.perf_counter() - __t
-
-            __t = time.perf_counter()
             self.step_conv()
-            self.tms['conv']+= time.perf_counter() - __t
-
-            __t = time.perf_counter()
             if self.ord == 2: self.step_diff()
-            self.tms['diff']+= time.perf_counter() - __t
-
-            self.tms['calc']+= time.perf_counter() - _t
 
             if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
-                _t = time.perf_counter()
                 _msg = self.step_post()
-                self.tms['post']+= time.perf_counter() - _t
 
                 if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
 
@@ -261,9 +274,7 @@ class Solver(object):
 
         if with_print: _tqdm.close()
 
-        _t = time.perf_counter()
         self.step_last()
-        self.tms['calc']+= time.perf_counter() - _t
 
         return self
 
@@ -361,6 +372,7 @@ class Solver(object):
 
         return np.linalg.norm(rhs) / np.linalg.norm(r)
 
+    @timer('calc', 'init')
     def step_init(self):
         '''
         Some operations before the first computation step.
@@ -376,6 +388,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
+    @timer('calc', 'diff')
     def step_diff(self):
         '''
         One computation step for the diffusion term.
@@ -402,6 +415,7 @@ class Solver(object):
 
         self.FN.init(Y=v)
 
+    @timer('calc', 'conv')
     def step_conv(self):
         '''
         One computation step for the drift term.
@@ -493,6 +507,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
+    @timer('calc', 'post')
     def step_post(self):
         '''
         Check result of the current computation step.
@@ -545,6 +560,7 @@ class Solver(object):
 
         return msg
 
+    @timer('calc', 'last')
     def step_last(self):
         '''
         Some operations after the final computation step.
@@ -553,6 +569,7 @@ class Solver(object):
         self.FN.calc()
         # nrm = self.FN.comp_int()
         # self.FN.Y = 1./nrm * self.FN.Y
+        return
 
     def info(self, is_ret=False):
         '''
@@ -576,19 +593,18 @@ class Solver(object):
         s+= 'TT, eps= %8.2e '%self.eps if self.with_tt else 'NP '
         s+= '[order=%d]\n'%self.ord
 
-        s+='Time main : '
-        s+= 'prep = %8.2e, '%self.tms['prep']
-        s+= 'calc = %8.2e\n'%self.tms['calc']
-
-        s+='Time spec : '
-        s+= 'diff = %8.2e, '%self.tms['diff']
-        s+= 'conv = %8.2e  '%self.tms['conv']
-        s+= 'post = %8.2e\n'%self.tms['post']
-
         if len(self.hst['E_real']):
             s+= 'Err real  : %8.2e\n'%self.hst['E_real'][-1]
         if len(self.hst['E_stat']):
             s+= 'Err stat  : %8.2e\n'%self.hst['E_stat'][-1]
+
+        s+= 'Time prep : %8.2e \n'%self.tms['prep']
+        s+= 'Time calc : %8.2e \n'%self.tms['calc']
+        s+= '...  init : %8.2e \n'%self.tms['calc_init']
+        s+= '...  diff : %8.2e \n'%self.tms['calc_diff']
+        s+= '...  conv : %8.2e \n'%self.tms['calc_conv']
+        s+= '...  post : %8.2e \n'%self.tms['calc_post']
+        s+= '...  last : %8.2e \n'%self.tms['calc_last']
 
         if not s.endswith('\n'): s+= '\n'
         if is_ret: return s
