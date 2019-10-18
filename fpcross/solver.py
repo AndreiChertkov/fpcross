@@ -15,13 +15,10 @@ from . import Grid
 from . import Func
 from . import OrdSolver
 
-def timer(name1, name2=None):
+def timer(name):
     '''
     Save time for function call.
     '''
-
-    nm1 = name1
-    nm2 = name1 + '_' + name2 if name2 else None
 
     def timer_(f):
 
@@ -31,8 +28,7 @@ def timer(name1, name2=None):
             r = f(self, *args, **kwargs)
             t = time.perf_counter() - t
 
-            if nm1: self.tms[nm1]+= t
-            if nm2: self.tms[nm2]+= t
+            self.tms[name]+= t
 
             return r
 
@@ -215,7 +211,9 @@ class Solver(object):
 
         self.MD.prep()
 
-        D0 = difscheb(self.SG, 2)[-1]
+        self.D1, self.D2 = difscheb(self.SG, 2)
+
+        D0 = self.D2
         J0 = np.eye(self.SG.n0)
         J0[+0, +0] = 0.
         J0[-1, -1] = 0.
@@ -231,6 +229,7 @@ class Solver(object):
 
         return self
 
+    @timer('calc')
     def calc(self, size_max=None, rank_max=None, with_print=True):
         '''
         Calculation of the solution.
@@ -303,76 +302,77 @@ class Solver(object):
         return self.FN.comp(X)
 
     def comp_rhs(self, t=None, is_real=False, is_stat=False):
-        '''
-        Compute the right hand side of the FPE for the current solution
-        (computed, real or stationary), using Chebyshev differential matrices.
-        * This function is used only for check of the models for equations.
-        * Full spatial grid (and transformation of the tt-tensor to full
-        format if with_tt) is used in the current version!
+        FN_r = self.FN.copy()
+        if is_real: FN_r.init(self.MD.rt).prep()
+        if is_stat: FN_r.init(self.MD.rs).prep()
 
-        INPUT:
+        rhs = None
 
-        t - time for computation
-        type1: None
-        type2: float
-        * If is not set (type1), then the current time will be used.
+        if self.with_tt:  # TT-format
 
-        is_real - flag:
-            True  - use real solution
-            False - do not use real solution (use computed or stat)
-        type: bool
+            for i in range(self.SG.d):
+                G = tt.tensor.to_list(FN_r.Y)
+                G[i] = np.einsum('ij,kjm->kim', self.D2, G[i])
 
-        is_stat - flag:
-            True  - use stationary solution
-            False - do not use stationary solution (use computed or real)
-        type: bool
+                v = tt.tensor.from_list(G)
+                v = v.round(self.eps)
 
-        OUTPUT:
+                rhs = v.copy() if rhs is None else rhs + v
 
-        e - rhs norm divided by the solution norm
-        type:  float, >= 0
+            rhs*= self.MD.D()
 
-        TODO:
+            for i in range(self.SG.d):
 
-        - Add support for computation in the TT-format.
-        '''
+                def func(X):
+                    return self.MD.f0(X, self.t if not t else t)[i, :]
 
-        FN = self.FN.copy()
-        if is_real: FN.init(self.MD.rt).prep()
-        if is_stat: FN.init(self.MD.rs).prep()
+                FN_f = self.FN.copy(is_init=True).init(func).prep()
 
-        t = self.t if not t else t
-        x = self.SG.comp()
-        f = self.MD.f0(x, t)
-        D = self.MD.D()
-        r = FN.Y.full() if self.with_tt else FN.Y.copy()
-        r = r.reshape(-1, order='F')
+                G = tt.tensor.to_list(FN_r.Y * FN_f.Y)
+                G[i] = np.einsum('ij,kjm->kim', self.D1, G[i])
 
-        D1, D2 = difscheb(self.SG, 2)
-        #J0 = np.eye(self.SG.n0); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
-        #for _ in range(1, self.SG.d):
-        #    J = np.kron(J, J0)
+                v = tt.tensor.from_list(G)
+                v = v.round(self.eps)
 
-        rhs = 0.
-        for k in range(self.SG.d):
-            M = [np.eye(self.SG.n0) for _ in range(self.SG.d)]
+                rhs = rhs - v
 
-            M[self.SG.d - 1 - k] = D1.copy()
-            _D1 = M[0].copy()
-            for k_ in range(1, self.SG.d):
-                _D1 = np.kron(_D1, M[k_])
+            rhs = rhs.norm() / FN_r.Y.norm()
 
-            M[self.SG.d - 1 - k] = D2.copy()
-            _D2 = M[0].copy()
-            for k_ in range(1, self.SG.d):
-                _D2 = np.kron(_D2, M[k_])
 
-            rhs-= _D1 @ (r * f[k, :])
-            rhs+= _D2 @ (r * D)
+        else:            # NP-format
+            t = self.t if not t else t
+            x = self.SG.comp()
+            f = self.MD.f0(x, t)
+            D = self.MD.D()
+            r = FN_r.Y.copy().reshape(-1, order='F')
 
-        return np.linalg.norm(rhs) / np.linalg.norm(r)
+            D1, D2 = difscheb(self.SG, 2)
+            #J0 = np.eye(self.SG.n0); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
+            #for _ in range(1, self.SG.d):
+            #    J = np.kron(J, J0)
 
-    @timer('calc', 'init')
+            rhs = 0.
+            for k in range(self.SG.d):
+                M = [np.eye(self.SG.n0) for _ in range(self.SG.d)]
+
+                M[self.SG.d - 1 - k] = self.D1.copy()
+                _D1 = M[0].copy()
+                for k_ in range(1, self.SG.d):
+                    _D1 = np.kron(_D1, M[k_])
+
+                M[self.SG.d - 1 - k] = self.D2.copy()
+                _D2 = M[0].copy()
+                for k_ in range(1, self.SG.d):
+                    _D2 = np.kron(_D2, M[k_])
+
+                rhs-= _D1 @ (r * f[k, :])
+                rhs+= _D2 @ (r * D)
+
+            rhs = np.linalg.norm(rhs) / np.linalg.norm(r)
+
+        return rhs
+
+    @timer('calc_init')
     def step_init(self):
         '''
         Some operations before the first computation step.
@@ -388,7 +388,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
-    @timer('calc', 'diff')
+    @timer('calc_diff')
     def step_diff(self):
         '''
         One computation step for the diffusion term.
@@ -415,7 +415,7 @@ class Solver(object):
 
         self.FN.init(Y=v)
 
-    @timer('calc', 'conv')
+    @timer('calc_conv')
     def step_conv(self):
         '''
         One computation step for the drift term.
@@ -507,7 +507,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
-    @timer('calc', 'post')
+    @timer('calc_post')
     def step_post(self):
         '''
         Check result of the current computation step.
@@ -560,7 +560,7 @@ class Solver(object):
 
         return msg
 
-    @timer('calc', 'last')
+    @timer('calc_last')
     def step_last(self):
         '''
         Some operations after the final computation step.
