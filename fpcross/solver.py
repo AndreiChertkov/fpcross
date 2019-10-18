@@ -160,7 +160,7 @@ class Solver(object):
         - Maybe move some params from __init__ to this function.
         '''
 
-        self.hst = {'T': [], 'R': [], 'E_real': [], 'E_stat': []}
+        self.hst = {'T': [], 'R': [], 'E_real': [], 'E_stat': [], 'Int': []}
         self.tms = {'prep': 0., 'calc': 0., 'diff': 0., 'conv': 0., 'post': 0.}
 
         return self
@@ -219,9 +219,7 @@ class Solver(object):
 
         TODO:
 
-        - Check if initial W0 set as r0 is correct.
-
-        - Add initial guess r to rt and maybe rs in step_f.
+        - Remove computational time measurements and move it to decorators.
         '''
 
         if with_print:
@@ -366,6 +364,10 @@ class Solver(object):
     def step_init(self):
         '''
         Some operations before the first computation step.
+
+        TODO:
+
+        - Check if initial W0 set as r0 is correct.
         '''
 
         self.t = self.TG.l1
@@ -492,12 +494,17 @@ class Solver(object):
         self.W0 = self.FN.Y.copy()
 
     def step_post(self):
-        ''' Check result of the current computation step. '''
+        '''
+        Check result of the current computation step.
 
-        if True:
-            self.FN.calc()
-            nrm = self.FN.comp_int()
-            self.FN.Y = 1./nrm * self.FN.Y
+        TODO:
+
+        - Add initial guess r to rt and maybe rs.
+        '''
+
+        self.FN.calc()
+        nrm = self.FN.comp_int()
+        # self.FN.Y = 1./nrm * self.FN.Y
 
         def _err_calc(r_calc, r_real):
             dr = r_real - r_calc
@@ -507,6 +514,7 @@ class Solver(object):
 
         self.hst['T'].append(self.t)
         self.hst['R'].append(self.FN.Y.copy())
+        self.hst['Int'].append(nrm)
 
         msg = '| At T=%-6.1e :'%self.t
 
@@ -528,7 +536,12 @@ class Solver(object):
             msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
 
         if self.with_tt:
-            msg+= ' rank=%-6.1e'%self.FN.Y.erank
+            msg+= ' r=%-6.2e'%self.FN.Y.erank
+
+        msg+= ' n=%-6.2e'%nrm
+
+        rhs = self.comp_rhs()
+        msg+= ' rhs=%-6.2e'%rhs
 
         return msg
 
@@ -538,9 +551,8 @@ class Solver(object):
         '''
 
         self.FN.calc()
-        if True:
-            nrm = self.FN.comp_int()
-            self.FN.Y = 1./nrm * self.FN.Y
+        # nrm = self.FN.comp_int()
+        # self.FN.Y = 1./nrm * self.FN.Y
 
     def info(self, is_ret=False):
         '''
