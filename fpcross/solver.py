@@ -17,7 +17,7 @@ from . import OrdSolver
 
 def timer(name):
     '''
-    Save time for function call.
+    Decorator. Save time for function call.
     '''
 
     def timer_(f):
@@ -35,6 +35,28 @@ def timer(name):
         return timer__
 
     return timer_
+
+class Printer(object):
+    '''
+    Present (print in interactive mode) current calculation status.
+    '''
+
+    def __init__(self, SL, with_print=False):
+        self.SL, self.with_print, self.tqdm = SL, with_print, None
+
+    def init(self):
+        d, u, t = 'Solve', 'step', self.SL.TG.n0 - 1
+        if self.with_print: self.tqdm = tqdm(desc=d, unit=u, total=t, ncols=80)
+        return self
+
+    def update(self, msg=None):
+        if self.with_print and msg: self.tqdm.set_postfix_str(msg, refresh=True)
+        if self.with_print: self.tqdm.update(1)
+        return self
+
+    def close(self):
+        if self.with_print: self.tqdm.close()
+        return self
 
 class Solver(object):
     '''
@@ -56,6 +78,7 @@ class Solver(object):
     7 Call "copy" to obtain new instance with the same parameters and results.
 
     Advanced usage:
+    - Call "plot" for plot of error and tt-compression factors.
     - Call "plot_tm" for plot of solution and error at selected spatial point.
     - Call "plot_sp" for plot of solution and error at selected time moment.
 
@@ -76,16 +99,38 @@ class Solver(object):
     hst - dictionary with saved (history) values
     type: dict
     fld : T - time moments
-        type: list of float
+        type: list [t_hst] of float
     fld : R - solutions of the FPE on the spatial grid
-        type: list of np.ndarray or tt-tensor [number of points] of float
+        type1: list [0]
+        type2: list [t_hst] of np.ndarray [number of points] of float
+        type3: list [t_hst] of tt-tensor [number of points] of float
+        * Is empty list (type1) if flag with_r_hst is not set.
+        * Is type3 if flag with_tt is set and type2 otherwise.
+    fld : Rnk - tt-ranks of the solution
+        type1: list [0]
+        type2: list [t_hst] of list of int, > 0
+        * Is empty list (type1) if flag with_tt is not set.
+    fld : Int - integral of the solution on the spatial domain
+        type: list [t_hst] of float
+        * If with_norm_int flag is set, then solution will be normalized
+        * in t_hst points by its integral, and saved value in Int is computed
+        * before the corresponding normalization.
+    fld : C_calc - relative number of points used for drift construction
+        type: list [t_hst] of float, > 0
+        * This is the compression factor due to the cross approximation.
+    fld : C_size - relative number of items for the TT-cores
+        type: list [t_hst] of float, > 0
+        * This is the compression factor due to the tt-format.
     fld : E_real - errors vs analytic (real) solution
-        type: list of float, >= 0
+        type1: list [0]
+        type2: list [t_hst] of float, >= 0
+        * Is empty list (type1) if function for real solution is not set.
     fld : E_stat - errors vs stationary solution
-        type: list of float, >= 0
-    * Fields T and R are lists of length t_hst.
-    * Field E_real (E_stat) is a list of length t_hst if real (stationary)
-    * solution is provided and is an empty list otherwise.
+        type1: list [0]
+        type2: list [t_hst] of float, >= 0
+        * Is empty list (type1) if function for stationary solution is not set.
+    fld : E_rhsn - norm of the rhs (devided by the norm of solution)
+        type: list [t_hst] of float, >= 0
 
     tms - Saved durations of the main operations
     type: dict
@@ -135,10 +180,6 @@ class Solver(object):
             True  - sparse (tensor train, TT) format will be used
             False - dense (numpy, NP) format will be used
         type: bool
-
-        TODO:
-
-        - Set t_hst as parameter.
         '''
 
         self.TG = TG
@@ -162,26 +203,49 @@ class Solver(object):
 
         self.FN = Func(self.SG, self.eps, self.with_tt)
 
-        t_hst = 10
-        self.t_hst = int(self.TG.n0 * 1. / t_hst) if t_hst else 0
-
         self.init()
 
-    def init(self):
+    def init(self, t_hst=10, with_norm_int=False, with_r_hst=False):
         '''
         Init main parameters of the class instance.
+
+        INPUT:
+
+        t_hst - number of points for history
+        type: int, >= 0, <= number_of_time_poins
+        * Ranks, errors, etc. will be saved for related time moments.
+
+        with_norm_int - flag:
+            True  - solution is divided by its integral on t_hst steps
+            False - solution is not divided by its integral
+        type: bool
+
+        with_r_hst - flag:
+            True  - solution will be saved to history on t_hst steps
+            False - solution will not be saved to history
+        type: bool
 
         OUTPUT:
 
         SL - self
         type: fpcross.Solver
-
-        TODO:
-
-        - Maybe move some params from __init__ to this function.
         '''
 
-        self.hst = {'T': [], 'R': [], 'E_real': [], 'E_stat': [], 'Int': []}
+        self.t_hst = int(self.TG.n0 * 1. / t_hst) if t_hst else 0
+        self.with_norm_int = bool(with_norm_int)
+        self.with_r_hst = bool(with_r_hst)
+
+        self.hst = {
+            'T': [],
+            'R': [],
+            'Rnk': [],
+            'Int': [],
+            'C_calc': [],
+            'C_size': [],
+            'E_real': [],
+            'E_stat': [],
+            'E_rhsn': [],
+        }
         self.tms = {
             'prep': 0.,
             'calc': 0.,
@@ -225,12 +289,10 @@ class Solver(object):
             for i in range(self.SG.d):
                 self.Z = Z0.copy() if i == 0 else np.kron(self.Z, Z0)
 
-        self.t = self.TG.l1 # Current time
-
         return self
 
     @timer('calc')
-    def calc(self, size_max=None, rank_max=None, with_print=True):
+    def calc(self, with_print=True):
         '''
         Calculation of the solution.
 
@@ -245,36 +307,22 @@ class Solver(object):
 
         SL - self
         type: fpcross.Solver
-
-        TODO:
-
-        - Remove computational time measurements and move it to decorators.
         '''
 
-        if with_print:
-            _tqdm = tqdm(
-                desc='Solve', unit='step', total=self.TG.n0-1, ncols=80
-            )
-
+        PR = Printer(self, with_print).init()
         self.step_init()
-
         for m in range(1, self.TG.n0):
             self.t+= self.TG.h0
             self.step_diff()
             self.step_conv()
-            if self.ord == 2: self.step_diff()
-
+            if self.ord == 2:
+                self.step_diff()
             if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
-                _msg = self.step_post()
-
-                if with_print: _tqdm.set_postfix_str(_msg, refresh=True)
-
-            if with_print: _tqdm.update(1)
-
-        if with_print: _tqdm.close()
-
+                PR.update(self.step_post())
+            else:
+                PR.update()
         self.step_last()
-
+        PR.close()
         return self
 
     def comp(self, X):
@@ -382,7 +430,7 @@ class Solver(object):
         - Check if initial W0 set as r0 is correct.
         '''
 
-        self.t = self.TG.l1
+        self.t = self.TG.l1 # Current time
 
         self.FN.init(self.MD.r0).prep()
 
@@ -396,6 +444,8 @@ class Solver(object):
         TODO:
 
         - Check if tt-round is needed at the end.
+
+        - Function (if exists) is missed after FN.init.
         '''
 
         v0 = self.FN.Y
@@ -460,7 +510,7 @@ class Solver(object):
 
             return np.vstack([
                 f0,
-                -1. * np.sum(f1, axis=0) * r
+                -np.sum(f1, axis=0) * r
             ])
 
         def step(X):
@@ -476,34 +526,23 @@ class Solver(object):
             type: ndarray [number of points] of float
             '''
 
-            t0 = self.t - self.TG.h0
-            t1 = self.t
-            TG = Grid(1, 2, [t0, t1], kind='u')
+            TG = Grid(1, 2, [self.t - self.TG.h0, self.t], kind='u')
             kd = 'eul' if self.ord == 1 else 'rk4'
-
-            SL = OrdSolver(TG, kind=kd, is_rev=True)
-            SL.init(self.MD.f0)
-            X0 = SL.comp(X)
+            X0 = OrdSolver(TG, kind=kd, is_rev=True).init(self.MD.f0).comp(X)
             w0 = FN.comp(X0)
             y0 = np.vstack([X0, w0])
-
-            SL = OrdSolver(TG, kind=kd)
-            SL.init(func)
-            y1 = SL.comp(y0)
+            y1 = OrdSolver(TG, kind=kd).init(func).comp(y0)
             w1 = y1[-1, :]
 
-            if self.with_tt and np.linalg.norm(w1) < 1.E-15:
-                w1+= 1.E-15 # To prevent zero division in the cross appr.
+            if self.with_tt and np.linalg.norm(w1) < 1.E-20:
+                w1+= 1.E-20 # To prevent zero division in the cross appr.
 
             return w1
 
-        FN = self.FN.copy()
-        FN.calc()
+        FN = self.FN.copy().calc()
 
-        self.FN.init(step, opts={
-            'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0,
-        })
-        self.FN.prep()
+        opts={ 'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0 }
+        self.FN.init(step, opts=opts).prep()
 
         self.W0 = self.FN.Y.copy()
 
@@ -597,6 +636,8 @@ class Solver(object):
             s+= 'Err real  : %8.2e\n'%self.hst['E_real'][-1]
         if len(self.hst['E_stat']):
             s+= 'Err stat  : %8.2e\n'%self.hst['E_stat'][-1]
+        if len(self.hst['E_rhsn']):
+            s+= 'Err rhs   : %8.2e\n'%self.hst['E_rhsn'][-1]
 
         s+= 'Time prep : %8.2e \n'%self.tms['prep']
         s+= 'Time calc : %8.2e \n'%self.tms['calc']
