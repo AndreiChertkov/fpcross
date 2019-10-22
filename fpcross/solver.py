@@ -286,6 +286,9 @@ class Solver(object):
 
         self.Z0 = Z0
         if not self.with_tt:
+
+            self.Xsg = self.SG.comp()
+
             for i in range(self.SG.d):
                 self.Z = Z0.copy() if i == 0 else np.kron(self.Z, Z0)
 
@@ -350,56 +353,64 @@ class Solver(object):
         return self.FN.comp(X)
 
     def comp_rhs(self, t=None, is_real=False, is_stat=False):
+        '''
+        Compute the norm of the right hand side (rhs) of the FPE
+        divided by norm of the solution.
+
+        INPUT:
+
+        t - time for calculation
+        type1: None
+        type2: float
+        * If is not set (type1) then the current time will be used.
+
+        is_real - flag:
+            True  - will be calculated for real (analytic) solution
+            False - will not be calculated for real (analytic) solution
+
+        is_stat - flag:
+            True  - will be calculated for stationary solution
+            False - will not be calculated for stationary solution
+        type: bool
+
+        OUTPUT:
+
+        res - norm of rhs divided by norm of the solution
+        type: float, >= 0
+        '''
+
+        t = self.t if not t else t
+        res = None
+
         FN_r = self.FN.copy()
         if is_real: FN_r.init(self.MD.rt).prep()
         if is_stat: FN_r.init(self.MD.rs).prep()
 
-        rhs = None
-
         if self.with_tt:  # TT-format
-
-            for i in range(self.SG.d):
+            for k in range(self.SG.d):
                 G = tt.tensor.to_list(FN_r.Y)
-                G[i] = np.einsum('ij,kjm->kim', self.D2, G[i])
-
-                v = tt.tensor.from_list(G)
+                G[k] = np.einsum('ij,kjm->kim', self.D2, G[k])
+                v = tt.tensor.from_list(G) * self.MD.D()
                 v = v.round(self.eps)
+                res = v.copy() if res is None else (res + v).round(self.eps)
 
-                rhs = v.copy() if rhs is None else rhs + v
-
-            rhs*= self.MD.D()
-
-            for i in range(self.SG.d):
-
-                def func(X):
-                    return self.MD.f0(X, self.t if not t else t)[i, :]
-
+                def func(X): return self.MD.f0(X, t)[k, :]
                 FN_f = self.FN.copy(is_init=True).init(func).prep()
-
-                G = tt.tensor.to_list(FN_r.Y * FN_f.Y)
-                G[i] = np.einsum('ij,kjm->kim', self.D1, G[i])
-
+                G = tt.tensor.to_list((FN_r.Y * FN_f.Y).round(self.eps))
+                G[k] = np.einsum('ij,kjm->kim', self.D1, G[k])
                 v = tt.tensor.from_list(G)
                 v = v.round(self.eps)
+                res = v.copy() if res is None else (res - v).round(self.eps)
 
-                rhs = rhs - v
-
-            rhs = rhs.norm() / FN_r.Y.norm()
-
+            res = res.norm() / FN_r.Y.norm()
 
         else:            # NP-format
-            t = self.t if not t else t
-            x = self.SG.comp()
+            x = self.Xsg
             f = self.MD.f0(x, t)
             D = self.MD.D()
-            r = FN_r.Y.copy().reshape(-1, order='F')
+            r = FN_r.Y.reshape(-1, order='F')
 
-            D1, D2 = difscheb(self.SG, 2)
-            #J0 = np.eye(self.SG.n0); J0[0, 0] = 0.; J0[-1, -1] = 0.; J = J0.copy()
-            #for _ in range(1, self.SG.d):
-            #    J = np.kron(J, J0)
-
-            rhs = 0.
+            res = np.zeros(r.shape[0])
             for k in range(self.SG.d):
                 M = [np.eye(self.SG.n0) for _ in range(self.SG.d)]
 
@@ -413,12 +424,11 @@ class Solver(object):
                 for k_ in range(1, self.SG.d):
                     _D2 = np.kron(_D2, M[k_])
 
-                rhs-= _D1 @ (r * f[k, :])
-                rhs+= _D2 @ (r * D)
+                res+= _D2 @ (r * D) - _D1 @ (r * f[k, :])
 
-            rhs = np.linalg.norm(rhs) / np.linalg.norm(r)
+            res = np.linalg.norm(res) / np.linalg.norm(r)
 
-        return rhs
+        return res
 
     @timer('calc_init')
     def step_init(self):
