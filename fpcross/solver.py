@@ -460,7 +460,7 @@ class Solver(object):
 
             return np.vstack([
                 f0,
-                -1. * np.trace(f1) * r
+                -1. * np.sum(f1, axis=0) * r
             ])
 
         def step(X):
