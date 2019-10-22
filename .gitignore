@@ -4,7 +4,7 @@
 *.so
 *~
 
-__info/
+_info_/
 __pycache__/
 build/
 dist/
@@ -14,5 +14,3 @@ dist/
 .ipynb_checkpoints
 .DS_Store
 Icon?
-
-ffmpeg
