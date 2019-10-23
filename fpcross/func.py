@@ -8,6 +8,8 @@ from tt.cross.rectcross import cross
 
 from . import polycheb
 
+from .utils import _timer_cls
+
 class Func(object):
     '''
     Class for the fast multidimensional function interpolation
@@ -128,6 +130,7 @@ class Func(object):
 
         return FN
 
+    @_timer_cls('init')
     def init(self, f=None, Y=None, opts={}):
         '''
         Init the main parameters of the class instance.
@@ -197,7 +200,7 @@ class Func(object):
         self.A = None
 
         self.tms = {
-            'prep': 0., 'calc': 0., 'comp': 0., 'func': 0.
+            'init': 0., 'prep': 0., 'calc': 0., 'comp': 0., 'func': 0.
         }
         self.res = {
             'evals': 0, 't_func': 0., 'iters': 0,
@@ -215,8 +218,7 @@ class Func(object):
         set_opt('rf', 2)
         set_opt('Y0', None)
 
-        return self
-
+    @_timer_cls('prep')
     def prep(self):
         '''
         Construct function values on the spatial grid.
@@ -238,8 +240,6 @@ class Func(object):
 
         if self.f is None:
             raise ValueError('Function is not set. Can not prepare.')
-
-        self.tms['prep'] = time.perf_counter()
 
         if self.with_tt: # TT-format
             log_file = './__tt-cross_tmp.txt'
@@ -303,10 +303,7 @@ class Func(object):
 
             self.tms['func'] = (time.perf_counter()-self.tms['func'])/X.shape[1]
 
-        self.tms['prep'] = time.perf_counter() - self.tms['prep']
-
-        return self
-
+    @_timer_cls('calc')
     def calc(self):
         '''
         Build tensor of interpolation coefficients according to training data.
@@ -323,8 +320,6 @@ class Func(object):
 
         if self.Y is None:
             raise ValueError('Train data is not set. Can not build interpolation coefficients. Call "prep" before.')
-
-        self.tms['calc'] = time.perf_counter()
 
         if self.with_tt: # TT-format
             G = tt.tensor.to_list(self.Y)
@@ -351,10 +346,6 @@ class Func(object):
                 self.A = Func.interpolate_cheb(self.A)
                 self.A = self.A.reshape(n_, order='F')
                 self.A = np.swapaxes(self.A, 0, i)
-
-        self.tms['calc'] = time.perf_counter() - self.tms['calc']
-
-        return self
 
     def comp(self, X, z=0.):
         '''

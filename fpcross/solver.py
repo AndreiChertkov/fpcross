@@ -15,48 +15,7 @@ from . import Grid
 from . import Func
 from . import OrdSolver
 
-def timer(name):
-    '''
-    Decorator. Save time for function call.
-    '''
-
-    def timer_(f):
-
-        def timer__(self, *args, **kwargs):
-
-            t = time.perf_counter()
-            r = f(self, *args, **kwargs)
-            t = time.perf_counter() - t
-
-            self.tms[name]+= t
-
-            return r
-
-        return timer__
-
-    return timer_
-
-class Printer(object):
-    '''
-    Present (print in interactive mode) current calculation status.
-    '''
-
-    def __init__(self, SL, with_print=False):
-        self.SL, self.with_print, self.tqdm = SL, with_print, None
-
-    def init(self):
-        d, u, t = 'Solve', 'step', self.SL.TG.n0 - 1
-        if self.with_print: self.tqdm = tqdm(desc=d, unit=u, total=t, ncols=80)
-        return self
-
-    def update(self, msg=None):
-        if self.with_print and msg: self.tqdm.set_postfix_str(msg, refresh=True)
-        if self.with_print: self.tqdm.update(1)
-        return self
-
-    def close(self):
-        if self.with_print: self.tqdm.close()
-        return self
+from .utils import _timer_cls, _PrinterSl
 
 class Solver(object):
     '''
@@ -205,6 +164,7 @@ class Solver(object):
 
         self.init()
 
+    @_timer_cls('init')
     def init(self, n_hst=10, with_norm_int=False, with_r_hst=False):
         '''
         Init main parameters of the class instance.
@@ -248,6 +208,7 @@ class Solver(object):
             'E_rhsn': [],
         }
         self.tms = {
+            'init': 0.,
             'prep': 0.,
             'calc': 0.,
             'calc_init': 0.,
@@ -257,9 +218,7 @@ class Solver(object):
             'calc_last': 0.,
         }
 
-        return self
-
-    @timer('prep')
+    @_timer_cls('prep')
     def prep(self):
         '''
         Prepare special matrices.
@@ -287,15 +246,11 @@ class Solver(object):
 
         self.Z0 = Z0
         if not self.with_tt:
-
             self.Xsg = self.SG.comp()
-
             for i in range(self.SG.d):
                 self.Z = Z0.copy() if i == 0 else np.kron(self.Z, Z0)
 
-        return self
-
-    @timer('calc')
+    @_timer_cls('calc')
     def calc(self, with_print=True):
         '''
         Calculation of the solution.
@@ -313,7 +268,7 @@ class Solver(object):
         type: fpcross.Solver
         '''
 
-        PR = Printer(self, with_print).init()
+        PR = _PrinterSl(self, with_print).init()
         self.step_init()
         for m in range(1, self.TG.n0):
             self.t+= self.TG.h0
@@ -327,7 +282,6 @@ class Solver(object):
                 PR.update()
         self.step_last()
         PR.close()
-        return self
 
     def comp(self, X):
         '''
@@ -431,7 +385,7 @@ class Solver(object):
 
         return res
 
-    @timer('calc_init')
+    @_timer_cls('calc_init')
     def step_init(self):
         '''
         Some operations before the first computation step.
@@ -447,7 +401,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
-    @timer('calc_diff')
+    @_timer_cls('calc_diff')
     def step_diff(self):
         '''
         One computation step for the diffusion term.
@@ -476,7 +430,7 @@ class Solver(object):
 
         self.FN.init(Y=v)
 
-    @timer('calc_conv')
+    @_timer_cls('calc_conv')
     def step_conv(self):
         '''
         One computation step for the drift term.
@@ -557,7 +511,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
-    @timer('calc_post')
+    @_timer_cls('calc_post')
     def step_post(self):
         '''
         Check result of the current computation step.
@@ -614,7 +568,7 @@ class Solver(object):
 
         return msg
 
-    @timer('calc_last')
+    @_timer_cls('calc_last')
     def step_last(self):
         '''
         Some operations after the final computation step.
@@ -623,7 +577,6 @@ class Solver(object):
         self.FN.calc()
         # nrm = self.FN.comp_int()
         # self.FN.Y = 1./nrm * self.FN.Y
-        return
 
     def info(self, is_ret=False):
         '''
@@ -651,7 +604,7 @@ class Solver(object):
         s+= 'Hst pois  : %s \n'%('%d'%self.n_hst if self.n_hst else 'None')
         s+= 'Hst r     : %s \n'%('Yes' if self.with_r_hst else 'No')
         s+= 'Norm int  : %s \n'%('Yes' if self.with_norm_int else 'No')
-        
+
         if len(self.hst['E_rhsn']):
             s+= 'Err  rhs  : %8.2e\n'%self.hst['E_rhsn'][-1]
         if len(self.hst['E_real']):
