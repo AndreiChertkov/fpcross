@@ -1,5 +1,6 @@
 import time
 import platform
+from tqdm import tqdm
 
 from . import config
 
@@ -15,25 +16,18 @@ def _timer_cls(name):
     '''
     Decorator. Save time (duration) for function call inside the class.
     The corresponding class should have tms dict with field name.
-    The filed tms[name] will be incremented by duration.
+    The filed tms[name] (if exists) will be incremented by duration.
     * Will return class instance, not result of the decorated function.
     '''
 
     def timer_(f):
-
         def timer__(self, *args, **kwargs):
-
             t = time.perf_counter()
             r = f(self, *args, **kwargs)
             t = time.perf_counter() - t
-
-            self.tms[name]+= t
-
-            # return r
-            return self
-
+            if hasattr(self, 'tms') and name in self.tms: self.tms[name]+= t
+            return self # r
         return timer__
-
     return timer_
 
 class _PrinterSl(object):

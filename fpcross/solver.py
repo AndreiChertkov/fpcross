@@ -5,7 +5,6 @@ from scipy.linalg import expm
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation, rc
-from tqdm import tqdm
 
 import tt
 
@@ -199,8 +198,9 @@ class Solver(object):
         self.hst = {
             'T': [],
             'R': [],
-            'Rnk': [],
             'Int': [],
+            'Rank_A': [],
+            'Rank_E': [],
             'C_calc': [],
             'C_size': [],
             'E_real': [],
@@ -277,9 +277,10 @@ class Solver(object):
             if self.ord == 2:
                 self.step_diff()
             if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
-                PR.update(self.step_post())
+                self.step_post()
             else:
-                PR.update()
+                self.msg = None
+            PR.update(self.msg)
         self.step_last()
         PR.close()
 
@@ -533,12 +534,20 @@ class Solver(object):
 
         self.FN.calc()
         r_int = self.FN.comp_int()
-        if self.with_norm_int: self.FN.Y = self.FN.Y / r_int
+        if self.with_norm_int: self.FN.Y = 1. / r_int * self.FN.Y
 
         self.hst['T'].append(self.t)
         self.hst['Int'].append(r_int)
         if self.with_r_hst: self.hst['R'].append(self.FN.Y.copy())
-        if self.with_tt: self.hst['Rnk'].append(self.FN.Y.r)
+        if self.with_tt:
+            R = self.FN.Y.r
+            c = 0.
+            for i in range(self.SG.d): c+= R[i] * self.SG.n[i] * R[i+1]
+            c/= np.prod(self.SG.n)
+
+            self.hst['Rank_A'].append(R)
+            self.hst['Rank_E'].append(self.FN.Y.erank)
+            self.hst['C_size'].append(c)
 
         msg = '| At T=%-6.1e : '%self.t
 
@@ -561,12 +570,12 @@ class Solver(object):
             self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
             msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
 
-        msg+= ' ' * 100
+        # msg+= ' ' * 100
 
         if self.with_tt:
             msg+= ' r=%-6.2e'%self.FN.Y.erank
 
-        return msg
+        self.msg = msg
 
     @_timer_cls('calc_last')
     def step_last(self):
