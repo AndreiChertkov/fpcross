@@ -205,13 +205,13 @@ class Solver(object):
 
         self.init()
 
-    def init(self, t_hst=10, with_norm_int=False, with_r_hst=False):
+    def init(self, n_hst=10, with_norm_int=False, with_r_hst=False):
         '''
         Init main parameters of the class instance.
 
         INPUT:
 
-        t_hst - number of points for history
+        n_hst - number of points for history
         type: int, >= 0, <= number_of_time_poins
         * Ranks, errors, etc. will be saved for related time moments.
 
@@ -231,7 +231,8 @@ class Solver(object):
         type: fpcross.Solver
         '''
 
-        self.t_hst = int(self.TG.n0 * 1. / t_hst) if t_hst else 0
+        self.n_hst = n_hst if n_hst else 0
+        self.t_hst = int(self.TG.n0 * 1. / self.n_hst) if self.n_hst else 0
         self.with_norm_int = bool(with_norm_int)
         self.with_r_hst = bool(with_r_hst)
 
@@ -563,12 +564,9 @@ class Solver(object):
 
         TODO:
 
+        - Remove self.FN.calc() (and change algorithm for comp_int).
         - Add initial guess r to rt and maybe rs.
         '''
-
-        self.FN.calc()
-        nrm = self.FN.comp_int()
-        # self.FN.Y = 1./nrm * self.FN.Y
 
         def _err_calc(r_calc, r_real):
             dr = r_real - r_calc
@@ -576,36 +574,43 @@ class Solver(object):
             dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
             return dn / n0 if n0 > 0 else dn
 
-        self.hst['T'].append(self.t)
-        self.hst['R'].append(self.FN.Y.copy())
-        self.hst['Int'].append(nrm)
-
-        msg = '| At T=%-6.1e :'%self.t
-
         FN = self.FN.copy(is_init=True)
         FN.eps/= 100
 
-        if self.MD.with_rt():
-            FN.init(lambda x: self.MD.rt(x, self.t))
-            FN.prep()
-            self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
+        self.FN.calc()
+        r_int = self.FN.comp_int()
+        if self.with_norm_int: self.FN.Y = self.FN.Y / r_int
 
-            msg+= ' er=%-6.1e'%self.hst['E_real'][-1]
+        self.hst['T'].append(self.t)
+        self.hst['Int'].append(r_int)
+        if self.with_r_hst: self.hst['R'].append(self.FN.Y.copy())
+        if self.with_tt: self.hst['Rnk'].append(self.FN.Y.r)
+
+        msg = '| At T=%-6.1e : '%self.t
+
+        msg+= ' ' * 100
+
+        if True:
+            msg+= '  Int=%-6.1e'%r_int
+
+        if True:
+            self.hst['E_rhsn'].append(self.comp_rhs())
+            msg+= '  Erhs=%-6.1e'%self.hst['E_rhsn'][-1]
+
+        if self.MD.with_rt():
+            FN.init(lambda x: self.MD.rt(x, self.t)).prep()
+            self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
+            msg+= '  Ereal=%-6.1e'%self.hst['E_real'][-1]
 
         if self.MD.with_rs():
-            FN.init(lambda x: self.MD.rs(x))
-            FN.prep()
+            FN.init(lambda x: self.MD.rs(x)).prep()
             self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
+            msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
 
-            msg+= ' es=%-6.1e'%self.hst['E_stat'][-1]
+        msg+= ' ' * 100
 
         if self.with_tt:
             msg+= ' r=%-6.2e'%self.FN.Y.erank
-
-        msg+= ' n=%-6.2e'%nrm
-
-        rhs = self.comp_rhs()
-        msg+= ' rhs=%-6.2e'%rhs
 
         return msg
 
@@ -642,12 +647,17 @@ class Solver(object):
         s+= 'TT, eps= %8.2e '%self.eps if self.with_tt else 'NP '
         s+= '[order=%d]\n'%self.ord
 
-        if len(self.hst['E_real']):
-            s+= 'Err real  : %8.2e\n'%self.hst['E_real'][-1]
-        if len(self.hst['E_stat']):
-            s+= 'Err stat  : %8.2e\n'%self.hst['E_stat'][-1]
+        s+= 'Format    : %1dD, '%self.SG.d
+        s+= 'Hst pois  : %s \n'%('%d'%self.n_hst if self.n_hst else 'None')
+        s+= 'Hst r     : %s \n'%('Yes' if self.with_r_hst else 'No')
+        s+= 'Norm int  : %s \n'%('Yes' if self.with_norm_int else 'No')
+        
         if len(self.hst['E_rhsn']):
-            s+= 'Err rhs   : %8.2e\n'%self.hst['E_rhsn'][-1]
+            s+= 'Err  rhs  : %8.2e\n'%self.hst['E_rhsn'][-1]
+        if len(self.hst['E_real']):
+            s+= 'Err  real : %8.2e\n'%self.hst['E_real'][-1]
+        if len(self.hst['E_stat']):
+            s+= 'Err  stat : %8.2e\n'%self.hst['E_stat'][-1]
 
         s+= 'Time prep : %8.2e \n'%self.tms['prep']
         s+= 'Time calc : %8.2e \n'%self.tms['calc']
