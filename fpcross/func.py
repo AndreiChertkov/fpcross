@@ -8,7 +8,7 @@ from tt.cross.rectcross import cross
 
 from . import polycheb
 
-from .utils import _timer_cls
+from .utils import tms
 
 class Func(object):
     '''
@@ -130,7 +130,7 @@ class Func(object):
 
         return FN
 
-    @_timer_cls('init')
+    @tms('init')
     def init(self, f=None, Y=None, opts={}):
         '''
         Init the main parameters of the class instance.
@@ -218,7 +218,7 @@ class Func(object):
         set_opt('rf', 2)
         set_opt('Y0', None)
 
-    @_timer_cls('prep')
+    @tms('prep')
     def prep(self):
         '''
         Construct function values on the spatial grid.
@@ -303,7 +303,7 @@ class Func(object):
 
             self.tms['func'] = (time.perf_counter()-self.tms['func'])/X.shape[1]
 
-    @_timer_cls('calc')
+    @tms('calc')
     def calc(self):
         '''
         Build tensor of interpolation coefficients according to training data.

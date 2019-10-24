@@ -12,7 +12,7 @@ def ij():
     from IPython.core.display import HTML
     return HTML('<style>%s</style>'%config['css'])
 
-def _timer_cls(name):
+def tms(name):
     '''
     Decorator. Save time (duration) for function call inside the class.
     The corresponding class should have tms dict with field name.
@@ -30,7 +30,7 @@ def _timer_cls(name):
         return timer__
     return timer_
 
-class _PrinterSl(object):
+class PrinterSl(object):
     '''
     Present (print in interactive mode) current calculation status
     for the solver (fpcross.Solver).

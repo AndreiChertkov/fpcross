@@ -1,5 +1,7 @@
 # Package fpcross
 
+## Description
+
 Solution of the multidimensional Fokker-Planck equation (FPE) of the form
 
 d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
@@ -9,7 +11,7 @@ with known f(x, t), initial condition r~0~(x) and scalar diffusion coefficient D
 
 ## Requirements
 
-1. **Python** (version >= 3.7).
+1. [Python](https://www.python.org) programming language (version >= 3.7).
 
 1. Standard python packages like [numpy](https://numpy.org), [scipy](https://www.scipy.org), [matplotlib](https://matplotlib.org), etc. (all of them are included in [anaconda](https://www.anaconda.com/download/) distribution).
 
@@ -19,7 +21,7 @@ with known f(x, t), initial condition r~0~(x) and scalar diffusion coefficient D
 
 ## Installation
 
-1. Install **python** (version >= 3.7) and standard python packages listed above. The best way is to use **anaconda** distribution.
+1. Install **python** (version >= 3.7) and standard python packages listed in the section `Requirements` above. The best way is to use **anaconda** distribution.
 
 1. Install **ttpy** python package according to instructions from the corresponding repository.
 
@@ -43,7 +45,7 @@ All examples are performed as interactive browser-based jupyter lab notebooks. T
 
 1. Open one of the jupyter lab notebooks from this folder.
 
-    > See `./examples/func.ipynb` for interpolation submodule details, `./examples/main.ipynb` for example of solver usage and another jupyter lab notebooks in `./examples/` folder for examples of various special use cases.
+    > See `./examples/func.ipynb` for interpolation submodule details, `./examples/fpe.ipynb` for example of solver usage and another jupyter lab notebooks in `./examples/` folder for examples of various special use cases.
 
 1. Run all cells in the jupyter lab notebook one by one.
 
@@ -67,12 +69,16 @@ All examples are performed as interactive browser-based jupyter lab notebooks. T
 
 * [ ] Set more accurate form for config file.
 
-* [ ] All flags (bool arguments) should have the same default value (`False`).
+* [x] All flags (bool arguments) should have the same default value (`False`).
 
 * [ ] Add link to our related publication.
 
-* [ ] Add basic tests for all modules.
+* [x] Add basic tests for all modules.
+
+* [ ] Add advanced tests for all modules.
 
 * [ ] Find a more suitable name for the package and rename it.
+
+* [ ] Add package to pypi.
 
 * [ ] Select convection for the doc-strings (functions and classes) and update the corresponding comments in the code.

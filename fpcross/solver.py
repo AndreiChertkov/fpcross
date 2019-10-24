@@ -13,8 +13,7 @@ from . import difscheb
 from . import Grid
 from . import Func
 from . import OrdSolver
-
-from .utils import _timer_cls, _PrinterSl
+from .utils import tms, PrinterSl
 
 class Solver(object):
     '''
@@ -163,7 +162,7 @@ class Solver(object):
 
         self.init()
 
-    @_timer_cls('init')
+    @tms('init')
     def init(self, n_hst=10, with_norm_int=False, with_r_hst=False):
         '''
         Init main parameters of the class instance.
@@ -218,7 +217,7 @@ class Solver(object):
             'calc_last': 0.,
         }
 
-    @_timer_cls('prep')
+    @tms('prep')
     def prep(self):
         '''
         Prepare special matrices.
@@ -250,7 +249,7 @@ class Solver(object):
             for i in range(self.SG.d):
                 self.Z = Z0.copy() if i == 0 else np.kron(self.Z, Z0)
 
-    @_timer_cls('calc')
+    @tms('calc')
     def calc(self, with_print=True):
         '''
         Calculation of the solution.
@@ -268,7 +267,7 @@ class Solver(object):
         type: fpcross.Solver
         '''
 
-        PR = _PrinterSl(self, with_print).init()
+        PR = PrinterSl(self, with_print).init()
         self.step_init()
         for m in range(1, self.TG.n0):
             self.t+= self.TG.h0
@@ -386,7 +385,7 @@ class Solver(object):
 
         return res
 
-    @_timer_cls('calc_init')
+    @tms('calc_init')
     def step_init(self):
         '''
         Some operations before the first computation step.
@@ -402,7 +401,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
-    @_timer_cls('calc_diff')
+    @tms('calc_diff')
     def step_diff(self):
         '''
         One computation step for the diffusion term.
@@ -431,7 +430,7 @@ class Solver(object):
 
         self.FN.init(Y=v)
 
-    @_timer_cls('calc_conv')
+    @tms('calc_conv')
     def step_conv(self):
         '''
         One computation step for the drift term.
@@ -512,7 +511,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
-    @_timer_cls('calc_post')
+    @tms('calc_post')
     def step_post(self):
         '''
         Check result of the current computation step.
@@ -577,15 +576,16 @@ class Solver(object):
 
         self.msg = msg
 
-    @_timer_cls('calc_last')
+    @tms('calc_last')
     def step_last(self):
         '''
         Some operations after the final computation step.
         '''
 
-        self.FN.calc()
+
         # nrm = self.FN.comp_int()
         # self.FN.Y = 1./nrm * self.FN.Y
+        self.FN.calc()
 
     def info(self, is_ret=False):
         '''
