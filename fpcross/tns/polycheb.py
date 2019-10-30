@@ -33,8 +33,10 @@ def polycheb(X, m, l=None):
     '''
 
     m = int(m)
-    if m <= 0: raise ValueError('Invalid parameter m (should be > 0).')
-    if not isinstance(X, np.ndarray): X = np.array(X)
+    if m <= 0:
+        raise ValueError('Invalid parameter m (should be > 0).')
+    if not isinstance(X, np.ndarray):
+        X = np.array(X)
 
     if l is not None:
         if not isinstance(l, np.ndarray):
@@ -50,7 +52,7 @@ def polycheb(X, m, l=None):
             l1 = l[0, 0]
             l2 = l[0, 1]
 
-        X = (2. * X - l2 - l1) * 1. / (l2 - l1)
+        X = (2. * X - l2 - l1) / (l2 - l1)
 
     if len(X.shape):
         T = np.ones([m] + list(X.shape))

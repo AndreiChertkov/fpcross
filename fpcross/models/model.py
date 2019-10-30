@@ -28,7 +28,19 @@ class Model(object):
                 v = opts.get('dflt')
                 if isinstance(v, types.FunctionType):
                     v = v(kwargs)
-            object.__setattr__(self, '_' + name, v)
+            setattr(self, '_' + name, v)
+
+        return self
+
+    def prep(self):
+        '''
+        Prepare special model parameters.
+
+        OUTPUT:
+
+        MD - self
+        type: fpcross.Model
+        '''
 
         return self
 
@@ -77,9 +89,7 @@ class Model(object):
         res - tags
         type: list of str
 
-        TODO:
-
-        - Add the list of all supported tags.
+        TODO Add the list of all supported tags.
         '''
 
         return []
@@ -92,9 +102,8 @@ class Model(object):
 
         res - parameters
         type: dict
-        * Each field is also dict with fields
-        * 'name' (str), 'desc' (str), 'type' (str),
-        * 'dflt' (type or function), 'frmt' (str).
+        * Each field is also a dict with fields 'name' (str), 'desc' (str),
+        * 'type' (str), 'dflt' (type name or function), 'frmt' (str).
         '''
 
         return {}
@@ -123,13 +132,6 @@ class Model(object):
 
         return ''
 
-    def prep(self):
-        '''
-        Prepare special model parameters.
-        '''
-
-        return
-
     def info(self, is_comp=False, is_ret=False):
         '''
         Present info about the model.
@@ -145,6 +147,13 @@ class Model(object):
             True  - return string info
             False - print/display string info
         type: bool
+
+        OUTPUT:
+
+        s - (if is_out) string with info
+        type: str
+
+        TODO Check replacement for indents.
         '''
 
         name = self.name() or '?????'
@@ -159,10 +168,9 @@ class Model(object):
             s = 'Model : %-22s | %s\n'%(name, repr)
             s+= '>>>>>>> Description            : %s'%(desc or '...')
 
-            if not s.endswith('\n'): s+= '\n'
-            if is_ret: return s
-            print(s[:-1])
-            return
+            if not s.endswith('\n'):
+                s+= '\n'
+            return s if is_ret else print(s[:-1])
 
         s_name = r'<div class="head0__name">%s</div>'%name
         s_tags = r' [%s]'%(', '.join(tags)) if len(tags) else ''
@@ -196,7 +204,9 @@ class Model(object):
 
         s = s_main + s_pars + s_text + s_coms + r'''<div class="end"></div>'''
 
-        if is_ret: return s
+        if is_ret:
+            return s
+
         from IPython.display import display, Markdown
         display(Markdown(s))
 
@@ -251,9 +261,7 @@ class Model(object):
         v - values
         type: ndarray [dimensions, number of points] of float
 
-        TODO:
-
-        - Add method with_f1 for the case if derivative is not known.
+        TODO Add method with_f1 for the case if derivative is not known.
         '''
 
         raise NotImplementedError('This is abstract class.')
@@ -293,7 +301,9 @@ class Model(object):
         type: ndarray [number of points] of float
         '''
 
-        if not self.with_rt: raise ValueError('The model has not rt.')
+        if not self.with_rt:
+            raise ValueError('The model has not rt.')
+
         raise NotImplementedError('This is abstract class.')
 
     def rs(self, X):
@@ -311,7 +321,9 @@ class Model(object):
         type: ndarray [number of points] of float
         '''
 
-        if not self.with_rs: raise ValueError('The model has not rs.')
+        if not self.with_rs:
+            raise ValueError('The model has not rs.')
+
         raise NotImplementedError('This is abstract class.')
 
     def with_rt(self):
@@ -319,7 +331,6 @@ class Model(object):
         Return True if model has known exact analytic solution.
         '''
 
-        # return getattr(self, 'rt', None) is not None
         return False
 
     def with_rs(self):
@@ -327,7 +338,6 @@ class Model(object):
         Return True if model has known exact stationary solution.
         '''
 
-        # return getattr(self, 'rs', None) is not None
         return False
 
     @staticmethod
@@ -346,9 +356,7 @@ class Model(object):
         MD - model
         type: fpcross.Model
 
-        TODO:
-
-        - Add try block.
+        TODO Add try block.
         '''
 
         name = name.replace('-', '_')

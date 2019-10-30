@@ -21,11 +21,9 @@ def difscheb(SG, m):
     D - list of differentiation matrices (D1, D2, ..., Dm)
     type: tuple [m] of ndarray [n, n] of float
 
-    TODO:
+    TODO Check and update the code.
 
-    - Check and update the code.
-
-    - Add input check.
+    TODO Add input check.
     '''
 
 

@@ -15,7 +15,7 @@ class Model(ModelBase):
         return 'Multidimensional Focker Planck equation (Ornstein–Uhlenbeck process)'
 
     def tags(self):
-        return ['FPE', 'ND', 'analytic', 'analyt-stationary', 'OUP']
+        return ['FPE', 'ND', 'analytic-stationary', 'OUP']
 
     def pars(self):
         return {
