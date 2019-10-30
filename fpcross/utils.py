@@ -1,4 +1,5 @@
 import time
+from time import perf_counter as tpc
 import platform
 from tqdm import tqdm
 
@@ -14,19 +15,20 @@ def ij():
 
 def tms(name):
     '''
-    Decorator. Save time (duration) for function call inside the class.
+    @Decorator. Save time (duration) for function call inside the class.
     The corresponding class should have tms dict with field name.
     The filed tms[name] (if exists) will be incremented by duration.
-    * Will return class instance, not result of the decorated function.
+    * Will return class instance (not result of the decorated function!) for
+    * the functions with names init, prep and calc.
     '''
 
     def timer_(f):
         def timer__(self, *args, **kwargs):
-            t = time.perf_counter()
+            t = tpc()
             r = f(self, *args, **kwargs)
-            t = time.perf_counter() - t
-            if hasattr(self, 'tms') and name in self.tms: self.tms[name]+= t
-            return self # r
+            if hasattr(self, 'tms') and name in self.tms:
+                self.tms[name]+= tpc() - t
+            return self if f.__name__ in ['init', 'prep', 'calc'] else r
         return timer__
     return timer_
 
@@ -37,18 +39,28 @@ class PrinterSl(object):
     '''
 
     def __init__(self, SL, with_print=False):
-        self.SL, self.with_print, self.tqdm = SL, with_print, None
+        self.SL = SL
+        self.with_print = with_print
+        self.tqdm = None
 
     def init(self):
-        d, u, t = 'Solve', 'step', self.SL.TG.n0 - 1
-        if self.with_print: self.tqdm = tqdm(desc=d, unit=u, total=t, ncols=80)
+        if self.with_print:
+            d, u, t = 'Solve', 'step', self.SL.TG.n0 - 1
+            self.tqdm = tqdm(desc=d, unit=u, total=t, ncols=80)
+
         return self
 
     def update(self, msg=None):
-        if self.with_print and msg: self.tqdm.set_postfix_str(msg, refresh=True)
-        if self.with_print: self.tqdm.update(1)
+        if self.with_print and msg:
+            self.tqdm.set_postfix_str(msg, refresh=True)
+
+        if self.with_print:
+            self.tqdm.update(1)
+
         return self
 
     def close(self):
-        if self.with_print: self.tqdm.close()
+        if self.with_print:
+            self.tqdm.close()
+
         return self
