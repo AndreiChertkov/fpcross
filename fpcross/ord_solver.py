@@ -59,8 +59,10 @@ class OrdSolver(object):
                 type: ndarray [dimensions, number of points] of float
                 t - value of the time
                 type: float
+                y0 - (if with_y0) values of the related initial conditions
+                type: ndarray [dimensions, number of points] of float
             out:
-                f - function values on y points for time t
+                v - function values on y points for time t
                 type: ndarray [dimensions, number of points] of float
 
         with_y0 - flag:
@@ -96,12 +98,12 @@ class OrdSolver(object):
         type: ndarray [dimensions, number of points] of float
         '''
 
-        t1 = self.TG.l2 if self.is_rev else self.TG.l1
-        t2 = self.TG.l1 if self.is_rev else self.TG.l2
-        h0 = self.TG.h0
-        if self.is_rev: h0 = -h0
+        t1 = self.TG.l1 if not self.is_rev else self.TG.l2
+        t2 = self.TG.l2 if not self.is_rev else self.TG.l1
+        h0 = self.TG.h0 if not self.is_rev else self.TG.h0 * -1.
 
-        if not isinstance(y0, np.ndarray): y0 = np.array(y0)
+        if not isinstance(y0, np.ndarray):
+            y0 = np.array(y0)
 
         t = t1
         y = y0.copy()
@@ -110,8 +112,11 @@ class OrdSolver(object):
             for j in range(y.shape[1]):
                 def func(t, y):
                     y_ = y.reshape(-1, 1)
-                    if not self.with_y0: return self.f(y_, t).reshape(-1)
-                    return self.f(y_, t, y0[:, j].reshape(-1, 1)).reshape(-1)
+                    if self.with_y0:
+                        v = self.f(y_, t, y0[:, j].reshape(-1, 1))
+                    else:
+                        v = self.f(y_, t)
+                    return v.reshape(-1)
 
                 y[:, j] = solve_ivp(func, [t1, t2], y[:, j]).y[:, -1]
 
