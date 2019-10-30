@@ -1,13 +1,12 @@
 import os
 import sys
-import time
+from time import perf_counter as tpc
 import numpy as np
 
 import tt
 from tt.cross.rectcross import cross
 
 from . import polycheb
-
 from .utils import tms
 
 class Func(object):
@@ -39,22 +38,25 @@ class Func(object):
     type: ndarray or TT-tensor [*(numbers of points)] of float
     * Is calculated in self.calc.
 
+    opts - computation options (max ranks, initial guess, etc.)
+    type: dict
+
     tms - saved durations of the main operations
     type: dict
     fld : prep - construction of the function values on the Chebyshev grid
-        type: float, >= 0
+        type: float >= 0
     fld : calc - construction of interpolation coefficients
-        type: float, >= 0
+        type: float >= 0
     fld : comp - computation of the interpolant in one given spatial point
-        type: float, >= 0
+        type: float >= 0
     fld : func - computation of the base function in one given spatial point
-        type: float, >= 0
+        type: float >= 0
 
     res - results of the computations (tt-ranks, etc.)
     type: dict
 
     err - abs. value of the relative error of result for some non grid points
-    type: np.ndarray [number of test points] of float, >= 0.
+    type: np.ndarray [number of test points] of float >= 0.
     * Is calculated in self.test.
     '''
 
@@ -67,7 +69,7 @@ class Func(object):
         * Only Chebyshev grids are supported in the current version.
 
         eps - is the desired accuracy of the approximation
-        type: float, >= 1.E-20
+        type: float >= 1.E-20
         * Is used in tt-round and tt-cross approximation operations.
 
         with_tt - flag:
@@ -84,12 +86,12 @@ class Func(object):
             raise ValueError('Invalid spatial grid (should be Chebyshev).')
 
         if self.eps < 1.E-20:
-            raise ValueError('Invalid accuracy parameter (should be > 1.E-20).')
+            raise ValueError('Invalid accuracy parameter (should be >= 1E-20).')
 
         self.opts = {}
         self.init()
 
-    def copy(self, opts=None, is_init=False):
+    def copy(self, opts=None, is_init=False, **kwargs):
         '''
         Create a copy of the class instance.
 
@@ -105,20 +107,27 @@ class Func(object):
             False - interpolation result (if exists) will be also copied
         type: bool
 
+        **kwargs - some arguments from Func.__init__
+        type: dict
+        * These values will replace the corresponding params in the new func.
+
         OUTPUT:
 
         FN - new class instance
         type: fpcross.Func
-
-        TODO:
-
-        - Add support for new parameters for __init__.
         '''
 
-        FN = Func(self.SG.copy(), self.eps, self.with_tt)
-        FN.init(opts=self.opts).init(opts=opts)
+        if len(kwargs.keys()) and not is_init:
+            raise ValueError('Main opts are changed. Func should be inited.')
 
-        if is_init: return FN
+        SG = kwargs.get('SG', self.SG.copy())
+        eps = kwargs.get('eps', self.eps)
+        with_tt = kwargs.get('with_tt', self.with_tt)
+
+        FN = Func(SG, eps, with_tt).init(opts=self.opts).init(opts=opts)
+
+        if is_init:
+            return FN
 
         FN.f = self.f
         FN.Y = self.Y.copy() if self.Y is not None else None
@@ -189,10 +198,8 @@ class Func(object):
         FN - self
         type: fpcross.Func
 
-        TODO:
-
-        - Add support for functions that can calculate only one point
-          by one function call and for other function inp/out formats.
+        TODO Add support for functions that can calculate only one point
+             by one function call and for other function inp/out formats.
         '''
 
         self.f = f
@@ -209,8 +216,10 @@ class Func(object):
         self.err = None
 
         def set_opt(name, dflt=None):
-            if name in (opts or {}): self.opts[name] = opts[name]
-            elif not name in self.opts: self.opts[name] = dflt
+            if name in (opts or {}):
+                self.opts[name] = opts[name]
+            elif not name in self.opts:
+                self.opts[name] = dflt
 
         set_opt('is_f_with_i', False)
         set_opt('nswp', 200)
@@ -228,11 +237,9 @@ class Func(object):
         FN - self
         type: fpcross.Func
 
-        TODO:
+        TODO If Y0 is not set, how select best random value (rank, etc.)?
 
-        - If Y0 is not set, how select best random value (rank, etc.)?
-
-        - Set more accurate algorithm for tt-round of initial guess.
+        TODO Set more accurate algorithm for tt-round of initial guess.
         '''
 
         if self.Y is not None:
@@ -245,11 +252,11 @@ class Func(object):
             log_file = './__tt-cross_tmp.txt'
 
             def func(ind):
-                ind = ind.astype(int)
-                t = time.perf_counter()
-                X = self.SG.comp(ind.T)
-                Y = self.f(X, ind.T) if self.opts['is_f_with_i'] else self.f(X)
-                self.tms['func']+= time.perf_counter() - t
+                ind = ind.T.astype(int)
+                t = tpc()
+                X = self.SG.comp(ind)
+                Y = self.f(X, ind) if self.opts['is_f_with_i'] else self.f(X)
+                self.tms['func']+= tpc() - t
                 self.res['evals']+= X.shape[1]
                 return Y
 
@@ -260,8 +267,10 @@ class Func(object):
 
                 rmax = None
                 for n, r in zip(self.SG.n, Z.r[1:]):
-                    if r > n and (rmax is None or rmax > n): rmax = n
-                if rmax is not None: Z = Z.round(rmax=rmax)
+                    if r > n and (rmax is None or rmax > n):
+                        rmax = n
+                if rmax is not None:
+                    Z = Z.round(rmax=rmax)
 
             try:
                 log = open(log_file, 'w')
@@ -291,17 +300,19 @@ class Func(object):
             os.remove(log_file)
 
         else:            # NP-format
-            self.tms['func'] = time.perf_counter()
+            self.tms['func'] = tpc()
 
-            X = self.SG.comp()
             if self.opts['is_f_with_i']:
                 I = self.SG.comp(is_ind=True)
-                self.Y = self.f(X, I)
+                X = self.SG.comp(I)
+                Y = self.f(X, I)
             else:
-                self.Y = self.f(X)
-            self.Y = self.Y.reshape(self.SG.n, order='F')
+                X = self.SG.comp()
+                Y = self.f(X)
 
-            self.tms['func'] = (time.perf_counter()-self.tms['func'])/X.shape[1]
+            self.Y = Y.reshape(self.SG.n, order='F')
+
+            self.tms['func'] = (tpc() - self.tms['func']) / X.shape[1]
 
     @tms('calc')
     def calc(self):
@@ -313,9 +324,7 @@ class Func(object):
         FN - self
         type: fpcross.Func
 
-        TODO:
-
-        - Should we round A tensor after construction?
+        TODO Should we round A tensor after construction?
         '''
 
         if self.Y is None:
@@ -367,30 +376,30 @@ class Func(object):
         Y - approximated values of the function in given points
         type: ndarray [number of points] of float
 
-        TODO:
+        TODO Vectorize calculations for points vector if possible.
 
-        - Vectorize calculations for points vector if possible.
+        TODO Add support for 1D input.
 
-        - Add support for 1D input.
-
-        - Check if correct calculate Cheb. pol. until max(n) for all dimensions.
+        TODO Check if correct calculate Cheb. pol. until max(n) for all dims.
         '''
 
         if self.A is None:
             raise ValueError('Interpolation is not done. Can not compute values of the function. Call "calc" before.')
 
-        if not isinstance(X, np.ndarray): X = np.array(X)
+        if not isinstance(X, np.ndarray):
+            X = np.array(X)
 
-        self.tms['comp'] = time.time()
+        self.tms['comp'] = tpc()
 
-        Y = np.ones(X.shape[1]) * z
+        Y = np.ones(X.shape[1]) * float(z)
         T = polycheb(X, np.max(self.SG.n), self.SG.l)
 
         if self.with_tt: # TT-format
             G = tt.tensor.to_list(self.A)
 
             for j in range(X.shape[1]):
-                if self.SG.is_out(X[:, j]): continue
+                if self.SG.is_out(X[:, j]):
+                    continue
 
                 i = 0
                 Q = np.einsum('riq,i->rq', G[i], T[:self.SG.n[i], i, j])
@@ -401,7 +410,8 @@ class Func(object):
 
         else:            # NP-format
             for j in range(X.shape[1]):
-                if self.SG.is_out(X[:, j]): continue
+                if self.SG.is_out(X[:, j]):
+                    continue
 
                 Q = self.A.copy()
                 for i in range(self.SG.d):
@@ -409,18 +419,20 @@ class Func(object):
 
                 Y[j] = Q
 
-        self.tms['comp'] = (time.time() - self.tms['comp']) / X.shape[1]
+        self.tms['comp'] = (tpc() - self.tms['comp']) / X.shape[1]
 
         return Y
 
     def comp_int(self):
         '''
-        Compute integral of the function on the full domain.
+        Compute integral of the function on the full grid domain.
 
         OUTPUT:
 
         v - value of the integral
         type: float
+
+        TODO replace call of integrate_cheb_coeffs by integrate_cheb.
         '''
 
         if self.A is None:
@@ -437,7 +449,7 @@ class Func(object):
                 G_sh = G[k].shape                       # ( R_{k-1}, N_k, R_k )
                 G[k] = np.swapaxes(G[k], 0, 1)
                 G[k] = G[k].reshape(G_sh[1], -1)
-                G[k] = Func.integrate_cheb(G[k])
+                G[k] = Func.integrate_cheb_coeffs(G[k])
                 G[k] = G[k].reshape(G_sh[0], G_sh[2])
 
                 v = v @ G[k]
@@ -450,7 +462,7 @@ class Func(object):
 
             for k in range(self.SG.d):
                 v = v.reshape(self.SG.n[k], -1)
-                v = Func.integrate_cheb(v)
+                v = Func.integrate_cheb_coeffs(v)
                 v*= (self.SG.l[k, 1] - self.SG.l[k, 0]) / 2.
 
             v = v[0]
@@ -490,9 +502,6 @@ class Func(object):
         type: str
         '''
 
-        if self.A is not None and self.f is not None and n_test:
-            self.test(n_test, is_test_u)
-
         s = '------------------ Function  \n'
         s+= 'Format           : %1dD, '%self.SG.d
         s+= 'TT, eps= %8.2e\n'%self.eps if self.with_tt else 'NP\n'
@@ -505,6 +514,8 @@ class Func(object):
             s+= 'Func (average)   : %8.2e \n'%self.tms['func']
 
         if self.A is not None and self.f is not None and n_test:
+            self.test(n_test, is_test_u)
+
             s+= '--> Test         |       \n'
             s+= 'Random points    : %8s   \n'%('No' if is_test_u else 'Yes')
             s+= 'Number of points : %8d   \n'%self.err.size
@@ -513,10 +524,10 @@ class Func(object):
             s+= 'Error (min)      : %8.2e \n'%np.min(self.err)
 
         if self.with_tt:
-            with_ig = 'No' if self.opts['Y0'] is None else 'Yes'
+            with_guess = 'No' if self.opts['Y0'] is None else 'Yes'
 
             s+= '--> Cross params |       \n'
-            s+= 'Initial guess    : %8s   \n'%with_ig
+            s+= 'Initial guess    : %8s   \n'%with_guess
             s+= 'nswp             : %8d   \n'%self.opts['nswp']
             s+= 'kickrank         : %8d   \n'%self.opts['kickrank']
             s+= 'rf               : %8.2e \n'%self.opts['rf']
@@ -529,8 +540,10 @@ class Func(object):
             s+= 'Cross err (rel)  : %8.2e \n'%self.res['err_rel']
             s+= 'Cross err (abs)  : %8.2e \n'%self.res['err_abs']
 
-        if not s.endswith('\n'): s+= '\n'
-        if is_ret: return s
+        if not s.endswith('\n'):
+            s+= '\n'
+        if is_ret:
+            return s
         print(s[:-1])
 
     def test(self, n=100, is_u=False):
@@ -556,9 +569,9 @@ class Func(object):
         * for the test due to rounding of the d-root and using of the only
         * inner grid points, hence number of points <= n.
 
-        TODO:
+        TODO Add support for absolute error.
 
-        - Add support for absolute error.
+        TODO Check that number of points is > 0 for is_u case.
         '''
 
         if self.f is None:
@@ -606,14 +619,16 @@ class Func(object):
         type: ndarray [number of points, number of functions] of float
         '''
 
-        if not isinstance(Y, np.ndarray): Y = np.array(Y)
-        if len(Y.shape) == 1: Y = Y.reshape(-1, 1)
+        if not isinstance(Y, np.ndarray):
+            Y = np.array(Y)
+        if len(Y.shape) == 1:
+            Y = Y.reshape(-1, 1)
         if len(Y.shape) != 2:
             raise ValueError('Invalid shape for function values.')
 
         n = Y.shape[0]
-        V = np.vstack([Y, Y[n-2 : 0 : -1, :]])
-        A = np.fft.fft(V, axis=0).real
+        Z = np.vstack([Y, Y[n-2 : 0 : -1, :]])
+        A = np.fft.fft(Z, axis=0).real
         A = A[:n, :] / (n - 1)
         A[0, :] /= 2.
         A[n-1, :] /= 2.
@@ -621,13 +636,49 @@ class Func(object):
         return A
 
     @staticmethod
-    def integrate_cheb(A):
+    def integrate_cheb(Y):
+        '''
+        Integrate one-dimensional function f(x) using its known values
+        on the nodes of the Chebyshev grid on the interval (-1, 1).
+
+        It can find integrals for several functions on the one call.
+
+        INPUT:
+
+        Y - values of function at the nodes of the Chebyshev grid
+            x_j = cos(\pi j / (N - 1)), j = 0, 1 ,..., N-1,
+            where N is a number of points
+        type1: list [number of points] of float
+        type2: ndarray [number of points] of float
+        type3: list [number of points, number of functions] of float
+        type4: ndarray [number of points, number of functions] of float
+        * It may be of type1 or type2 only in the case of only one function.
+
+        OUTPUT:
+
+        v - value of the integral
+        type: ndarray [number of functions] of float
+
+        TODO Finilize.
+        '''
+
+        if not isinstance(Y, np.ndarray):
+            Y = np.array(Y)
+        if len(Y.shape) == 1:
+            Y = Y.reshape(-1, 1)
+        if len(Y.shape) != 2:
+            raise ValueError('Invalid shape for function values.')
+
+        raise NotImplementedError()
+
+    @staticmethod
+    def integrate_cheb_coeffs(A):
         '''
         Integrate one-dimensional function f(x) = \sum_{i} (A_i * T_i(x)),
         using known coefficients for interpolation by Chebyshev polynomials,
         on the interval (-1, 1).
 
-        It can find coefficients for several functions on the one call.
+        It can find integrals for several functions on the one call.
 
         INPUT:
 
@@ -641,11 +692,15 @@ class Func(object):
         OUTPUT:
 
         v - value of the integral
-        type: float
+        type: ndarray [number of functions] of float
         '''
 
-        if not isinstance(A, np.ndarray): A = np.array(A)
-        if len(A.shape) == 1: A = A.reshape(-1, 1)
+        if not isinstance(A, np.ndarray):
+            A = np.array(A)
+        if len(A.shape) == 1:
+            A = A.reshape(-1, 1)
+        if len(A.shape) != 2:
+            raise ValueError('Invalid shape for interpolation coefficients.')
 
         n = np.arange(A.shape[0])[::2]
         n = np.repeat(n.reshape(-1, 1), A.shape[1], axis=1)
