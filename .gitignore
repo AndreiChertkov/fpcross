@@ -1,16 +1,43 @@
+# --------------------------------------------
+# Folder with  auxiliary untracked information
+
+_info_/
+
+# ----------------
+# OS service files
+
+.thumbs.db
+.DS_Store
+*~
+
+# ------------
+# Google drive
+
+Icon?
+
+# --------------------
+# Python service files
+
+__pycache__/
+*synctex.gz*
 *.egg-info/
 *.egg
 *.py[cod]
-*.so
-*~
+.ipynb_checkpoints
 
-_info_/
-__pycache__/
+# ----------------------------
+# Python package service files
+
 build/
 dist/
 
-.tox
-.cache
-.ipynb_checkpoints
-.DS_Store
-Icon?
+# -------------------
+# Latex service files
+
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
