@@ -55,7 +55,7 @@ class Solver(object):
 
     hst - dictionary with saved (history) values
     type: dict
-    fld : T - time moments
+    fld : T - time moments saved to history
         type: list [t_hst] of float
     fld : R - solutions of the FPE on the spatial grid
         type1: list [0]
@@ -65,7 +65,7 @@ class Solver(object):
         * Is type3 if flag with_tt is set and type2 otherwise.
     fld : Rnk - tt-ranks of the solution
         type1: list [0]
-        type2: list [t_hst] of list of int, > 0
+        type2: list [t_hst] of list of int > 0
         * Is empty list (type1) if flag with_tt is not set.
     fld : Int - integral of the solution on the spatial domain
         type: list [t_hst] of float
@@ -93,7 +93,7 @@ class Solver(object):
     type: dict
     fld : prep - time spent to prepare required matrices, etc.
         type: float, >= 0
-    fld : calc - time spent to perform calculations
+    fld : calc - time spent to perform calculations (diff+conv+post+...)
         type: float, >= 0
     fld : diff - time spent to perform calculations for diffusion term
         type: float, >= 0
