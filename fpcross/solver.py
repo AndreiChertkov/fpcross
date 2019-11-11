@@ -1,9 +1,9 @@
 import time
 import types
 import numpy as np
-from scipy.linalg import expm
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from scipy.linalg import expm
 from matplotlib import animation, rc
 
 import tt
@@ -50,7 +50,7 @@ class Solver(object):
     MD - model for equation with functions and coefficients
     type: fpcross.Model
 
-    FN - function class that keep the current solution and its interpolation
+    FN - function class that keeps the current solution and its interpolation
     type: fpcross.Func
 
     hst - dictionary with saved (history) values
@@ -62,10 +62,10 @@ class Solver(object):
         type2: list [t_hst] of np.ndarray [number of points] of float
         type3: list [t_hst] of tt-tensor [number of points] of float
         * Is empty list (type1) if flag with_r_hst is not set.
-        * Is type3 if flag with_tt is set and type2 otherwise.
+        * Is type3 if flag with_tt is set and is type2 otherwise.
     fld : Rnk - tt-ranks of the solution
         type1: list [0]
-        type2: list [t_hst] of list of int > 0
+        type2: list [t_hst] of list [d] of int > 0
         * Is empty list (type1) if flag with_tt is not set.
     fld : Int - integral of the solution on the spatial domain
         type: list [t_hst] of float
@@ -86,10 +86,10 @@ class Solver(object):
         type1: list [0]
         type2: list [t_hst] of float, >= 0
         * Is empty list (type1) if function for stationary solution is not set.
-    fld : E_rhsn - norm of the rhs (devided by the norm of solution)
+    fld : E_rhsn - norm of the rhs devided by the norm of solution
         type: list [t_hst] of float, >= 0
 
-    tms - Saved durations of the main operations
+    tms - Saved durations (in seconds) of the main operations
     type: dict
     fld : prep - time spent to prepare required matrices, etc.
         type: float, >= 0
@@ -119,8 +119,6 @@ class Solver(object):
 
         MD - model for equation with functions and coefficients
         type: fpcross.Model
-        * It should be instance of the Model class (type1)
-        * or use ModelBase as the parent class (type2).
 
         eps - desired accuracy of the solution
         type: float, >= 1.E-20
@@ -189,7 +187,7 @@ class Solver(object):
         type: fpcross.Solver
         '''
 
-        self.n_hst = n_hst if n_hst else 0
+        self.n_hst = int(n_hst) if n_hst else 0
         self.t_hst = int(self.TG.n0 * 1. / self.n_hst) if self.n_hst else 0
         self.with_norm_int = bool(with_norm_int)
         self.with_r_hst = bool(with_r_hst)
@@ -250,15 +248,15 @@ class Solver(object):
                 self.Z = Z0.copy() if i == 0 else np.kron(self.Z, Z0)
 
     @tms('calc')
-    def calc(self, with_print=True):
+    def calc(self, dsbl_print=False):
         '''
         Calculation of the solution.
 
         INPUT:
 
-        with_print - flag:
-            True  - intermediate calculation results will be printed
-            False - results will not be printed
+        dsbl_print - flag:
+            True  - intermediate calculation results will not be printed
+            False - intermediate calculation results will be printed
         type: bool
 
         OUTPUT:
@@ -267,7 +265,7 @@ class Solver(object):
         type: fpcross.Solver
         '''
 
-        PR = PrinterSl(self, with_print).init()
+        PR = PrinterSl(self, with_print=!dsbl_print).init()
         self.step_init()
         for m in range(1, self.TG.n0):
             self.t+= self.TG.h0

@@ -7,7 +7,9 @@ _info_/
 # OS service files
 
 .thumbs.db
+.Thumbs.db
 .DS_Store
+
 *~
 
 # ------------
@@ -41,3 +43,18 @@ dist/
 *.blg
 *.fls
 *.fdb_latexmk
+
+# -------------------
+# Javascript service files
+
+# /dist
+package-lock.json
+node_modules
+.quasar
+
+# -------------------
+# Various service files
+
+*.sublime*
+.idea/
+.vscode/settings.json
