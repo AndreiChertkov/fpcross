@@ -265,7 +265,7 @@ class Solver(object):
         type: fpcross.Solver
         '''
 
-        PR = PrinterSl(self, with_print=!dsbl_print).init()
+        PR = PrinterSl(self, with_print=not dsbl_print).init()
         self.step_init()
         for m in range(1, self.TG.n0):
             self.t+= self.TG.h0

@@ -19,7 +19,7 @@ class TestSolver(unittest.TestCase):
         )
         SL.init()
         SL.prep()
-        SL.calc(with_print=False)
+        SL.calc(dsbl_print=True)
         self.assertTrue(SL.hst['E_real'][-1] < 9.29e-06)
         self.assertTrue(SL.hst['E_stat'][-1] < 9.34e-06)
 
@@ -35,7 +35,7 @@ class TestSolver(unittest.TestCase):
         )
         SL.init()
         SL.prep()
-        SL.calc(with_print=False)
+        SL.calc(dsbl_print=True)
         self.assertTrue(SL.hst['E_real'][-1] < 4.48e-03)
 
 if __name__ == '__main__':

@@ -26,10 +26,14 @@ def tms(name):
         def timer__(self, *args, **kwargs):
             t = tpc()
             r = f(self, *args, **kwargs)
+
             if hasattr(self, 'tms') and name in self.tms:
                 self.tms[name]+= tpc() - t
+
             return self if f.__name__ in ['init', 'prep', 'calc'] else r
+
         return timer__
+
     return timer_
 
 class PrinterSl(object):

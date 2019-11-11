@@ -22,10 +22,14 @@ def difscheb(SG, m):
     type: tuple [m] of ndarray [n, n] of float
 
     TODO Check and update the code.
-
-    TODO Add input check.
     '''
 
+    m = int(m)
+    if m <= 0:
+        raise ValueError('Invalid parameter m (should be > 0).')
+
+    if SG.kind != 'c':
+        raise ValueError('Invalid spatial grid (should be Chebyshev).')
 
     n = SG.n0
     l_min = SG.l1

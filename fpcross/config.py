@@ -239,6 +239,7 @@ config = {
           border-left: 5px solid #dfb5b4;
           padding: 0.5em;
         }
+
         .note {
           color: #42d56e;
         }
@@ -256,4 +257,6 @@ config = {
     ''',
 }
 
-# TODO: add color dict and generate css, using color names.
+# TODO Add color dict and generate css, using color names.
+
+# TODO Maybe move css into separate .css file.
