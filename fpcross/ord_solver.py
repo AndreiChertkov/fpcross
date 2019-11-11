@@ -20,7 +20,7 @@ class OrdSolver(object):
 
         TG - one-dimensional time grid
         type: fpcross.Grid
-        * Only uniform grids with 2 points are supported in the current version.
+        * Only uniform grids are supported in the current version.
 
         kind - type of the solver
         type: str
@@ -36,24 +36,25 @@ class OrdSolver(object):
         '''
 
         self.TG = TG
-        self.kind = kind
-        self.is_rev = is_rev
+        self.kind = str(kind)
+        self.is_rev = bool(is_rev)
 
         if self.TG.d != 1 or self.TG.kind != 'u':
             raise ValueError('Invalid time grid (should be 1-dim. uniform).')
-        if self.TG.n0 != 2:
-            raise ValueError('Invalid time grid (should have only 2 points).')
         if self.kind != 'eul' and self.kind != 'rk4' and self.kind != 'ivp':
             raise ValueError('Invalid solver type.')
 
-    def init(self, f, with_y0=False):
+        self.init()
+
+    def init(self, f=None, with_y0=False):
         '''
         Init the main parameters of the class instance.
 
         INPUT:
 
         f - function that calculate the rhs of the ODE for given points
-        type: function
+        type1: None
+        type2: function
             inp:
                 y - values of the spatial variable
                 type: ndarray [dimensions, number of points] of float
@@ -78,7 +79,7 @@ class OrdSolver(object):
         '''
 
         self.f = f
-        self.with_y0 = with_y0
+        self.with_y0 = bool(with_y0)
 
         return self
 
@@ -98,12 +99,15 @@ class OrdSolver(object):
         type: ndarray [dimensions, number of points] of float
         '''
 
-        t1 = self.TG.l1 if not self.is_rev else self.TG.l2
-        t2 = self.TG.l2 if not self.is_rev else self.TG.l1
-        h0 = self.TG.h0 if not self.is_rev else self.TG.h0 * -1.
+        if not self.f:
+            raise ValueError('Rhs for the equation is not set yet. Call "init" before.')
 
         if not isinstance(y0, np.ndarray):
             y0 = np.array(y0)
+
+        t1 = self.TG.l1 if not self.is_rev else self.TG.l2
+        t2 = self.TG.l2 if not self.is_rev else self.TG.l1
+        h0 = self.TG.h0 if not self.is_rev else self.TG.h0 * -1.
 
         t = t1
         y = y0.copy()

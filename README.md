@@ -5,9 +5,9 @@
 Solution of the multidimensional Fokker-Planck equation (FPE) of the form
 
 d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
-r(x,0) = r~0~(x),
+r(x,0) = r0(x),
 
-with known f(x, t), initial condition r~0~(x) and scalar diffusion coefficient D by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.
+with known f(x, t), initial condition r0(x) and scalar diffusion coefficient D by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.
 
 ## Requirements
 
@@ -81,4 +81,4 @@ All examples are performed as interactive browser-based jupyter lab notebooks. T
 
 * [ ] Add package to pypi.
 
-* [ ] Select convection for the doc-strings (functions and classes) and update the corresponding comments in the code.
+* [ ] Select convention for the doc-strings (functions and classes) and update the corresponding comments in the code.
