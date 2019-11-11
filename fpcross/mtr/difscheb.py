@@ -28,7 +28,7 @@ def difscheb(SG, m):
     if m <= 0:
         raise ValueError('Invalid parameter m (should be > 0).')
 
-    if SG.kind != 'c':
+    if SG.k != 'c':
         raise ValueError('Invalid spatial grid (should be Chebyshev).')
 
     n = SG.n0

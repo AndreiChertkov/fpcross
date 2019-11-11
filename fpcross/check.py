@@ -50,8 +50,8 @@ class Check(object):
         def calc_one(opts, m, n):
             d = self.MD.d()
             MD = self.MD
-            TG = Grid(d=1, n=m, l=[self.t_min, self.t_max], kind='u')
-            SG = Grid(d=d, n=n, l=[self.x_min, self.x_max], kind='c')
+            TG = Grid(d=1, n=m, l=[self.t_min, self.t_max], k='u')
+            SG = Grid(d=d, n=n, l=[self.x_min, self.x_max], k='c')
             SL = Solver(TG, SG, MD, opts['eps'], opts['ord'], opts['with_tt'])
             SL.init().prep().calc()
 

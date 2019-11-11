@@ -82,7 +82,7 @@ class Func(object):
         self.eps = float(eps)
         self.with_tt = bool(with_tt)
 
-        if self.SG.kind != 'c':
+        if self.SG.k != 'c':
             raise ValueError('Invalid spatial grid (should be Chebyshev).')
 
         if self.eps < 1.E-20:
@@ -583,7 +583,7 @@ class Func(object):
             raise ValueError(s)
 
         if is_u:
-            X = self.SG.copy(n=n**(1./self.SG.d), kind='u').comp(is_inner=True)
+            X = self.SG.copy(n=n**(1./self.SG.d), k='u').comp(is_inner=True)
         else:
             X = self.SG.rand(n)
 

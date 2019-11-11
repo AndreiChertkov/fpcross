@@ -33,6 +33,12 @@ class Grid(object):
     type: ndarray [dimensions, 2] of float,
           [i, 0] < [i, 1] for each i
 
+    k - kind of the grid
+    type: str
+    enum:
+        - 'u' - uniform grid
+        - 'c' - Chebyshev grid
+
     h - grid steps assuming uniformity for each dimension
     type: ndarray [dimensions] of float > 0,
           h[i] <= l[i, 1] - l[i, 0] for each i
@@ -53,18 +59,12 @@ class Grid(object):
     type: float > 0 and <= l2 - l1
     * For the 1D grid it is scalar grid step (assuming uniformity).
 
-    kind - kind of the grid
-    type: str
-    enum:
-        - 'u' - uniform grid
-        - 'c' - Chebyshev grid
-
     TODO Add function that scale points to/from limits l and [0, 1].
 
-    TODO Add function that check if given point on the boundary.
+    TODO Add function that check if given point lies on the boundary.
     '''
 
-    def __init__(self, d=None, n=2, l=[-1., 1.], kind='c'):
+    def __init__(self, d=None, n=2, l=[-1., 1.], k='c'):
         '''
         INPUT:
 
@@ -94,7 +94,7 @@ class Grid(object):
         * values for each dimension. If it is 1D list or array (type1 or type2),
         * then the same values will be used for each dimension.
 
-        kind - kind of the grid
+        k - kind of the grid
         type: str
         enum:
             - 'u' - uniform grid
@@ -125,7 +125,7 @@ class Grid(object):
         if not isinstance(n, np.ndarray) or len(n.shape) != 1:
             raise ValueError('Invalid type or shape for number of points (n).')
         if n.shape[0] != d:
-            raise IndexError('Invalid dimension for number of points  v.')
+            raise IndexError('Invalid dimension for number of points (n).')
         for i in range(d):
             if n[i] < 2:
                 raise ValueError('Ivalid number of points (should be >= 2).')
@@ -149,7 +149,9 @@ class Grid(object):
             if l[i, 0] >= l[i, 1]:
                 raise ValueError('Ivalid limits (min should be less of max).')
 
-        if kind != 'u' and kind != 'c':
+        # Check / prepare k
+
+        if k != 'u' and k != 'c':
             raise ValueError('Invalid grid kind.')
 
         # Set parameters
@@ -157,9 +159,9 @@ class Grid(object):
         self.d = d
         self.n = n
         self.l = l
+        self.k = k
         self.h = (self.l[:, 1] - self.l[:, 0]) / (self.n - 1)
-        self.kind = kind
-
+        
         # Set mean values for parameters
 
         self.n0 = int(np.mean(self.n))
@@ -186,9 +188,9 @@ class Grid(object):
         d = kwargs.get('d', self.d)
         n = kwargs.get('n', self.n.copy())
         l = kwargs.get('l', self.l.copy())
-        kind = kwargs.get('kind', self.kind)
+        k = kwargs.get('k', self.k)
 
-        return Grid(d, n, l, kind)
+        return Grid(d, n, l, k)
 
     def comp(self, I=None, is_ind=False, is_inner=False):
         '''
@@ -267,10 +269,10 @@ class Grid(object):
         l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), I.shape[1], axis=1)
         l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), I.shape[1], axis=1)
 
-        if self.kind == 'u':
+        if self.k == 'u':
             t = I * 1. / (n_ - 1)
             X = t * (l2 - l1) + l1
-        if self.kind == 'c':
+        if self.k == 'c':
             t = np.cos(np.pi * I / (n_ - 1))
             X = t * (l2 - l1) / 2. + (l2 + l1) / 2.
 
@@ -299,9 +301,9 @@ class Grid(object):
         l1 = self.l[:, 0]
         l2 = self.l[:, 1]
 
-        if self.kind == 'u':
+        if self.k == 'u':
             i = (x - l1) * (n - 1) / (l2 - l1)
-        if self.kind == 'c':
+        if self.k == 'c':
             t = (2. * x - l2 - l1) / (l2 - l1)
             t[t > +1.] = +1.
             t[t < -1.] = -1.
@@ -399,9 +401,9 @@ class Grid(object):
         s = '------------------ Grid\n'
 
         k = '???'
-        if self.kind == 'u':
+        if self.k == 'u':
             k = 'Uniform'
-        if self.kind == 'c':
+        if self.k == 'c':
             k = 'Chebyshev'
         s+= 'Kind             : %s\n'%k
 

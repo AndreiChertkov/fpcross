@@ -144,10 +144,10 @@ class Solver(object):
         self.ord = int(ord)
         self.with_tt = bool(with_tt)
 
-        if self.TG.d != 1 or self.TG.kind != 'u':
+        if self.TG.d != 1 or self.TG.k != 'u':
             raise ValueError('Invalid time grid (should be 1-dim. uniform).')
 
-        if self.SG.kind != 'c' or not self.SG.is_square():
+        if self.SG.k != 'c' or not self.SG.is_square():
             raise ValueError('Invalid spatial grid (should be square Cheb.).')
 
         if self.eps < 1.E-20:
@@ -489,7 +489,7 @@ class Solver(object):
             type: ndarray [number of points] of float
             '''
 
-            TG = Grid(1, 2, [self.t - self.TG.h0, self.t], kind='u')
+            TG = Grid(1, 2, [self.t - self.TG.h0, self.t], k='u')
             kd = 'eul' if self.ord == 1 else 'rk4'
             X0 = OrdSolver(TG, kind=kd, is_rev=True).init(self.MD.f0).comp(X)
             w0 = FN.comp(X0)

@@ -103,10 +103,10 @@ class TestGrid(unittest.TestCase):
         l = np.array([[-2, 4], [-5, 7]])
 
         GR = Grid(d, n, l, 'u')
-        np.testing.assert_equal(GR.kind, 'u')
+        np.testing.assert_equal(GR.k, 'u')
 
         GR = Grid(d, n, l, 'c')
-        np.testing.assert_equal(GR.kind, 'c')
+        np.testing.assert_equal(GR.k, 'c')
 
         self.assertRaises(ValueError, lambda: Grid(d, n, l, 'xxx'))
 
@@ -145,7 +145,7 @@ class TestGrid(unittest.TestCase):
         GR = Grid(n=[5, 7], l=[
             [-4., 3.],
             [-1., 2.],
-        ], kind='u')
+        ], k='u')
 
         X = GR.comp([0, 0])
         np.testing.assert_almost_equal(
@@ -172,7 +172,7 @@ class TestGrid(unittest.TestCase):
         GR = Grid(n=[5, 7], l=[
             [-4., 3.],
             [-1., 2.],
-        ], kind='c')
+        ], k='c')
 
         X = GR.comp([0, 0])
         np.testing.assert_almost_equal(
@@ -244,39 +244,39 @@ class TestGrid(unittest.TestCase):
         self.assertEqual(GR.indf([4, 6, 7]), 279)
 
     def test_find_u(self):
-        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='u')
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='u')
 
         self.assertEqual(GR.find([-0.9, -1.2]), 2)
         self.assertEqual(GR.find([+1.9, -0.1]), 13)
         self.assertEqual(GR.find([11.9, 22.1]), 34)
 
     def test_find_c(self):
-        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='c')
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='c')
 
         self.assertEqual(GR.find([-0.9, -1.2]), 32)
         self.assertEqual(GR.find([+1.9, -0.1]), 21)
         self.assertEqual(GR.find([11.9, 22.1]), 0)
 
     def test_is_out_u(self):
-        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='u')
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='u')
 
         self.assertFalse(GR.is_out([-1., +1.4]))
         self.assertTrue(GR.is_out([+4., +1.4]))
 
     def test_is_out_c(self):
-        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], kind='u')
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='u')
 
         self.assertFalse(GR.is_out([-1., +1.4]))
         self.assertTrue(GR.is_out([+4., +1.4]))
 
     def test_is_sym(self):
-        self.assertTrue(Grid(n=5, l=[[-3., 3.]], kind='u').is_sym())
-        self.assertFalse(Grid(n=5, l=[[-4., 3.]], kind='u').is_sym())
-        self.assertFalse(Grid(n=5, l=[[1., 3.]], kind='u').is_sym())
+        self.assertTrue(Grid(n=5, l=[[-3., 3.]], k='u').is_sym())
+        self.assertFalse(Grid(n=5, l=[[-4., 3.]], k='u').is_sym())
+        self.assertFalse(Grid(n=5, l=[[1., 3.]], k='u').is_sym())
 
-        self.assertTrue(Grid(n=5, l=[[-3., 3.], [-4., 4.]], kind='u').is_sym())
-        self.assertFalse(Grid(n=5, l=[[-4., 3.], [-2, 2.]], kind='u').is_sym())
-        self.assertFalse(Grid(n=5, l=[[-2, 2.], [1., 3.]], kind='u').is_sym())
+        self.assertTrue(Grid(n=5, l=[[-3., 3.], [-4., 4.]], k='u').is_sym())
+        self.assertFalse(Grid(n=5, l=[[-4., 3.], [-2, 2.]], k='u').is_sym())
+        self.assertFalse(Grid(n=5, l=[[-2, 2.], [1., 3.]], k='u').is_sym())
 
 if __name__ == '__main__':
     unittest.main()

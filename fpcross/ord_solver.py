@@ -35,14 +35,15 @@ class OrdSolver(object):
         type: bool
         '''
 
-        self.TG = TG
-        self.kind = str(kind)
-        self.is_rev = bool(is_rev)
-
-        if self.TG.d != 1 or self.TG.kind != 'u':
+        if TG.d != 1 or TG.k != 'u':
             raise ValueError('Invalid time grid (should be 1-dim. uniform).')
-        if self.kind != 'eul' and self.kind != 'rk4' and self.kind != 'ivp':
+
+        if kind != 'eul' and kind != 'rk4' and kind != 'ivp':
             raise ValueError('Invalid solver type.')
+
+        self.TG = TG
+        self.kind = kind
+        self.is_rev = bool(is_rev)
 
         self.init()
 
