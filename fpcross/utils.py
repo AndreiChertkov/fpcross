@@ -1,7 +1,7 @@
 import time
-from time import perf_counter as tpc
 import platform
 from tqdm import tqdm
+from time import perf_counter as tpc
 
 from . import config
 

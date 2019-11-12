@@ -91,15 +91,21 @@ class Solver(object):
 
     tms - Saved durations (in seconds) of the main operations
     type: dict
+    fld : init - time spent to init main data structures
+        type: float, >= 0
     fld : prep - time spent to prepare required matrices, etc.
         type: float, >= 0
-    fld : calc - time spent to perform calculations (diff+conv+post+...)
+    fld : calc - time spent to perform calculations (init+diff+conv+post+last)
         type: float, >= 0
-    fld : diff - time spent to perform calculations for diffusion term
+    fld : calc_init - time to perform operations before the first time step
         type: float, >= 0
-    fld : conv - time spent to perform calculations for convection term
+    fld : calc_diff - time to perform calculations for diffusion term
         type: float, >= 0
-    fld : post - time spent to perform calculations after each step
+    fld : calc_conv - time to perform calculations for convection term
+        type: float, >= 0
+    fld : calc_post - time to perform calculations after each step
+        type: float, >= 0
+    fld : calc_last - time to perform operations after the last time step
         type: float, >= 0
     '''
 
@@ -113,9 +119,8 @@ class Solver(object):
 
         SG - one- or multi-dimensional spatial grid
         type: fpcross.Grid
-        * Only "square" grids (each dimension has the same total number of
-        * points and limits) are supported in the current version.
-        * Only Chebyshev grids are supported in the current version.
+        * Only Chebyshev "square" grids (each dimension has the same total
+        number of points and limits) are supported in the current version.
 
         MD - model for equation with functions and coefficients
         type: fpcross.Model
@@ -137,6 +142,18 @@ class Solver(object):
         type: bool
         '''
 
+        if TG.d != 1 or TG.k != 'u':
+            raise ValueError('Invalid time grid (should be 1-dim. uniform).')
+
+        if SG.k != 'c' or not SG.is_square():
+            raise ValueError('Invalid spatial grid (should be square Cheb.).')
+
+        if not isinstance(eps, (int, float)) or eps < 1.E-20:
+            raise ValueError('Invalid accuracy parameter (should be >= 1E-20).')
+
+        if not ord in [1, 2]:
+            raise ValueError('Invalid order parameter (should be 1 or 2).')
+
         self.TG = TG
         self.SG = SG
         self.MD = MD
@@ -144,42 +161,37 @@ class Solver(object):
         self.ord = int(ord)
         self.with_tt = bool(with_tt)
 
-        if self.TG.d != 1 or self.TG.k != 'u':
-            raise ValueError('Invalid time grid (should be 1-dim. uniform).')
-
-        if self.SG.k != 'c' or not self.SG.is_square():
-            raise ValueError('Invalid spatial grid (should be square Cheb.).')
-
-        if self.eps < 1.E-20:
-            raise ValueError('Invalid accuracy parameter (should be >=1.E-20).')
-
-        if self.ord != 1 and self.ord != 2:
-            raise ValueError('Invalid order parameter (should be 1 or 2).')
-
         self.FN = Func(self.SG, self.eps, self.with_tt)
 
+        self.opts = {}
         self.init()
 
     @tms('init')
-    def init(self, n_hst=10, with_norm_int=False, with_r_hst=False):
+    def init(self, opts={}):
         '''
         Init main parameters of the class instance.
 
         INPUT:
 
-        n_hst - number of points for history
-        type: int, >= 0, <= number_of_time_poins
-        * Ranks, errors, etc. will be saved for related time moments.
-
-        with_norm_int - flag:
-            True  - solution is divided by its integral on t_hst steps
-            False - solution is not divided by its integral
-        type: bool
-
-        with_r_hst - flag:
-            True  - solution will be saved to history on t_hst steps
-            False - solution will not be saved to history
-        type: bool
+        opts - dictionary with optional parameters
+        type: dict
+        fld : n_hst - number of points for history
+            default: 10
+            type: int, >= 0, <= number_of_time_poins
+            * Ranks, errors, etc. will be saved for related time moments.
+        fld : with_norm_int - flag:
+                True  - solution is divided by its integral on t_hst steps
+                False - solution is not divided by its integraled
+            default: False
+            type: bool
+        fld : with_r_hst - flag:
+                True  - solution will be saved to history on t_hst steps
+                False - solution will not be saved to history
+            default: False
+            type: bool
+        * Only provided fields will be used. Values of the missed fields will
+        * not be changed and will be the same as after the previous call
+        * or will be equal to the corresponding default values.
 
         OUTPUT:
 
@@ -187,10 +199,28 @@ class Solver(object):
         type: fpcross.Solver
         '''
 
-        self.n_hst = int(n_hst) if n_hst else 0
-        self.t_hst = int(self.TG.n0 * 1. / self.n_hst) if self.n_hst else 0
-        self.with_norm_int = bool(with_norm_int)
-        self.with_r_hst = bool(with_r_hst)
+        def set_opt(name, dflt=None):
+            if name in (opts or {}):
+                self.opts[name] = opts[name]
+            elif not name in self.opts:
+                self.opts[name] = dflt
+
+        set_opt('n_hst', 10)
+        set_opt('with_norm_int', False)
+        set_opt('with_r_hst', False)
+
+        self.opts['n_hst'] = self.opts['n_hst'] if self.opts['n_hst'] else 0
+        self.opts['n_hst'] = int(self.opts['n_hst'])
+
+        if self.opts['n_hst']:
+            self.opts['t_hst'] = int(self.TG.n0 * 1. / self.opts['n_hst'])
+        else:
+            self.opts['t_hst'] = 0
+
+        self.opts['with_norm_int'] = bool(self.opts['with_norm_int'])
+
+        self.opts['with_r_hst'] = bool(self.opts['with_r_hst'])
+
 
         self.hst = {
             'T': [],
@@ -225,9 +255,7 @@ class Solver(object):
         SL - self
         type: fpcross.Solver
 
-        TODO:
-
-        - Check usage of J matrix.
+        TODO Check usage of J matrix.
         '''
 
         self.MD.prep()
@@ -266,6 +294,7 @@ class Solver(object):
         '''
 
         PR = PrinterSl(self, with_print=not dsbl_print).init()
+        th = self.opts['t_hst']
         self.step_init()
         for m in range(1, self.TG.n0):
             self.t+= self.TG.h0
@@ -273,7 +302,7 @@ class Solver(object):
             self.step_conv()
             if self.ord == 2:
                 self.step_diff()
-            if self.t_hst and (m % self.t_hst == 0 or m == self.TG.n0 - 1):
+            if th and (m % th == 0 or m == self.TG.n0 - 1):
                 self.step_post()
             else:
                 self.msg = None
@@ -295,9 +324,7 @@ class Solver(object):
         r - calculated solution in the given points
         type: ndarray [number of points] of float
 
-        TODO:
-
-        - Add support for one-point input.
+        TODO Add support for one-point input.
         '''
 
         if self.FN.A is None:
@@ -312,7 +339,7 @@ class Solver(object):
 
         INPUT:
 
-        t - time for calculation
+        t - time for computation
         type1: None
         type2: float
         * If is not set (type1) then the current time will be used.
@@ -336,8 +363,10 @@ class Solver(object):
         res = None
 
         FN_r = self.FN.copy()
-        if is_real: FN_r.init(self.MD.rt).prep()
-        if is_stat: FN_r.init(self.MD.rs).prep()
+        if is_real:
+            FN_r.init(self.MD.rt).prep()
+        if is_stat:
+            FN_r.init(self.MD.rs).prep()
 
         if self.with_tt:  # TT-format
             for k in range(self.SG.d):
@@ -347,7 +376,9 @@ class Solver(object):
                 v = v.round(self.eps)
                 res = v.copy() if res is None else (res + v).round(self.eps)
 
-                def func(X): return self.MD.f0(X, t)[k, :]
+                def func(X):
+                    return self.MD.f0(X, t)[k, :]
+                    
                 FN_f = self.FN.copy(is_init=True).init(func).prep()
                 G = tt.tensor.to_list((FN_r.Y * FN_f.Y).round(self.eps))
                 G[k] = np.einsum('ij,kjm->kim', self.D1, G[k])
@@ -388,9 +419,7 @@ class Solver(object):
         '''
         Some operations before the first computation step.
 
-        TODO:
-
-        - Check if initial W0 set as r0 is correct.
+        TODO Check if initial W0 set as r0 is correct.
         '''
 
         self.t = self.TG.l1 # Current time
@@ -404,11 +433,9 @@ class Solver(object):
         '''
         One computation step for the diffusion term.
 
-        TODO:
+        TODO Check if tt-round is needed at the end.
 
-        - Check if tt-round is needed at the end.
-
-        - Function (if exists) is missed after FN.init.
+        TODO Function (if exists) is missed after FN.init.
         '''
 
         v0 = self.FN.Y
@@ -431,17 +458,15 @@ class Solver(object):
     @tms('calc_conv')
     def step_conv(self):
         '''
-        One computation step for the drift term.
+        One computation step for the convection term.
 
-        TODO:
+        TODO Try interpolation of the log.
 
-        - Try interpolation of the log.
+        TODO Is it correct to add eps to prevent zero division in cross (???) ?
 
-        - Is it correct to add eps to prevent zero division in cross?
+        TODO Try initial guess in the form of the Euler solution?
 
-        - Try initial guess in the form of the Euler solution?
-
-        - Check various numbers of points for ODE solvers.
+        TODO Check various numbers of points for ODE solvers.
         '''
 
         def func(y, t):
@@ -514,10 +539,9 @@ class Solver(object):
         '''
         Check result of the current computation step.
 
-        TODO:
+        TODO Remove self.FN.calc() (and change algorithm for comp_int).
 
-        - Remove self.FN.calc() (and change algorithm for comp_int).
-        - Add initial guess r to rt and maybe rs.
+        TODO Add initial guess r to rt and maybe rs.
         '''
 
         def _err_calc(r_calc, r_real):
@@ -531,11 +555,11 @@ class Solver(object):
 
         self.FN.calc()
         r_int = self.FN.comp_int()
-        if self.with_norm_int: self.FN.Y = 1. / r_int * self.FN.Y
+        if self.opts['with_norm_int']: self.FN.Y = 1. / r_int * self.FN.Y
 
         self.hst['T'].append(self.t)
         self.hst['Int'].append(r_int)
-        if self.with_r_hst: self.hst['R'].append(self.FN.Y.copy())
+        if self.opts['with_r_hst']: self.hst['R'].append(self.FN.Y.copy())
         if self.with_tt:
             R = self.FN.Y.r
             c = 0.
@@ -608,9 +632,9 @@ class Solver(object):
         s+= '[order=%d]\n'%self.ord
 
         s+= 'Format    : %1dD, '%self.SG.d
-        s+= 'Hst pois  : %s \n'%('%d'%self.n_hst if self.n_hst else 'None')
-        s+= 'Hst r     : %s \n'%('Yes' if self.with_r_hst else 'No')
-        s+= 'Norm int  : %s \n'%('Yes' if self.with_norm_int else 'No')
+        s+= 'Hst pois  : %s \n'%('%d'%self.opts['n_hst'] if self.opts['n_hst'] else 'None')
+        s+= 'Hst r     : %s \n'%('Yes' if self.opts['with_r_hst'] else 'No')
+        s+= 'Norm int  : %s \n'%('Yes' if self.opts['with_norm_int'] else 'No')
 
         if len(self.hst['E_rhsn']):
             s+= 'Err  rhs  : %8.2e\n'%self.hst['E_rhsn'][-1]
@@ -627,8 +651,10 @@ class Solver(object):
         s+= '...  post : %8.2e \n'%self.tms['calc_post']
         s+= '...  last : %8.2e \n'%self.tms['calc_last']
 
-        if not s.endswith('\n'): s+= '\n'
-        if is_ret: return s
+        if not s.endswith('\n'):
+            s+= '\n'
+        if is_ret:
+            return s
         print(s[:-1])
 
     def anim(self, ffmpeg_path, delt=50):
@@ -643,13 +669,10 @@ class Solver(object):
         delt - number of frames per second
         type: int, > 0
 
-        TODO:
-
-        - Finilize.
+        TODO Finilize.
         '''
 
-        s = 'Is draft.'
-        raise NotImplementedError(s)
+        raise NotImplementedError('Is draft.')
 
         def _anim_1d(ax):
             x1d = self.X[0, :self.x_poi]
@@ -742,9 +765,7 @@ class Solver(object):
             default: False
             type: bool
 
-        TODO:
-
-        - Finilize.
+        TODO Finilize.
         '''
 
         raise NotImplementedError('Is draft.')
@@ -900,9 +921,7 @@ class Solver(object):
             default: False
             type: bool
 
-        TODO:
-
-        - Finilize.
+        TODO Finilize.
         '''
 
         raise NotImplementedError('Is draft.')

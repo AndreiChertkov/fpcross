@@ -1,7 +1,7 @@
 import os
 import sys
-from time import perf_counter as tpc
 import numpy as np
+from time import perf_counter as tpc
 
 import tt
 from tt.cross.rectcross import cross
