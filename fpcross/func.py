@@ -78,15 +78,15 @@ class Func(object):
         type: bool
         '''
 
+        if SG.k != 'c':
+            raise ValueError('Invalid spatial grid (should be Chebyshev).')
+
+        if not isinstance(eps, (int, float)) or eps < 1.E-20:
+            raise ValueError('Invalid accuracy parameter (should be >= 1E-20).')
+
         self.SG = SG
         self.eps = float(eps)
         self.with_tt = bool(with_tt)
-
-        if self.SG.k != 'c':
-            raise ValueError('Invalid spatial grid (should be Chebyshev).')
-
-        if self.eps < 1.E-20:
-            raise ValueError('Invalid accuracy parameter (should be >= 1E-20).')
 
         self.opts = {}
         self.init()
@@ -110,6 +110,7 @@ class Func(object):
         **kwargs - some arguments from Func.__init__
         type: dict
         * These values will replace the corresponding params in the new func.
+        * Is some of args are set, then is_init flag should be set as True.
 
         OUTPUT:
 
@@ -126,16 +127,14 @@ class Func(object):
 
         FN = Func(SG, eps, with_tt).init(opts=self.opts).init(opts=opts)
 
-        if is_init:
-            return FN
+        if not is_init:
+            FN.f = self.f
+            FN.Y = self.Y.copy() if self.Y is not None else None
+            FN.A = self.A.copy() if self.A is not None else None
 
-        FN.f = self.f
-        FN.Y = self.Y.copy() if self.Y is not None else None
-        FN.A = self.A.copy() if self.A is not None else None
-
-        FN.tms = self.tms.copy()
-        FN.res = self.res.copy()
-        FN.err = self.err.copy() if self.err is not None else None
+            FN.tms = self.tms.copy() if self.tms is not None else None
+            FN.res = self.res.copy() if self.res is not None else None
+            FN.err = self.err.copy() if self.err is not None else None
 
         return FN
 
@@ -432,7 +431,10 @@ class Func(object):
         v - value of the integral
         type: float
 
-        TODO replace call of integrate_cheb_coeffs by integrate_cheb.
+        TODO Replace call of integrate_cheb_coeffs by integrate_cheb
+             or by the corresponding flag for selection.
+
+        TODO Add support for nonsymmetric case.
         '''
 
         if self.A is None:
@@ -498,7 +500,7 @@ class Func(object):
 
         OUTPUT:
 
-        s - (if is_out) string with info
+        s - (if is_ret) string with info
         type: str
         '''
 
@@ -575,12 +577,10 @@ class Func(object):
         '''
 
         if self.f is None:
-            s = 'Function for interpolation is not set. Can not test.'
-            raise ValueError(s)
+            raise ValueError('Function for interpolation is not set. Can not test.')
 
         if self.opts['is_f_with_i']:
-            s = 'Function for interpolation requires indices. Can not test.'
-            raise ValueError(s)
+            raise ValueError('Function for interpolation requires indices. Can not test.')
 
         if is_u:
             X = self.SG.copy(n=n**(1./self.SG.d), k='u').comp(is_inner=True)

@@ -60,8 +60,6 @@ class Grid(object):
     * For the 1D grid it is scalar grid step (assuming uniformity).
 
     TODO Add function that scale points to/from limits l and [0, 1].
-
-    TODO Add function that check if given point lies on the boundary.
     '''
 
     def __init__(self, d=None, n=2, l=[-1., 1.], k='c'):
@@ -161,7 +159,7 @@ class Grid(object):
         self.l = l
         self.k = k
         self.h = (self.l[:, 1] - self.l[:, 0]) / (self.n - 1)
-        
+
         # Set mean values for parameters
 
         self.n0 = int(np.mean(self.n))
@@ -218,7 +216,7 @@ class Grid(object):
 
         is_ind - flag:
             True  - only prepared indices of points will be returned
-            False - constructd spatial grid points will be returned
+            False - constructed spatial grid points will be returned
         type: bool
 
         is_inner - flag:
@@ -259,6 +257,8 @@ class Grid(object):
                 I = I.reshape(1, -1) # many one-dimensional points
             if len(I.shape) == 1 and self.d >= 2:
                 I = I.reshape(-1, 1) # one multidimensional point
+            if len(I.shape) != 2:
+                raise ValueError('Invalid shape for grid points.')
             if I.shape[0] != self.d:
                 raise ValueError('Invalid dimension for grid points.')
 
@@ -294,6 +294,8 @@ class Grid(object):
 
         i - flatten index of the grid point.
         type: int >= 0 and < prod(n)
+
+        TODO add flag to select output (flatten or multi index).
         '''
 
         x = self._prep_poi(x)
@@ -310,7 +312,7 @@ class Grid(object):
             i = np.arccos(t) * (n - 1) / np.pi
 
         i = np.rint(i).astype(int)
-        i[i <= 0] = 0.
+        i[i <= 0] = 0
         i[i >= n] = n[i >= n] - 1.
 
         return self.indf(i)
@@ -370,6 +372,8 @@ class Grid(object):
 
         X - calculated random points
         type: ndarray [dimensions, n] of float
+
+        TODO Add selection of the distribution kind.
         '''
 
         n = int(n)
@@ -398,6 +402,8 @@ class Grid(object):
         type: str
         '''
 
+        is_square = self.is_square()
+
         s = '------------------ Grid\n'
 
         k = '???'
@@ -409,12 +415,12 @@ class Grid(object):
 
         s+= 'Dimensions       : %-2d\n'%self.d
 
-        s+= '%s             : '%('Mean' if not self.is_square() else '    ')
+        s+= '%s             : '%('Mean' if not is_square else '    ')
         s+= 'Poi %-3d | '%self.n0
         s+= 'Min %-6.3f | '%self.l1
         s+= 'Max %-6.3f |\n'%self.l2
 
-        if not self.is_square():
+        if not is_square:
             for i, [n, l] in enumerate(zip(self.n, self.l)):
                 if i >= 5 and i < self.d - 5:
                     if i == 5:
@@ -493,6 +499,9 @@ class Grid(object):
         type: bool
         '''
 
+        if not isinstance(eps, (int, float)) or eps <= 0:
+            raise ValueError('Invalid accuracy eps (should be > 0).')
+
         x = self._prep_poi(x)
         l = self.l
 
@@ -519,7 +528,42 @@ class Grid(object):
         type: bool
         '''
 
-        return not self.is_in(x, eps)
+        if not isinstance(eps, (int, float)) or eps <= 0:
+            raise ValueError('Invalid accuracy eps (should be > 0).')
+
+        x = self._prep_poi(x)
+        l = self.l
+
+        return np.max(l[:, 0] - x) > eps or np.max(x - l[:, 1]) > eps
+
+    def is_border(self, x, eps=1.E-20):
+        '''
+        Check if given point is lies on the grid border.
+
+        INPUT:
+
+        x - spatial point
+        type1: float
+        type2: list [dimensions] of float
+        type3: ndarray [dimensions] of float
+        * May be float (type1) for the 1-dimensional case.
+
+        eps - accuracy for check
+        type: float >= 0
+
+        OUTPUT:
+
+        res - True if point is on the grid border and False otherwise
+        type: bool
+
+        TODO Replace by more accurate check.
+        '''
+
+        if self.is_in(x, eps):
+            return False
+        if self.is_out(x, eps):
+            return False
+        return True
 
     def is_sym(self, eps=1.E-20):
         '''
@@ -535,6 +579,9 @@ class Grid(object):
         res - True if grid is symmetric and False otherwise
         type: bool
         '''
+
+        if not isinstance(eps, (int, float)) or eps <= 0:
+            raise ValueError('Invalid accuracy eps (should be > 0).')
 
         return np.max(np.abs(self.l[:, 0] + self.l[:, 1])) < eps
 
@@ -555,6 +602,9 @@ class Grid(object):
 
         TODO Rename this function.
         '''
+
+        if not isinstance(eps, (int, float)) or eps <= 0:
+            raise ValueError('Invalid accuracy eps (should be > 0).')
 
         def is_non_zero(x):
             return np.max(np.abs(x)) > eps
@@ -598,7 +648,7 @@ class Grid(object):
         if x is None:
             if not is_opt:
                 raise ValueError('The spatial point is not set.')
-            return x
+            return
 
         if isinstance(x, (int, float)):
             x = [float(x)]
