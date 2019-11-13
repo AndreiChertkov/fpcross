@@ -61,7 +61,11 @@ class Solver(object):
         type3: list [opts.n_hst] of tt-tensor [number of points] of float
         * Is empty list (type1) if flag opts.with_r_hst is not set.
         * Is type3 if flag with_tt is set and is type2 otherwise.
-    fld : Rnk - tt-ranks of the solution
+    fld : Rank - tt-ranks of the solution
+        type1: list [0]
+        type2: list [opts.n_hst] of list [d] of int > 0
+        * Is empty list (type1) if flag with_tt is not set.
+    fld : Rank_A - tt-ranks of the interpolation coefficients
         type1: list [0]
         type2: list [opts.n_hst] of list [d] of int > 0
         * Is empty list (type1) if flag with_tt is not set.
@@ -176,11 +180,6 @@ class Solver(object):
             default: 10
             type: int, >= 0, <= number_of_time_poins
             * Ranks, errors, etc. will be saved for related time moments.
-        fld : with_norm_int - flag:
-                True  - solution is divided by its integral on t_hst steps
-                False - solution is not divided by its integraled
-            default: False
-            type: bool
         fld : with_r_hst - flag:
                 True  - solution will be saved to history on t_hst steps
                 False - solution will not be saved to history
@@ -203,18 +202,14 @@ class Solver(object):
                 self.opts[name] = dflt
 
         set_opt('n_hst', 10)
-        set_opt('with_norm_int', False)
         set_opt('with_r_hst', False)
 
-        self.opts['n_hst'] = self.opts['n_hst'] if self.opts['n_hst'] else 0
-        self.opts['n_hst'] = int(self.opts['n_hst'])
-
         if self.opts['n_hst']:
+            self.opts['n_hst'] = int(self.opts['n_hst'])
             self.opts['t_hst'] = int(self.TG.n0 * 1. / self.opts['n_hst'])
         else:
+            self.opts['n_hst'] = 0
             self.opts['t_hst'] = 0
-
-        self.opts['with_norm_int'] = bool(self.opts['with_norm_int'])
 
         self.opts['with_r_hst'] = bool(self.opts['with_r_hst'])
 
@@ -222,14 +217,14 @@ class Solver(object):
         self.hst = {
             'T': [],
             'R': [],
-            'Int': [],
+            'Rank': [],
             'Rank_A': [],
-            'Rank_E': [],
             'C_calc': [],
             'C_size': [],
             'E_real': [],
             'E_stat': [],
             'E_rhsn': [],
+            'E_dert': [],
         }
         self.tms = {
             'init': 0.,
@@ -259,18 +254,18 @@ class Solver(object):
 
         self.D1, self.D2 = difscheb(self.SG, 2)
 
-        D0 = self.D2
+        h0 = self.TG.h0 if self.ord == 1 else self.TG.h0 / 2.
+        Dc = self.MD.D()
         J0 = np.eye(self.SG.n0)
         J0[+0, +0] = 0.
         J0[-1, -1] = 0.
-        h0 = self.TG.h0 if self.ord == 1 else self.TG.h0 / 2.
-        Z0 = expm(h0 * self.MD.D() * J0 @ D0)
+        D0 = self.D2
+        self.Z0 = expm(h0 * Dc * J0 @ D0)
 
-        self.Z0 = Z0
         if not self.with_tt:
             self.Xsg = self.SG.comp()
             for i in range(self.SG.d):
-                self.Z = Z0.copy() if i == 0 else np.kron(self.Z, Z0)
+                self.Z = self.Z0.copy() if i == 0 else np.kron(self.Z, self.Z0)
 
     @tms('calc')
     def calc(self, dsbl_print=False):
@@ -291,21 +286,225 @@ class Solver(object):
         '''
 
         PR = PrinterSl(self, with_print=not dsbl_print).init()
-        th = self.opts['t_hst']
-        self.step_init()
+        self.calc_init()
         for m in range(1, self.TG.n0):
             self.t+= self.TG.h0
             self.step_diff()
             self.step_conv()
             if self.ord == 2:
                 self.step_diff()
-            if th and (m % th == 0 or m == self.TG.n0 - 1):
-                self.step_post()
-            else:
-                self.msg = None
+            self.step_post()
             PR.update(self.msg)
-        self.step_last()
+        self.calc_last()
         PR.close()
+
+    @tms('calc_init')
+    def calc_init(self):
+        '''
+        Some operations before the first computation step.
+
+        TODO Check if initial W0 set as r0 is correct.
+        '''
+
+        self.t = self.TG.l1             # Current time
+        self.FN.init(self.MD.r0).prep() # Initial condition
+        self.W0 = self.FN.Y.copy()      # Initial guess for convection solution
+        self.msg = None                 # Message for print
+
+    @tms('calc_diff')
+    def calc_diff(self):
+        '''
+        One computation step for the diffusion term.
+
+        TODO Check if tt-round is needed at the end.
+
+        TODO Function (if exists) is missed after FN.init.
+        '''
+
+        v0 = self.FN.Y
+
+        if self.with_tt:  # TT-format
+            G = tt.tensor.to_list(v0)
+            for i in range(self.SG.d):
+                G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
+
+            v = tt.tensor.from_list(G)
+            v = v.round(self.eps)
+
+        else:            # NP-format
+            v0 = v0.reshape(-1, order='F')
+            v = self.Z @ v0
+            v = v.reshape(self.SG.n, order='F')
+
+        self.FN.init(Y=v)
+
+    @tms('calc_conv')
+    def calc_conv(self):
+        '''
+        One computation step for the convection term.
+
+        TODO Try interpolation of the log.
+
+        TODO Is it correct to add eps to prevent zero division in cross (???) ?
+
+        TODO Try initial guess in the form of the Euler solution?
+
+        TODO Check various numbers of points for ODE solvers.
+        '''
+
+        def func(y, t):
+            '''
+            Compute rhs for the system of drift equations
+            d x / dt = f(x, t)
+            d w / dt = - Tr[ d f(x, t) / d t ] w.
+
+            INPUT:
+
+            y - combined values of the spatial variable (x) and PDF (w)
+            type: ndarray [dimensions + 1, number of points] of float
+            * First dimensions rows are related to x and the last row to w.
+
+            t - time
+            type: float
+
+            OUTPUT:
+
+            rhs - rhs of the system
+            type: ndarray [dimensions + 1, number of points] of float
+            '''
+
+            x = y[:-1, :]
+            r = y[-1, :]
+
+            f0 = self.MD.f0(x, t)
+            f1 = self.MD.f1(x, t)
+
+            return np.vstack([
+                f0,
+                -np.sum(f1, axis=0) * r
+            ])
+
+        def step(X):
+            '''
+            INPUT:
+
+            X - values of the spatial variable
+            type: ndarray [dimensions, number of points] of float
+
+            OUTPUT:
+
+            w - approximated values of the solution in the given points
+            type: ndarray [number of points] of float
+            '''
+
+            TG = Grid(d=1, n=2, l=[self.t - self.TG.h0, self.t], k='u')
+            kd = 'eul' if self.ord == 1 else 'rk4'
+            X0 = OrdSolver(TG, kind=kd, is_rev=True).init(self.MD.f0).comp(X)
+            w0 = FN.comp(X0)
+            y0 = np.vstack([X0, w0])
+            y1 = OrdSolver(TG, kind=kd).init(func).comp(y0)
+            w1 = y1[-1, :]
+
+            if self.with_tt and np.linalg.norm(w1) < 1.E-20:
+                w1+= 1.E-20 # To prevent zero division in the cross appr.
+
+            return w1
+
+        self.FN.calc()
+        r_int = self.FN.comp_int()
+        self.FN.Y = 1. / r_int * self.FN.Y
+        self.FN.A = 1. / r_int * self.FN.A
+        FN = self.FN.copy()
+
+        opts={ 'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0 }
+        self.FN.init(step, opts=opts).prep()
+
+        self.W0 = self.FN.Y.copy()
+
+    @tms('calc_post')
+    def calc_post(self):
+        '''
+        Check result of the current computation step.
+
+        TODO Remove self.FN.calc() (and change algorithm for comp_int).
+
+        TODO Add initial guess r to rt and maybe rs.
+        '''
+
+        t_hst = self.opts['t_hst']
+        is_hst = t_hst and (m % t_hst == 0 or m == self.TG.n0 - 1)
+
+        if not is_hst:
+            self.msg = None
+            return
+
+        def _err_calc(r_calc, r_real):
+            dr = r_real - r_calc
+            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
+            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
+            return dn / n0 if n0 > 0 else dn
+
+        FN = self.FN.copy(is_init=True)
+        FN.eps/= 100
+
+        self.FN.calc()
+        r_int = self.FN.comp_int()
+        if self.opts['with_norm_int']: self.FN.Y = 1. / r_int * self.FN.Y
+
+        self.hst['T'].append(self.t)
+        self.hst['Int'].append(r_int)
+        if self.opts['with_r_hst']:
+            self.hst['R'].append(self.FN.Y.copy())
+        if self.with_tt:
+            R = self.FN.Y.r
+            c = 0.
+            for i in range(self.SG.d): c+= R[i] * self.SG.n[i] * R[i+1]
+            c/= np.prod(self.SG.n)
+
+            self.hst['Rank_A'].append(R)
+            self.hst['Rank_E'].append(self.FN.Y.erank)
+            self.hst['C_size'].append(c)
+
+        msg = '| At T=%-6.1e : '%self.t
+
+        msg+= ' ' * 100
+
+        if True:
+            msg+= '  Int=%-6.1e'%r_int
+
+        if True:
+            self.hst['E_dert'].append(self.comp_rhs())
+            msg+= '  Edert=%-6.1e'%self.hst['E_dert'][-1]
+
+        if True:
+            self.hst['E_rhsn'].append(self.comp_rhs())
+            msg+= '  Erhsn=%-6.1e'%self.hst['E_rhsn'][-1]
+
+        if self.MD.with_rt():
+            FN.init(lambda x: self.MD.rt(x, self.t)).prep()
+            self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
+            msg+= '  Ereal=%-6.1e'%self.hst['E_real'][-1]
+
+        if self.MD.with_rs():
+            FN.init(lambda x: self.MD.rs(x)).prep()
+            self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
+            msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
+
+        if self.with_tt:
+            msg+= ' r=%-6.2e'%self.FN.Y.erank
+
+        self.msg = msg
+
+    @tms('calc_last')
+    def calc_last(self):
+        '''
+        Some operations after the final computation step.
+        '''
+
+        self.FN.calc()
+        r_int = self.FN.comp_int()
+        self.FN.Y = 1. / r_int * self.FN.Y
+        self.FN.A = 1. / r_int * self.FN.A
 
     def comp(self, X):
         '''
@@ -410,210 +609,6 @@ class Solver(object):
             res = np.linalg.norm(res) / np.linalg.norm(r)
 
         return res
-
-    @tms('calc_init')
-    def step_init(self):
-        '''
-        Some operations before the first computation step.
-
-        TODO Check if initial W0 set as r0 is correct.
-        '''
-
-        self.t = self.TG.l1 # Current time
-
-        self.FN.init(self.MD.r0).prep()
-
-        self.W0 = self.FN.Y.copy()
-
-    @tms('calc_diff')
-    def step_diff(self):
-        '''
-        One computation step for the diffusion term.
-
-        TODO Check if tt-round is needed at the end.
-
-        TODO Function (if exists) is missed after FN.init.
-        '''
-
-        v0 = self.FN.Y
-
-        if self.with_tt:  # TT-format
-            G = tt.tensor.to_list(v0)
-            for i in range(self.SG.d):
-                G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
-
-            v = tt.tensor.from_list(G)
-            v = v.round(self.eps)
-
-        else:            # NP-format
-            v0 = v0.reshape(-1, order='F')
-            v = self.Z @ v0
-            v = v.reshape(self.SG.n, order='F')
-
-        self.FN.init(Y=v)
-
-    @tms('calc_conv')
-    def step_conv(self):
-        '''
-        One computation step for the convection term.
-
-        TODO Try interpolation of the log.
-
-        TODO Is it correct to add eps to prevent zero division in cross (???) ?
-
-        TODO Try initial guess in the form of the Euler solution?
-
-        TODO Check various numbers of points for ODE solvers.
-        '''
-
-        def func(y, t):
-            '''
-            Compute rhs for the system of drift equations
-            d x / dt = f(x, t)
-            d w / dt = - Tr[ d f(x, t) / d t ] w.
-
-            INPUT:
-
-            y - combined values of the spatial variable (x) and PDF (w)
-            type: ndarray [dimensions + 1, number of points] of float
-            * First dimensions rows are related to x and the last row to w.
-
-            t - time
-            type: float
-
-            OUTPUT:
-
-            rhs - rhs of the system
-            type: ndarray [dimensions + 1, number of points] of float
-            '''
-
-            x = y[:-1, :]
-            r = y[-1, :]
-
-            f0 = self.MD.f0(x, t)
-            f1 = self.MD.f1(x, t)
-
-            return np.vstack([
-                f0,
-                -np.sum(f1, axis=0) * r
-            ])
-
-        def step(X):
-            '''
-            INPUT:
-
-            X - values of the spatial variable
-            type: ndarray [dimensions, number of points] of float
-
-            OUTPUT:
-
-            w - approximated values of the solution in the given points
-            type: ndarray [number of points] of float
-            '''
-
-            TG = Grid(1, 2, [self.t - self.TG.h0, self.t], k='u')
-            kd = 'eul' if self.ord == 1 else 'rk4'
-            X0 = OrdSolver(TG, kind=kd, is_rev=True).init(self.MD.f0).comp(X)
-            w0 = FN.comp(X0)
-            y0 = np.vstack([X0, w0])
-            y1 = OrdSolver(TG, kind=kd).init(func).comp(y0)
-            w1 = y1[-1, :]
-
-            if self.with_tt and np.linalg.norm(w1) < 1.E-20:
-                w1+= 1.E-20 # To prevent zero division in the cross appr.
-
-            return w1
-
-        # FN = self.FN.copy().calc()
-
-        self.FN.calc()
-        r_int = self.FN.comp_int()
-        self.FN.Y = 1. / r_int * self.FN.Y
-        self.FN.A = 1. / r_int * self.FN.A
-        FN = self.FN.copy()
-
-        opts={ 'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0 }
-        self.FN.init(step, opts=opts).prep()
-
-        self.W0 = self.FN.Y.copy()
-
-    @tms('calc_post')
-    def step_post(self):
-        '''
-        Check result of the current computation step.
-
-        TODO Remove self.FN.calc() (and change algorithm for comp_int).
-
-        TODO Add initial guess r to rt and maybe rs.
-        '''
-
-        def _err_calc(r_calc, r_real):
-            dr = r_real - r_calc
-            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
-            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
-            return dn / n0 if n0 > 0 else dn
-
-        FN = self.FN.copy(is_init=True)
-        FN.eps/= 100
-
-        self.FN.calc()
-        r_int = self.FN.comp_int()
-        if self.opts['with_norm_int']: self.FN.Y = 1. / r_int * self.FN.Y
-
-        self.hst['T'].append(self.t)
-        self.hst['Int'].append(r_int)
-        if self.opts['with_r_hst']:
-            self.hst['R'].append(self.FN.Y.copy())
-        if self.with_tt:
-            R = self.FN.Y.r
-            c = 0.
-            for i in range(self.SG.d): c+= R[i] * self.SG.n[i] * R[i+1]
-            c/= np.prod(self.SG.n)
-
-            self.hst['Rank_A'].append(R)
-            self.hst['Rank_E'].append(self.FN.Y.erank)
-            self.hst['C_size'].append(c)
-
-        msg = '| At T=%-6.1e : '%self.t
-
-        msg+= ' ' * 100
-
-        if True:
-            msg+= '  Int=%-6.1e'%r_int
-
-        if True:
-            self.hst['E_dert'].append(self.comp_rhs())
-            msg+= '  Edert=%-6.1e'%self.hst['E_dert'][-1]
-
-        if True:
-            self.hst['E_rhsn'].append(self.comp_rhs())
-            msg+= '  Erhsn=%-6.1e'%self.hst['E_rhsn'][-1]
-
-        if self.MD.with_rt():
-            FN.init(lambda x: self.MD.rt(x, self.t)).prep()
-            self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
-            msg+= '  Ereal=%-6.1e'%self.hst['E_real'][-1]
-
-        if self.MD.with_rs():
-            FN.init(lambda x: self.MD.rs(x)).prep()
-            self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
-            msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
-
-        if self.with_tt:
-            msg+= ' r=%-6.2e'%self.FN.Y.erank
-
-        self.msg = msg
-
-    @tms('calc_last')
-    def step_last(self):
-        '''
-        Some operations after the final computation step.
-        '''
-
-        self.FN.calc()
-        r_int = self.FN.comp_int()
-        self.FN.Y = 1. / r_int * self.FN.Y
-        self.FN.A = 1. / r_int * self.FN.A
 
     def info(self, is_ret=False):
         '''
