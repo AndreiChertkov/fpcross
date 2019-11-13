@@ -1,5 +1,4 @@
 import time
-import types
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -32,7 +31,6 @@ class Solver(object):
     4 Call "calc" for calculation process.
     5 Call "comp" to obtain the final solution at any given spatial point.
     6 Call "info" for demonstration of the calculation results.
-    7 Call "copy" to obtain new instance with the same parameters and results.
 
     Advanced usage:
     - Call "plot" for plot of error and tt-compression factors.
@@ -56,40 +54,37 @@ class Solver(object):
     hst - dictionary with saved (history) values
     type: dict
     fld : T - time moments saved to history
-        type: list [t_hst] of float
+        type: list [opts.n_hst] of float
     fld : R - solutions of the FPE on the spatial grid
         type1: list [0]
-        type2: list [t_hst] of np.ndarray [number of points] of float
-        type3: list [t_hst] of tt-tensor [number of points] of float
-        * Is empty list (type1) if flag with_r_hst is not set.
+        type2: list [opts.n_hst] of np.ndarray [number of points] of float
+        type3: list [opts.n_hst] of tt-tensor [number of points] of float
+        * Is empty list (type1) if flag opts.with_r_hst is not set.
         * Is type3 if flag with_tt is set and is type2 otherwise.
     fld : Rnk - tt-ranks of the solution
         type1: list [0]
-        type2: list [t_hst] of list [d] of int > 0
+        type2: list [opts.n_hst] of list [d] of int > 0
         * Is empty list (type1) if flag with_tt is not set.
-    fld : Int - integral of the solution on the spatial domain
-        type: list [t_hst] of float
-        * If with_norm_int flag is set, then solution will be normalized
-        * in t_hst points by its integral, and saved value in Int is computed
-        * before the corresponding normalization.
     fld : C_calc - relative number of points used for drift construction
-        type: list [t_hst] of float, > 0
+        type: list [opts.n_hst] of float, > 0
         * This is the compression factor due to the cross approximation.
     fld : C_size - relative number of items for the TT-cores
-        type: list [t_hst] of float, > 0
+        type: list [opts.n_hst] of float, > 0
         * This is the compression factor due to the tt-format.
     fld : E_real - errors vs analytic (real) solution
         type1: list [0]
-        type2: list [t_hst] of float, >= 0
+        type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if function for real solution is not set.
     fld : E_stat - errors vs stationary solution
         type1: list [0]
-        type2: list [t_hst] of float, >= 0
+        type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if function for stationary solution is not set.
     fld : E_rhsn - norm of the rhs devided by the norm of solution
-        type: list [t_hst] of float, >= 0
+        type: list [opts.n_hst] of float, >= 0
+    fld : E_dert - approximated time derivative of the solution (d r / dt)
+        type: list [opts.n_hst] of float, >= 0
 
-    tms - Saved durations (in seconds) of the main operations
+    tms - saved durations (in seconds) of the main operations
     type: dict
     fld : init - time spent to init main data structures
         type: float, >= 0
@@ -140,6 +135,8 @@ class Solver(object):
             True  - sparse (tensor train, TT) format will be used
             False - dense (numpy, NP) format will be used
         type: bool
+
+        TODO Add support for non square Chebyshev grids.
         '''
 
         if TG.d != 1 or TG.k != 'u':
@@ -378,7 +375,7 @@ class Solver(object):
 
                 def func(X):
                     return self.MD.f0(X, t)[k, :]
-                    
+
                 FN_f = self.FN.copy(is_init=True).init(func).prep()
                 G = tt.tensor.to_list((FN_r.Y * FN_f.Y).round(self.eps))
                 G[k] = np.einsum('ij,kjm->kim', self.D1, G[k])
@@ -527,7 +524,13 @@ class Solver(object):
 
             return w1
 
-        FN = self.FN.copy().calc()
+        # FN = self.FN.copy().calc()
+
+        self.FN.calc()
+        r_int = self.FN.comp_int()
+        self.FN.Y = 1. / r_int * self.FN.Y
+        self.FN.A = 1. / r_int * self.FN.A
+        FN = self.FN.copy()
 
         opts={ 'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0 }
         self.FN.init(step, opts=opts).prep()
@@ -559,7 +562,8 @@ class Solver(object):
 
         self.hst['T'].append(self.t)
         self.hst['Int'].append(r_int)
-        if self.opts['with_r_hst']: self.hst['R'].append(self.FN.Y.copy())
+        if self.opts['with_r_hst']:
+            self.hst['R'].append(self.FN.Y.copy())
         if self.with_tt:
             R = self.FN.Y.r
             c = 0.
@@ -578,8 +582,12 @@ class Solver(object):
             msg+= '  Int=%-6.1e'%r_int
 
         if True:
+            self.hst['E_dert'].append(self.comp_rhs())
+            msg+= '  Edert=%-6.1e'%self.hst['E_dert'][-1]
+
+        if True:
             self.hst['E_rhsn'].append(self.comp_rhs())
-            msg+= '  Erhs=%-6.1e'%self.hst['E_rhsn'][-1]
+            msg+= '  Erhsn=%-6.1e'%self.hst['E_rhsn'][-1]
 
         if self.MD.with_rt():
             FN.init(lambda x: self.MD.rt(x, self.t)).prep()
@@ -590,8 +598,6 @@ class Solver(object):
             FN.init(lambda x: self.MD.rs(x)).prep()
             self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
             msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
-
-        # msg+= ' ' * 100
 
         if self.with_tt:
             msg+= ' r=%-6.2e'%self.FN.Y.erank
@@ -604,10 +610,10 @@ class Solver(object):
         Some operations after the final computation step.
         '''
 
-
-        # nrm = self.FN.comp_int()
-        # self.FN.Y = 1./nrm * self.FN.Y
         self.FN.calc()
+        r_int = self.FN.comp_int()
+        self.FN.Y = 1. / r_int * self.FN.Y
+        self.FN.A = 1. / r_int * self.FN.A
 
     def info(self, is_ret=False):
         '''
@@ -626,30 +632,34 @@ class Solver(object):
         type: str
         '''
 
+        opts, hst, tms = self.opts, self.hst, self.tms
+        n_hst = opts['n_hst']
+
         s = '------------------ Solver\n'
         s+= 'Format    : %1dD, '%self.SG.d
         s+= 'TT, eps= %8.2e '%self.eps if self.with_tt else 'NP '
         s+= '[order=%d]\n'%self.ord
 
         s+= 'Format    : %1dD, '%self.SG.d
-        s+= 'Hst pois  : %s \n'%('%d'%self.opts['n_hst'] if self.opts['n_hst'] else 'None')
-        s+= 'Hst r     : %s \n'%('Yes' if self.opts['with_r_hst'] else 'No')
-        s+= 'Norm int  : %s \n'%('Yes' if self.opts['with_norm_int'] else 'No')
+        s+= 'Hst pois  : %s \n'%('%d'%n_hst if n_hst else 'None')
+        s+= 'Hst r     : %s \n'%('Yes' if opts['with_r_hst'] else 'No')
 
-        if len(self.hst['E_rhsn']):
-            s+= 'Err  rhs  : %8.2e\n'%self.hst['E_rhsn'][-1]
-        if len(self.hst['E_real']):
-            s+= 'Err  real : %8.2e\n'%self.hst['E_real'][-1]
-        if len(self.hst['E_stat']):
-            s+= 'Err  stat : %8.2e\n'%self.hst['E_stat'][-1]
+        if len(hst['E_dert']):
+            s+= 'd r / d t : %8.2e\n'%hst['E_dert'][-1]
+        if len(hst['E_rhsn']):
+            s+= 'Err  rhs  : %8.2e\n'%hst['E_rhsn'][-1]
+        if len(hst['E_real']):
+            s+= 'Err  real : %8.2e\n'%hst['E_real'][-1]
+        if len(hst['E_stat']):
+            s+= 'Err  stat : %8.2e\n'%hst['E_stat'][-1]
 
-        s+= 'Time prep : %8.2e \n'%self.tms['prep']
-        s+= 'Time calc : %8.2e \n'%self.tms['calc']
-        s+= '...  init : %8.2e \n'%self.tms['calc_init']
-        s+= '...  diff : %8.2e \n'%self.tms['calc_diff']
-        s+= '...  conv : %8.2e \n'%self.tms['calc_conv']
-        s+= '...  post : %8.2e \n'%self.tms['calc_post']
-        s+= '...  last : %8.2e \n'%self.tms['calc_last']
+        s+= 'Time prep : %8.2e \n'%tms['prep']
+        s+= 'Time calc : %8.2e \n'%tms['calc']
+        s+= '    .init : %8.2e \n'%tms['calc_init']
+        s+= '    .diff : %8.2e \n'%tms['calc_diff']
+        s+= '    .conv : %8.2e \n'%tms['calc_conv']
+        s+= '    .post : %8.2e \n'%tms['calc_post']
+        s+= '    .last : %8.2e \n'%tms['calc_last']
 
         if not s.endswith('\n'):
             s+= '\n'
