@@ -65,9 +65,9 @@ class Solver(object):
         type1: list [0]
         type2: list [opts.n_hst] of list [d] of int > 0
         * Is empty list (type1) if flag with_tt is not set.
-    fld : Rank_A - tt-ranks of the interpolation coefficients
+    fld : Rank_E - average tt-rank of the solution
         type1: list [0]
-        type2: list [opts.n_hst] of list [d] of int > 0
+        type2: list [opts.n_hst] of float > 0
         * Is empty list (type1) if flag with_tt is not set.
     fld : C_calc - relative number of points used for drift construction
         type: list [opts.n_hst] of float, > 0
@@ -84,7 +84,9 @@ class Solver(object):
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if function for stationary solution is not set.
     fld : E_rhsn - norm of the rhs devided by the norm of solution
-        type: list [opts.n_hst] of float, >= 0
+        type1: list [0]
+        type2: list [opts.n_hst] of float, >= 0
+        * Is empty list (type1) if flag with_rhs is not set.
     fld : E_dert - approximated time derivative of the solution (d r / dt)
         type: list [opts.n_hst] of float, >= 0
 
@@ -203,6 +205,7 @@ class Solver(object):
 
         set_opt('n_hst', 10)
         set_opt('with_r_hst', False)
+        set_opt('with_rhs', False)
 
         if self.opts['n_hst']:
             self.opts['n_hst'] = int(self.opts['n_hst'])
@@ -212,13 +215,13 @@ class Solver(object):
             self.opts['t_hst'] = 0
 
         self.opts['with_r_hst'] = bool(self.opts['with_r_hst'])
-
+        self.opts['with_rhs'] = bool(self.opts['with_rhs'])
 
         self.hst = {
             'T': [],
             'R': [],
             'Rank': [],
-            'Rank_A': [],
+            'Rank_E': [],
             'C_calc': [],
             'C_size': [],
             'E_real': [],
@@ -236,6 +239,8 @@ class Solver(object):
             'calc_post': 0.,
             'calc_last': 0.,
         }
+
+        self.res_conv = {}
 
     @tms('prep')
     def prep(self):
@@ -288,13 +293,20 @@ class Solver(object):
         PR = PrinterSl(self, with_print=not dsbl_print).init()
         self.calc_init()
         for m in range(1, self.TG.n0):
+            self.m = m
             self.t+= self.TG.h0
-            self.step_diff()
-            self.step_conv()
+
+            if True:
+                self.calc_diff()
+            if True:
+                self.calc_conv()
             if self.ord == 2:
-                self.step_diff()
-            self.step_post()
+                self.calc_diff()
+
+            self.calc_post()
+            self.FN0 = self.FN.copy()
             PR.update(self.msg)
+
         self.calc_last()
         PR.close()
 
@@ -310,6 +322,7 @@ class Solver(object):
         self.FN.init(self.MD.r0).prep() # Initial condition
         self.W0 = self.FN.Y.copy()      # Initial guess for convection solution
         self.msg = None                 # Message for print
+        return
 
     @tms('calc_diff')
     def calc_diff(self):
@@ -418,6 +431,7 @@ class Solver(object):
 
         opts={ 'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0 }
         self.FN.init(step, opts=opts).prep()
+        self.res_conv = self.FN.res.copy()
 
         self.W0 = self.FN.Y.copy()
 
@@ -432,7 +446,7 @@ class Solver(object):
         '''
 
         t_hst = self.opts['t_hst']
-        is_hst = t_hst and (m % t_hst == 0 or m == self.TG.n0 - 1)
+        is_hst = t_hst and (self.m % t_hst == 0 or self.m == self.TG.n0 - 1)
 
         if not is_hst:
             self.msg = None
@@ -447,53 +461,58 @@ class Solver(object):
         FN = self.FN.copy(is_init=True)
         FN.eps/= 100
 
-        self.FN.calc()
-        r_int = self.FN.comp_int()
-        if self.opts['with_norm_int']: self.FN.Y = 1. / r_int * self.FN.Y
-
         self.hst['T'].append(self.t)
-        self.hst['Int'].append(r_int)
+
         if self.opts['with_r_hst']:
             self.hst['R'].append(self.FN.Y.copy())
-        if self.with_tt:
-            R = self.FN.Y.r
-            c = 0.
-            for i in range(self.SG.d): c+= R[i] * self.SG.n[i] * R[i+1]
-            c/= np.prod(self.SG.n)
 
-            self.hst['Rank_A'].append(R)
-            self.hst['Rank_E'].append(self.FN.Y.erank)
+        if self.with_tt:
+            c = 0.
+            for i in range(self.SG.d):
+                c+= self.FN.Y.r[i] * self.SG.n[i] * self.FN.Y.r[i+1] * 1.
+            for i in range(self.SG.d):
+                c/= self.SG.n[i]
             self.hst['C_size'].append(c)
 
-        msg = '| At T=%-6.1e : '%self.t
+            c = self.res_conv['evals']
+            for i in range(self.SG.d):
+                c/= self.SG.n[i]
+            self.hst['C_calc'].append(c)
 
-        msg+= ' ' * 100
+            self.hst['Rank'].append(self.FN.Y.r)
+            self.hst['Rank_E'].append(self.FN.Y.erank)
+
+        self.msg = '| At T=%-6.1e : '%self.t + ' ' * 100
 
         if True:
-            msg+= '  Int=%-6.1e'%r_int
+            r1 = self.FN.Y
+            r0 = self.FN0.Y
+            dr = 1. / self.TG.h0 * (r1 - r0)
 
-        if True:
-            self.hst['E_dert'].append(self.comp_rhs())
-            msg+= '  Edert=%-6.1e'%self.hst['E_dert'][-1]
+            if self.with_tt:  # TT-format
+                e = dr.norm() / r1.norm()
+            else:            # NP-format
+                e = np.linalg.norm(dr) / np.linalg.norm(r1)
 
-        if True:
+            self.hst['E_dert'].append(e)
+            self.msg+= '  Edert=%-6.1e'%self.hst['E_dert'][-1]
+
+        if self.opts['with_rhs']:
             self.hst['E_rhsn'].append(self.comp_rhs())
-            msg+= '  Erhsn=%-6.1e'%self.hst['E_rhsn'][-1]
+            self.msg+= '  Erhsn=%-6.1e'%self.hst['E_rhsn'][-1]
 
         if self.MD.with_rt():
             FN.init(lambda x: self.MD.rt(x, self.t)).prep()
             self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
-            msg+= '  Ereal=%-6.1e'%self.hst['E_real'][-1]
+            self.msg+= '  Ereal=%-6.1e'%self.hst['E_real'][-1]
 
         if self.MD.with_rs():
             FN.init(lambda x: self.MD.rs(x)).prep()
             self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
-            msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
+            self.msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
 
         if self.with_tt:
-            msg+= ' r=%-6.2e'%self.FN.Y.erank
-
-        self.msg = msg
+            self.msg+= ' r=%-6.2e'%self.FN.Y.erank
 
     @tms('calc_last')
     def calc_last(self):
@@ -585,8 +604,8 @@ class Solver(object):
             res = res.norm() / FN_r.Y.norm()
 
         else:            # NP-format
-            x = self.Xsg
-            f = self.MD.f0(x, t)
+            X = self.Xsg
+            f = self.MD.f0(X, t)
             D = self.MD.D()
             r = FN_r.Y.reshape(-1, order='F')
 

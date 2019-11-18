@@ -504,6 +504,9 @@ class Func(object):
         type: str
         '''
 
+        if self.A is not None and self.f is not None and n_test:
+            self.test(n_test, is_test_u)
+
         s = '------------------ Function  \n'
         s+= 'Format           : %1dD, '%self.SG.d
         s+= 'TT, eps= %8.2e\n'%self.eps if self.with_tt else 'NP\n'
@@ -516,8 +519,6 @@ class Func(object):
             s+= 'Func (average)   : %8.2e \n'%self.tms['func']
 
         if self.A is not None and self.f is not None and n_test:
-            self.test(n_test, is_test_u)
-
             s+= '--> Test         |       \n'
             s+= 'Random points    : %8s   \n'%('No' if is_test_u else 'Yes')
             s+= 'Number of points : %8d   \n'%self.err.size
