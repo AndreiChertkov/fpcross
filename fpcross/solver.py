@@ -17,7 +17,7 @@ from .utils import tms, PrinterSl
 class Solver(object):
     '''
     Class with the fast solver for multidimensional Fokker-Planck equation (FPE)
-    d r(x,t) / d t = D Nabla( r(x,t) ) - div( f(x,t) r(x,t) ), r(x,0) = r0(x),
+    d r(x,t) / d t = D Delta( r(x,t) ) - div( f(x,t) r(x,t) ), r(x,0) = r0(x),
     with known f(x,t), its spatial derivative d f(x,t) / d x,
     initial condition r0(x) and scalar diffusion coefficient D.
 
@@ -30,7 +30,7 @@ class Solver(object):
     3 Call "prep" for construction of the special matrices.
     4 Call "calc" for calculation process.
     5 Call "comp" to obtain the final solution at any given spatial point.
-    6 Call "info" for demonstration of the calculation results.
+    6 Call "info" for demonstration (print) of the calculation results.
 
     Advanced usage:
     - Call "plot" for plot of error and tt-compression factors.
@@ -71,10 +71,12 @@ class Solver(object):
         * Is empty list (type1) if flag with_tt is not set.
     fld : C_calc - relative number of points used for drift construction
         type: list [opts.n_hst] of float, > 0
-        * This is the compression factor due to the cross approximation.
+        * This is the calc. economy due to the cross approximation
+        * (we calculate only portion C_calc of all tensor elements).
     fld : C_size - relative number of items for the TT-cores
         type: list [opts.n_hst] of float, > 0
-        * This is the compression factor due to the tt-format.
+        * This is the compression factor due to the tt-format
+        * (we keep in memory only portion C_size of all tensor elements).
     fld : E_real - errors vs analytic (real) solution
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
@@ -83,12 +85,12 @@ class Solver(object):
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if function for stationary solution is not set.
+    fld : E_dert - approximated time derivative of the solution (d r / dt)
+        type: list [opts.n_hst] of float, >= 0
     fld : E_rhsn - norm of the rhs devided by the norm of solution
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if flag with_rhs is not set.
-    fld : E_dert - approximated time derivative of the solution (d r / dt)
-        type: list [opts.n_hst] of float, >= 0
 
     tms - saved durations (in seconds) of the main operations
     type: dict
@@ -100,11 +102,13 @@ class Solver(object):
         type: float, >= 0
     fld : calc_init - time to perform operations before the first time step
         type: float, >= 0
+    fld : calc_prep - time to perform operations before each time step
+        type: float, >= 0
     fld : calc_diff - time to perform calculations for diffusion term
         type: float, >= 0
     fld : calc_conv - time to perform calculations for convection term
         type: float, >= 0
-    fld : calc_post - time to perform calculations after each step
+    fld : calc_post - time to perform calculations after each time step
         type: float, >= 0
     fld : calc_last - time to perform operations after the last time step
         type: float, >= 0
@@ -130,12 +134,14 @@ class Solver(object):
         type: float, >= 1.E-20
         * Is used only for TT-rounding operations and cross approximation
         * in the TT-format (is actual only if with_tt flag is set).
+        * For "exact" values (real solution, etc.) while its computation
+        * we select 100 times higher accuracy (eps / 100).
 
         ord - order of the approximation
         type: int
         enum:
-            - 1 - for the 1th order splitting and Euler ODE solver
-            - 2 - for the 2th order splitting and Runge-Kutta ODE solver
+            - 1 - for the 1th order splitting and Euler ODE-solver
+            - 2 - for the 2th order splitting and Runge-Kutta ODE-solver
 
         with_tt - flag:
             True  - sparse (tensor train, TT) format will be used
@@ -187,6 +193,23 @@ class Solver(object):
                 False - solution will not be saved to history
             default: False
             type: bool
+        fld : with_rhs - flag:
+                True  - the rhs of the equation will be calc. on t_hst steps
+                False - the rhs of the equation will not be calculated
+            default: False
+            type: bool
+        fld : f_prep - function that will be called before each step
+                       with self argument (after self.calc_prep)
+            default: None
+            type: function
+        fld : f_post - function that will be called after each step
+                       with self argument (after self.calc_post)
+            default: None
+            type: function
+        fld : f_post_hst - function that will be called after each step in hst
+                       with self argument (after self.calc_post)
+            default: None
+            type: function
         * Only provided fields will be used. Values of the missed fields will
         * not be changed and will be the same as after the previous call
         * or will be equal to the corresponding default values.
@@ -206,13 +229,16 @@ class Solver(object):
         set_opt('n_hst', 10)
         set_opt('with_r_hst', False)
         set_opt('with_rhs', False)
+        set_opt('f_prep', None)
+        set_opt('f_post', None)
+        set_opt('f_post_hst', None)
 
         if self.opts['n_hst']:
             self.opts['n_hst'] = int(self.opts['n_hst'])
-            self.opts['t_hst'] = int(self.TG.n0 * 1. / self.opts['n_hst'])
+            self.opts['t_hst'] = int(self.TG.n0 / self.opts['n_hst'])
         else:
             self.opts['n_hst'] = 0
-            self.opts['t_hst'] = 0
+            self.opts['t_hst'] = 0.
 
         self.opts['with_r_hst'] = bool(self.opts['with_r_hst'])
         self.opts['with_rhs'] = bool(self.opts['with_rhs'])
@@ -226,14 +252,16 @@ class Solver(object):
             'C_size': [],
             'E_real': [],
             'E_stat': [],
-            'E_rhsn': [],
             'E_dert': [],
+            'E_rhsn': [],
         }
+
         self.tms = {
             'init': 0.,
             'prep': 0.,
             'calc': 0.,
             'calc_init': 0.,
+            'calc_prep': 0.,
             'calc_diff': 0.,
             'calc_conv': 0.,
             'calc_post': 0.,
@@ -253,6 +281,7 @@ class Solver(object):
         type: fpcross.Solver
 
         TODO Check usage of J matrix.
+        TODO Add more accurate J matrix construction.
         '''
 
         self.MD.prep()
@@ -290,39 +319,49 @@ class Solver(object):
         type: fpcross.Solver
         '''
 
-        PR = PrinterSl(self, with_print=not dsbl_print).init()
-        self.calc_init()
-        for m in range(1, self.TG.n0):
-            self.m = m
-            self.t+= self.TG.h0
-
-            if True:
-                self.calc_diff()
-            if True:
-                self.calc_conv()
+        self.calc_init(dsbl_print)
+        for _ in range(1, self.TG.n0):
+            self.calc_prep()
+            self.calc_diff()
+            self.calc_conv()
             if self.ord == 2:
                 self.calc_diff()
-
             self.calc_post()
-            self.FN0 = self.FN.copy()
-            PR.update(self.msg)
-
         self.calc_last()
-        PR.close()
 
     @tms('calc_init')
-    def calc_init(self):
+    def calc_init(self, dsbl_print=False):
         '''
         Some operations before the first computation step.
+
+        INPUT:
+
+        dsbl_print - flag:
+            True  - intermediate calculation results will not be printed
+            False - intermediate calculation results will be printed
+        type: bool
 
         TODO Check if initial W0 set as r0 is correct.
         '''
 
-        self.t = self.TG.l1             # Current time
-        self.FN.init(self.MD.r0).prep() # Initial condition
-        self.W0 = self.FN.Y.copy()      # Initial guess for convection solution
-        self.msg = None                 # Message for print
-        return
+        self.m = 0
+        self.t = self.TG.l1
+        self.PR = PrinterSl(self, with_print=not dsbl_print).init()
+        self.FN.init(self.MD.r0).prep()
+        self.W0 = self.FN.Y.copy()
+        self.msg = None
+
+    @tms('calc_prep')
+    def calc_prep(self):
+        '''
+        Some operations before each computation step.
+        '''
+
+        self.m+= 1
+        self.t+= self.TG.h0
+
+        if self.opts['f_prep'] is not None:
+            self.opts['f_prep'](self)
 
     @tms('calc_diff')
     def calc_diff(self):
@@ -514,6 +553,15 @@ class Solver(object):
         if self.with_tt:
             self.msg+= ' r=%-6.2e'%self.FN.Y.erank
 
+        self.PR.update(self.msg)
+        self.FN0 = self.FN.copy()
+
+        if self.opts['f_post'] is not None:
+            self.opts['f_post'](self)
+
+        if self.opts['f_post_hst'] is not None:
+            self.opts['f_post_hst'](self)
+
     @tms('calc_last')
     def calc_last(self):
         '''
@@ -524,6 +572,8 @@ class Solver(object):
         r_int = self.FN.comp_int()
         self.FN.Y = 1. / r_int * self.FN.Y
         self.FN.A = 1. / r_int * self.FN.A
+
+        self.PR.close()
 
     def comp(self, X):
         '''
@@ -642,7 +692,7 @@ class Solver(object):
 
         OUTPUT:
 
-        s - (if is_out) string with info
+        s - (if is_ret) string with info
         type: str
         '''
 
@@ -654,9 +704,8 @@ class Solver(object):
         s+= 'TT, eps= %8.2e '%self.eps if self.with_tt else 'NP '
         s+= '[order=%d]\n'%self.ord
 
-        s+= 'Format    : %1dD, '%self.SG.d
         s+= 'Hst pois  : %s \n'%('%d'%n_hst if n_hst else 'None')
-        s+= 'Hst r     : %s \n'%('Yes' if opts['with_r_hst'] else 'No')
+        s+= 'Hst with r: %s \n'%('Yes' if opts['with_r_hst'] else 'No')
 
         if len(hst['E_dert']):
             s+= 'd r / d t : %8.2e\n'%hst['E_dert'][-1]
@@ -667,19 +716,19 @@ class Solver(object):
         if len(hst['E_stat']):
             s+= 'Err  stat : %8.2e\n'%hst['E_stat'][-1]
 
+        s+= 'Time full : %8.2e \n'%(tms['prep'] + tms['calc'])
         s+= 'Time prep : %8.2e \n'%tms['prep']
         s+= 'Time calc : %8.2e \n'%tms['calc']
         s+= '    .init : %8.2e \n'%tms['calc_init']
+        s+= '    .prep : %8.2e \n'%tms['calc_prep']
         s+= '    .diff : %8.2e \n'%tms['calc_diff']
         s+= '    .conv : %8.2e \n'%tms['calc_conv']
         s+= '    .post : %8.2e \n'%tms['calc_post']
         s+= '    .last : %8.2e \n'%tms['calc_last']
 
-        if not s.endswith('\n'):
-            s+= '\n'
         if is_ret:
-            return s
-        print(s[:-1])
+            return s + '\n'
+        print(s)
 
     def anim(self, ffmpeg_path, delt=50):
         '''
