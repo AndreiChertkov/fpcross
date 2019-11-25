@@ -4,6 +4,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
 from matplotlib import animation, rc
+from copy import deepcopy
 
 import tt
 
@@ -61,37 +62,41 @@ class Solver(object):
         type3: list [opts.n_hst] of tt-tensor [number of points] of float
         * Is empty list (type1) if flag opts.with_r_hst is not set.
         * Is type3 if flag with_tt is set and is type2 otherwise.
-    fld : Rank - tt-ranks of the solution
+    fld : rnk_list - tt-ranks of the solution
         type1: list [0]
         type2: list [opts.n_hst] of list [d] of int > 0
         * Is empty list (type1) if flag with_tt is not set.
-    fld : Rank_E - average tt-rank of the solution
+    fld : rnk_mean - average tt-rank of the solution
         type1: list [0]
         type2: list [opts.n_hst] of float > 0
         * Is empty list (type1) if flag with_tt is not set.
-    fld : C_calc - relative number of points used for drift construction
+    fld : cmp_calc - relative number of points used for drift construction
         type: list [opts.n_hst] of float, > 0
         * This is the calc. economy due to the cross approximation
-        * (we calculate only portion C_calc of all tensor elements).
-    fld : C_size - relative number of items for the TT-cores
+        * (we calculate only portion cmp_calc of all tensor elements).
+    fld : cmp_size - relative number of items for the TT-cores
         type: list [opts.n_hst] of float, > 0
         * This is the compression factor due to the tt-format
-        * (we keep in memory only portion C_size of all tensor elements).
-    fld : E_real - errors vs analytic (real) solution
+        * (we keep in memory only portion cmp_size of all tensor elements).
+    fld : err_real - errors vs analytic (real) solution
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if function for real solution is not set.
-    fld : E_stat - errors vs stationary solution
+    fld : err_stat - errors vs stationary solution
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if function for stationary solution is not set.
-    fld : E_dert - approximated time derivative of the solution (d r / dt)
-                   (norm of the derivative devided by the norm of solution)
+    fld : err_dert - approximated time derivative of the solution (d r / dt)
+                     (norm of the derivative devided by the norm of solution)
         type: list [opts.n_hst] of float, >= 0
-    fld : E_rhsn - norm of the rhs devided by the norm of solution
+    fld : err_rhsn - norm of the rhs devided by the norm of solution
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if flag with_rhs is not set.
+
+    res - dictionary with saved values from each time step
+          * It has the same fields as hst, but without
+          * T, R, err_real, err_stat and err_rhsn.
 
     tms - saved durations (in seconds) of the main operations
     type: dict
@@ -247,14 +252,14 @@ class Solver(object):
         self.hst = {
             'T': [],
             'R': [],
-            'Rank': [],
-            'Rank_E': [],
-            'C_calc': [],
-            'C_size': [],
-            'E_real': [],
-            'E_stat': [],
-            'E_dert': [],
-            'E_rhsn': [],
+            'rnk_list': [],
+            'rnk_mean': [],
+            'cmp_calc': [],
+            'cmp_size': [],
+            'err_real': [],
+            'err_stat': [],
+            'err_dert': [],
+            'err_rhsn': [],
         }
 
         self.tms = {
@@ -269,6 +274,7 @@ class Solver(object):
             'calc_last': 0.,
         }
 
+        self.res = deepcopy(self.hst)
         self.res_conv = {}
 
     @tms('prep')
@@ -351,6 +357,7 @@ class Solver(object):
         self.PR = PrinterSl(self, with_print=not dsbl_print).init()
         self.FN.init(self.MD.r0).prep()
         self.W0 = self.FN.Y.copy()
+        self.FN0 = self.FN.copy()
         self.msg = None
 
     @tms('calc_prep')
@@ -399,7 +406,7 @@ class Solver(object):
 
         TODO Try interpolation of the log.
 
-        TODO Is it correct to add eps to prevent zero division in cross (???) ?
+        TODO Is it requared to add eps to prevent zero division in cross (???) ?
 
         TODO Try initial guess in the form of the Euler solution?
 
@@ -481,79 +488,41 @@ class Solver(object):
         '''
         Check result of the current computation step.
 
-        TODO Remove self.FN.calc() (and change algorithm for comp_int).
+        TODO Remove self.FN.calc() (and change algorithm for comp_int) (???).
 
         TODO Add initial guess r to rt and maybe rs.
         '''
 
-        self.msg = None
+        t_hst = self.opts['t_hst']
+        is_hst = t_hst and (self.m % t_hst == 0 or self.m == self.TG.n0 - 1)
 
         if self.opts['f_post'] is not None:
             self.opts['f_post'](self)
 
-        t_hst = self.opts['t_hst']
-        is_hst = t_hst and (self.m % t_hst == 0 or self.m == self.TG.n0 - 1)
+        self.exam(self.res)
+        if is_hst:
+            self.exam(self.hst, is_hst=True)
+
+        self.FN0 = self.FN.copy()
 
         if not is_hst:
-            self.FN0 = self.FN.copy()
+            self.PR.update()
             return
 
-        self.msg = '| At T=%-6.1e : '%self.t + ' ' * 100
-
-        self.hst['T'].append(self.t)
-
-        if self.opts['with_r_hst']:
-            self.hst['R'].append(self.FN.Y.copy())
-
-        if self.with_tt:
-            self.hst['Rank'].append(self.FN.Y.r.copy())
-            self.hst['Rank_E'].append(self.FN.Y.erank)
-
-            c = self.res_conv['evals']
-            for i in range(self.SG.d):
-                c/= self.SG.n[i]
-            self.hst['C_calc'].append(c)
-
-            c = 0.
-            for i in range(self.SG.d):
-                c+= self.FN.Y.r[i] * self.SG.n[i] * self.FN.Y.r[i+1]
-            for i in range(self.SG.d):
-                c/= self.SG.n[i]
-            self.hst['C_size'].append(c)
-
-        def _err_calc(r_calc, r_real):
-            dr = r_real - r_calc
-            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
-            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
-            return dn / n0 if n0 > 0 else dn
-
-        FN = self.FN.copy(eps=self.FN.eps/100, is_init=True)
+        msg = '| At T=%-6.1e : '%self.t + ' ' * 100
 
         if True:
-            e = _err_calc(self.FN0.Y, self.FN.Y) / self.TG.h0
-            self.hst['E_dert'].append(e)
-            self.msg+= '  Edert=%-6.1e'%e
-
+            msg+= '  Edert=%-6.1e'%self.hst['err_dert'][-1]
         if self.opts['with_rhs']:
-            e = self.comp_rhs()
-            self.hst['E_rhsn'].append(e)
-            self.msg+= '  Erhsn=%-6.1e'%e
-
+            msg+= '  Erhsn=%-6.1e'%self.hst['err_rhsn'][-1]
         if self.MD.with_rt():
-            FN.init(lambda X: self.MD.rt(X, self.t)).prep()
-            self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
-            self.msg+= '  Ereal=%-6.1e'%self.hst['E_real'][-1]
-
+            msg+= '  Ereal=%-6.1e'%self.hst['err_real'][-1]
         if self.MD.with_rs():
-            FN.init(lambda X: self.MD.rs(X)).prep()
-            self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
-            self.msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
-
+            msg+= '  Estat=%-6.1e'%self.hst['err_stat'][-1]
         if self.with_tt:
-            self.msg+= ' r=%-6.2e'%self.FN.Y.erank
+            msg+= ' r=%-6.2e'%self.hst['rnk_mean'][-1]
 
-        self.PR.update(self.msg)
-
+        self.PR.update(msg)
         self.FN0 = self.FN.copy()
 
         if self.opts['f_post_hst'] is not None:
@@ -619,6 +588,8 @@ class Solver(object):
 
         res - norm of rhs divided by norm of the solution
         type: float, >= 0
+
+        TODO Check.
         '''
 
         if is_real and is_stat:
@@ -682,6 +653,58 @@ class Solver(object):
 
         return res
 
+    def exam(self, obj=None, eps_mult=100, is_hst=False):
+        def _err_calc(r_calc, r_real):
+            dr = r_real - r_calc
+            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
+            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
+            return dn / n0 if n0 > 0 else dn
+
+        res = {}
+
+        if is_hst:
+            res['T'] = self.t
+
+        if self.opts['with_r_hst']:
+            res['R'] = self.FN.Y.copy()
+
+        if self.with_tt:
+            res['rnk_list'] = self.FN.Y.r.copy()
+            res['rnk_mean'] = self.FN.Y.erank
+
+            res['cmp_calc'] = self.res_conv['evals']
+            for i in range(self.SG.d):
+                res['cmp_calc']/= self.SG.n[i]
+
+            res['cmp_size'] = 0.
+            for i in range(self.SG.d):
+                res['cmp_size']+= self.FN.Y.r[i]*self.SG.n[i]*self.FN.Y.r[i+1]
+            for i in range(self.SG.d):
+                res['cmp_size']/= self.SG.n[i]
+
+        if self.MD.with_rt() or self.MD.with_rs():
+            FN = self.FN.copy(eps=self.FN.eps/eps_mult, is_init=True)
+
+        if True:
+            res['err_dert'] = _err_calc(self.FN0.Y, self.FN.Y) / self.TG.h0
+
+        if self.opts['with_rhs']:
+            res['err_rhsn'] = self.comp_rhs()
+
+        if self.MD.with_rt():
+            FN.init(lambda X: self.MD.rt(X, self.t)).prep()
+            res['err_real'] = _err_calc(self.FN.Y, FN.Y)
+
+        if self.MD.with_rs():
+            FN.init(lambda X: self.MD.rs(X)).prep()
+            res['err_stat'] = _err_calc(self.FN.Y, FN.Y)
+
+        if obj is not None:
+            for name in res.keys():
+                obj[name].append(res[name])
+
+        return res
+
     def info(self, is_ret=False):
         '''
         Present information about the last computation.
@@ -710,14 +733,14 @@ class Solver(object):
         s+= 'Hst pois  : %s \n'%('%d'%n_hst if n_hst else 'None')
         s+= 'Hst with r: %s \n'%('Yes' if opts['with_r_hst'] else 'No')
 
-        if len(hst['E_dert']):
-            s+= 'd r / d t : %8.2e\n'%hst['E_dert'][-1]
-        if len(hst['E_rhsn']):
-            s+= 'Err  rhs  : %8.2e\n'%hst['E_rhsn'][-1]
-        if len(hst['E_real']):
-            s+= 'Err  real : %8.2e\n'%hst['E_real'][-1]
-        if len(hst['E_stat']):
-            s+= 'Err  stat : %8.2e\n'%hst['E_stat'][-1]
+        if len(hst['err_dert']):
+            s+= 'd r / d t : %8.2e\n'%hst['err_dert'][-1]
+        if len(hst['err_rhsn']):
+            s+= 'Err  rhs  : %8.2e\n'%hst['err_rhsn'][-1]
+        if len(hst['err_real']):
+            s+= 'Err  real : %8.2e\n'%hst['err_real'][-1]
+        if len(hst['err_stat']):
+            s+= 'Err  stat : %8.2e\n'%hst['err_stat'][-1]
 
         s+= 'Time full : %8.2e \n'%(tms['prep'] + tms['calc'])
         s+= 'Time prep : %8.2e \n'%tms['prep']
