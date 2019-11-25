@@ -86,6 +86,7 @@ class Solver(object):
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if function for stationary solution is not set.
     fld : E_dert - approximated time derivative of the solution (d r / dt)
+                   (norm of the derivative devided by the norm of solution)
         type: list [opts.n_hst] of float, >= 0
     fld : E_rhsn - norm of the rhs devided by the norm of solution
         type1: list [0]
@@ -297,7 +298,8 @@ class Solver(object):
         self.Z0 = expm(h0 * Dc * J0 @ D0)
 
         if not self.with_tt:
-            self.Xsg = self.SG.comp()
+            if self.opts['with_rhs']:
+                self.Xsg = self.SG.comp()
             for i in range(self.SG.d):
                 self.Z = self.Z0.copy() if i == 0 else np.kron(self.Z, self.Z0)
 
@@ -375,7 +377,7 @@ class Solver(object):
 
         v0 = self.FN.Y
 
-        if self.with_tt:  # TT-format
+        if self.with_tt:
             G = tt.tensor.to_list(v0)
             for i in range(self.SG.d):
                 G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
@@ -383,7 +385,7 @@ class Solver(object):
             v = tt.tensor.from_list(G)
             v = v.round(self.eps)
 
-        else:            # NP-format
+        else:
             v0 = v0.reshape(-1, order='F')
             v = self.Z @ v0
             v = v.reshape(self.SG.n, order='F')
@@ -401,14 +403,14 @@ class Solver(object):
 
         TODO Try initial guess in the form of the Euler solution?
 
-        TODO Check various numbers of points for ODE solvers.
+        TODO Check various numbers of points for ODE-solvers.
         '''
 
         def func(y, t):
             '''
             Compute rhs for the system of drift equations
             d x / dt = f(x, t)
-            d w / dt = - Tr[ d f(x, t) / d t ] w.
+            d w / dt = - Tr[ d f(x, t) / d x ] w.
 
             INPUT:
 
@@ -457,15 +459,15 @@ class Solver(object):
             y1 = OrdSolver(TG, kind=kd).init(func).comp(y0)
             w1 = y1[-1, :]
 
-            if self.with_tt and np.linalg.norm(w1) < 1.E-20:
-                w1+= 1.E-20 # To prevent zero division in the cross appr.
+            # if self.with_tt and np.linalg.norm(w1) < 1.E-20:
+            #     w1+= 1.E-20 # To prevent zero division in the cross appr.
 
             return w1
 
         self.FN.calc()
-        r_int = self.FN.comp_int()
-        self.FN.Y = 1. / r_int * self.FN.Y
-        self.FN.A = 1. / r_int * self.FN.A
+        mult = 1. / self.FN.comp_int()
+        self.FN.Y = mult * self.FN.Y
+        self.FN.A = mult * self.FN.A
         FN = self.FN.copy()
 
         opts={ 'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0 }
@@ -484,21 +486,19 @@ class Solver(object):
         TODO Add initial guess r to rt and maybe rs.
         '''
 
+        self.msg = None
+
+        if self.opts['f_post'] is not None:
+            self.opts['f_post'](self)
+
         t_hst = self.opts['t_hst']
         is_hst = t_hst and (self.m % t_hst == 0 or self.m == self.TG.n0 - 1)
 
         if not is_hst:
-            self.msg = None
+            self.FN0 = self.FN.copy()
             return
 
-        def _err_calc(r_calc, r_real):
-            dr = r_real - r_calc
-            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
-            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
-            return dn / n0 if n0 > 0 else dn
-
-        FN = self.FN.copy(is_init=True)
-        FN.eps/= 100
+        self.msg = '| At T=%-6.1e : '%self.t + ' ' * 100
 
         self.hst['T'].append(self.t)
 
@@ -506,47 +506,46 @@ class Solver(object):
             self.hst['R'].append(self.FN.Y.copy())
 
         if self.with_tt:
-            c = 0.
-            for i in range(self.SG.d):
-                c+= self.FN.Y.r[i] * self.SG.n[i] * self.FN.Y.r[i+1] * 1.
-            for i in range(self.SG.d):
-                c/= self.SG.n[i]
-            self.hst['C_size'].append(c)
+            self.hst['Rank'].append(self.FN.Y.r.copy())
+            self.hst['Rank_E'].append(self.FN.Y.erank)
 
             c = self.res_conv['evals']
             for i in range(self.SG.d):
                 c/= self.SG.n[i]
             self.hst['C_calc'].append(c)
 
-            self.hst['Rank'].append(self.FN.Y.r)
-            self.hst['Rank_E'].append(self.FN.Y.erank)
+            c = 0.
+            for i in range(self.SG.d):
+                c+= self.FN.Y.r[i] * self.SG.n[i] * self.FN.Y.r[i+1]
+            for i in range(self.SG.d):
+                c/= self.SG.n[i]
+            self.hst['C_size'].append(c)
 
-        self.msg = '| At T=%-6.1e : '%self.t + ' ' * 100
+        def _err_calc(r_calc, r_real):
+            dr = r_real - r_calc
+            n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
+            dn = dr.norm() if self.with_tt else np.linalg.norm(dr)
+            return dn / n0 if n0 > 0 else dn
+
+        FN = self.FN.copy(eps=self.FN.eps/100, is_init=True)
 
         if True:
-            r1 = self.FN.Y
-            r0 = self.FN0.Y
-            dr = 1. / self.TG.h0 * (r1 - r0)
-
-            if self.with_tt:  # TT-format
-                e = dr.norm() / r1.norm()
-            else:            # NP-format
-                e = np.linalg.norm(dr) / np.linalg.norm(r1)
-
+            e = _err_calc(self.FN0.Y, self.FN.Y) / self.TG.h0
             self.hst['E_dert'].append(e)
-            self.msg+= '  Edert=%-6.1e'%self.hst['E_dert'][-1]
+            self.msg+= '  Edert=%-6.1e'%e
 
         if self.opts['with_rhs']:
-            self.hst['E_rhsn'].append(self.comp_rhs())
-            self.msg+= '  Erhsn=%-6.1e'%self.hst['E_rhsn'][-1]
+            e = self.comp_rhs()
+            self.hst['E_rhsn'].append(e)
+            self.msg+= '  Erhsn=%-6.1e'%e
 
         if self.MD.with_rt():
-            FN.init(lambda x: self.MD.rt(x, self.t)).prep()
+            FN.init(lambda X: self.MD.rt(X, self.t)).prep()
             self.hst['E_real'].append(_err_calc(self.FN.Y, FN.Y))
             self.msg+= '  Ereal=%-6.1e'%self.hst['E_real'][-1]
 
         if self.MD.with_rs():
-            FN.init(lambda x: self.MD.rs(x)).prep()
+            FN.init(lambda X: self.MD.rs(X)).prep()
             self.hst['E_stat'].append(_err_calc(self.FN.Y, FN.Y))
             self.msg+= '  Estat=%-6.1e'%self.hst['E_stat'][-1]
 
@@ -554,10 +553,8 @@ class Solver(object):
             self.msg+= ' r=%-6.2e'%self.FN.Y.erank
 
         self.PR.update(self.msg)
-        self.FN0 = self.FN.copy()
 
-        if self.opts['f_post'] is not None:
-            self.opts['f_post'](self)
+        self.FN0 = self.FN.copy()
 
         if self.opts['f_post_hst'] is not None:
             self.opts['f_post_hst'](self)
@@ -569,9 +566,9 @@ class Solver(object):
         '''
 
         self.FN.calc()
-        r_int = self.FN.comp_int()
-        self.FN.Y = 1. / r_int * self.FN.Y
-        self.FN.A = 1. / r_int * self.FN.A
+        mult = 1. / self.FN.comp_int()
+        self.FN.Y = mult * self.FN.Y
+        self.FN.A = mult * self.FN.A
 
         self.PR.close()
 
@@ -607,7 +604,7 @@ class Solver(object):
         t - time for computation
         type1: None
         type2: float
-        * If is not set (type1) then the current time will be used.
+        * If is not set (type1) then the current solver time will be used.
 
         is_real - flag:
             True  - will be calculated for real (analytic) solution
@@ -624,6 +621,9 @@ class Solver(object):
         type: float, >= 0
         '''
 
+        if is_real and is_stat:
+            raise ValueError('Only one option (real or stat) may be selected.')
+
         t = self.t if not t else t
         res = None
 
@@ -633,27 +633,30 @@ class Solver(object):
         if is_stat:
             FN_r.init(self.MD.rs).prep()
 
-        if self.with_tt:  # TT-format
+        if self.with_tt:
+            D = self.MD.D()
+            r = FN_r.Y
+
             for k in range(self.SG.d):
-                G = tt.tensor.to_list(FN_r.Y)
+                G = tt.tensor.to_list(r)
                 G[k] = np.einsum('ij,kjm->kim', self.D2, G[k])
-                v = tt.tensor.from_list(G) * self.MD.D()
+                v = tt.tensor.from_list(G) * D
                 v = v.round(self.eps)
                 res = v.copy() if res is None else (res + v).round(self.eps)
 
                 def func(X):
                     return self.MD.f0(X, t)[k, :]
 
-                FN_f = self.FN.copy(is_init=True).init(func).prep()
-                G = tt.tensor.to_list((FN_r.Y * FN_f.Y).round(self.eps))
+                f = self.FN.copy(is_init=True).init(func).prep().Y
+                G = tt.tensor.to_list((r * f).round(self.eps))
                 G[k] = np.einsum('ij,kjm->kim', self.D1, G[k])
                 v = tt.tensor.from_list(G)
                 v = v.round(self.eps)
                 res = v.copy() if res is None else (res - v).round(self.eps)
 
-            res = res.norm() / FN_r.Y.norm()
+            res = res.norm() / r.norm()
 
-        else:            # NP-format
+        else:
             X = self.Xsg
             f = self.MD.f0(X, t)
             D = self.MD.D()
