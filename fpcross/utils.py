@@ -13,7 +13,7 @@ def ij():
     from IPython.core.display import HTML
     return HTML('<style>%s</style>'%config['css'])
 
-def tms(name):
+def tms(name, with_list=False):
     '''
     @Decorator. Save time (duration) for function call inside the class.
     The corresponding class should have tms dict with field name.
@@ -28,9 +28,15 @@ def tms(name):
         def timer__(self, *args, **kwargs):
             t = tpc()
             r = f(self, *args, **kwargs)
+            t = tpc() - t
 
-            if hasattr(self, 'tms') and name in self.tms:
-                self.tms[name]+= tpc() - t
+            if True:
+                if hasattr(self, 'tms') and name in self.tms:
+                    self.tms[name]+= t
+
+            if with_list:
+                if hasattr(self, 'tms_list') and name in self.tms_list:
+                    self.tms_list[name].append(t)
 
             return self if f.__name__ in ['init', 'prep', 'calc'] else r
 

@@ -877,7 +877,7 @@ class Solver(object):
 
         Tall = self.res['T']
         Thst = self.hst['T']
-        
+
         err_dert = self.res['err_dert']
         err_rhsn = self.hst['err_rhsn']
         err_stat = self.hst['err_stat']
@@ -888,6 +888,7 @@ class Solver(object):
         tms_conv = self.tms_list['calc_conv']
         tms_post = self.tms_list['calc_post']
 
+        rnk_mean = self.hst['rnk_mean']
         cmp_calc = self.hst['cmp_calc']
         cmp_size = self.hst['cmp_size']
 
@@ -905,13 +906,27 @@ class Solver(object):
             ax.set_title('Relative error' + kind)
             ax.set_xlabel('Time')
             if len(err_dert):
-                ax.plot(Tall, err_dert, '--', linewidth=4, label='numerical derivative')
+                ax.plot(Tall, err_dert, **{
+                    **conf['line']['l4'],
+                    'linestyle': '--',
+                    'linewidth': 4,
+                    'label': 'numerical derivative',
+                })
             if len(err_rhsn):
-                ax.plot(Thst, err_rhsn, marker='^', markersize=8, label='relative rhs')
+                ax.plot(Thst, err_rhsn, **{
+                    **conf['line']['l11'],
+                    'label': 'relative rhs',
+                })
             if len(err_stat):
-                ax.plot(Thst, err_stat, marker='s', markersize=8, label='vs analytic stat. soltion')
+                ax.plot(Thst, err_stat, **{
+                    **conf['line']['l7'],
+                    'label': 'vs analytic stat. soltion',
+                })
             if len(err_real):
-                ax.plot(Thst, err_real, marker='s', markersize=8, label='vs analytic solution')
+                ax.plot(Thst, err_real, **{
+                    **conf['line']['l6'],
+                    'label': 'vs analytic solution',
+                })
             ax.legend(loc='best')
             ax.semilogy()
 
@@ -920,13 +935,22 @@ class Solver(object):
             ax.set_title('Step duration'+ kind)
             ax.set_xlabel('Time')
             opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
-            ax.plot(Tall, tms_prep, **opts, label='Prepare before step')
-            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
-            ax.plot(Tall, tms_diff, **opts, label='Diffusion part')
-            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
-            ax.plot(Tall, tms_conv, **opts, label='Convection part')
-            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
-            ax.plot(Tall, tms_post, **opts, label='Check after step')
+            ax.plot(Tall, tms_prep, **{
+                **conf['line']['l1'],
+                'label': 'Prepare before step',
+            })
+            ax.plot(Tall, tms_diff, **{
+                **conf['line']['l2'],
+                'label': 'Diffusion part',
+            })
+            ax.plot(Tall, tms_conv, **{
+                **conf['line']['l4'],
+                'label': 'Convection part',
+            })
+            ax.plot(Tall, tms_post, **{
+                **conf['line']['l5'],
+                'label': 'Check after step',
+            })
             ax.legend(loc='best')
             ax.semilogy()
 
@@ -935,16 +959,23 @@ class Solver(object):
             ax.set_title('TT-erank'+ kind)
             ax.set_xlabel('Time')
             opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
-            ax.plot(Thst, self.hst['rnk_mean'], **opts)
+            ax.plot(Thst, rnk_mean, **{
+                **conf['line']['l14'],
+            })
 
         if self.with_tt:
             ax = fig.add_subplot(gs[1, 1])
             ax.set_title('TT-compression factor'+ kind)
             ax.set_xlabel('Time')
             opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
-            ax.plot(Thst, 1./np.array(self.hst['cmp_calc']), **opts, label='Function evaluations')
-            opts = { 'color': 'blue', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
-            ax.plot(Thst, 1./np.array(self.hst['cmp_size']), **opts, label='Memory usage')
+            ax.plot(Thst, cmp_calc, **{
+                **conf['line']['l13'],
+                'label': 'Function evaluations',
+            })
+            ax.plot(Thst, cmp_size, **{
+                **conf['line']['l15'],
+                'label': 'Memory usage',
+            })
             ax.legend(loc='best')
             ax.semilogy()
 
