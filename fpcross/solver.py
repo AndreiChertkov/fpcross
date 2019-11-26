@@ -1,4 +1,5 @@
 import time
+import pickle
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -66,7 +67,7 @@ class Solver(object):
         type1: list [0]
         type2: list [opts.n_hst] of list [d] of int > 0
         * Is empty list (type1) if flag with_tt is not set.
-    fld : rnk_mean - average tt-rank of the solution
+    fld : rnk_mean - average (effective) tt-rank of the solution
         type1: list [0]
         type2: list [opts.n_hst] of float > 0
         * Is empty list (type1) if flag with_tt is not set.
@@ -181,6 +182,29 @@ class Solver(object):
         self.opts = {}
         self.init()
 
+    def save(self, fpath):
+        data = {
+            'opts': self.opts,
+            'hst': self.hst,
+            'tms': self.tms,
+            'tms_list': self.tms_list,
+            'res': self.res,
+            'res_conv': self.res_conv,
+        }
+        with open(fpath, 'wb') as f:
+            pickle.dump(data, f)
+
+    def load(self, fpath):
+        with open(fpath, 'rb') as f:
+            data = pickle.load(f)
+
+        self.opts = data['opts']
+        self.hst = data['hst']
+        self.tms = data['tms']
+        self.tms_list = data['tms_list']
+        self.res = data['res']
+        self.res_conv = data['res_conv']
+
     @tms('init')
     def init(self, opts={}):
         '''
@@ -272,6 +296,13 @@ class Solver(object):
             'calc_conv': 0.,
             'calc_post': 0.,
             'calc_last': 0.,
+        }
+
+        self.tms_list = {
+            'calc_prep': [],
+            'calc_diff': [],
+            'calc_conv': [],
+            'calc_post': [],
         }
 
         self.res = {
@@ -368,7 +399,7 @@ class Solver(object):
         self.FN0 = self.FN.copy()
         self.msg = None
 
-    @tms('calc_prep')
+    @tms('calc_prep', with_list=True)
     def calc_prep(self):
         '''
         Some operations before each computation step.
@@ -380,7 +411,7 @@ class Solver(object):
         if self.opts['f_prep'] is not None:
             self.opts['f_prep'](self)
 
-    @tms('calc_diff')
+    @tms('calc_diff', with_list=True)
     def calc_diff(self):
         '''
         One computation step for the diffusion term.
@@ -407,7 +438,7 @@ class Solver(object):
 
         self.FN.init(Y=v)
 
-    @tms('calc_conv')
+    @tms('calc_conv', with_list=True)
     def calc_conv(self):
         '''
         One computation step for the convection term.
@@ -491,7 +522,7 @@ class Solver(object):
 
         self.W0 = self.FN.Y.copy()
 
-    @tms('calc_post')
+    @tms('calc_post', with_list=True)
     def calc_post(self):
         '''
         Check result of the current computation step.
@@ -683,12 +714,14 @@ class Solver(object):
             res['cmp_calc'] = self.res_conv['evals']
             for i in range(self.SG.d):
                 res['cmp_calc']/= self.SG.n[i]
+            res['cmp_calc'] = 1. / res['cmp_calc']
 
             res['cmp_size'] = 0.
             for i in range(self.SG.d):
                 res['cmp_size']+= self.FN.Y.r[i]*self.SG.n[i]*self.FN.Y.r[i+1]
             for i in range(self.SG.d):
                 res['cmp_size']/= self.SG.n[i]
+            res['cmp_size'] = 1. / res['cmp_size']
 
         if is_hst and (self.MD.with_rt() or self.MD.with_rs()):
             FN = self.FN.copy(eps=self.FN.eps/eps_mult, is_init=True)
@@ -832,6 +865,90 @@ class Solver(object):
 
         from IPython.display import HTML
         return HTML(anim.to_html5_video())
+
+    def plot(self):
+        '''
+        Plot results of the last computation (errors, times, TT-ranks
+        and compression factors).
+        '''
+
+        kind = ' (N=%d^%d, M=%d points)'%(self.SG.n0, self.SG.d, self.TG.n0)
+        conf = config['opts']['plot']
+
+        Tall = self.res['T']
+        Thst = self.hst['T']
+        
+        err_dert = self.res['err_dert']
+        err_rhsn = self.hst['err_rhsn']
+        err_stat = self.hst['err_stat']
+        err_real = self.hst['err_real']
+
+        tms_prep = self.tms_list['calc_prep']
+        tms_diff = self.tms_list['calc_diff']
+        tms_conv = self.tms_list['calc_conv']
+        tms_post = self.tms_list['calc_post']
+
+        cmp_calc = self.hst['cmp_calc']
+        cmp_size = self.hst['cmp_size']
+
+        if self.ord != 1:
+            tms_diff = tms_diff[0::2]
+
+        opts = conf['fig']['base_2_2' if self.with_tt else 'base_1_2']
+        fig = plt.figure(**opts)
+
+        opts = conf['grid']['base_2_2' if self.with_tt else 'base_1_2']
+        gs = mpl.gridspec.GridSpec(**opts)
+
+        if True:
+            ax = fig.add_subplot(gs[0, 0])
+            ax.set_title('Relative error' + kind)
+            ax.set_xlabel('Time')
+            if len(err_dert):
+                ax.plot(Tall, err_dert, '--', linewidth=4, label='numerical derivative')
+            if len(err_rhsn):
+                ax.plot(Thst, err_rhsn, marker='^', markersize=8, label='relative rhs')
+            if len(err_stat):
+                ax.plot(Thst, err_stat, marker='s', markersize=8, label='vs analytic stat. soltion')
+            if len(err_real):
+                ax.plot(Thst, err_real, marker='s', markersize=8, label='vs analytic solution')
+            ax.legend(loc='best')
+            ax.semilogy()
+
+        if True:
+            ax = fig.add_subplot(gs[0, 1])
+            ax.set_title('Step duration'+ kind)
+            ax.set_xlabel('Time')
+            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
+            ax.plot(Tall, tms_prep, **opts, label='Prepare before step')
+            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
+            ax.plot(Tall, tms_diff, **opts, label='Diffusion part')
+            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
+            ax.plot(Tall, tms_conv, **opts, label='Convection part')
+            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
+            ax.plot(Tall, tms_post, **opts, label='Check after step')
+            ax.legend(loc='best')
+            ax.semilogy()
+
+        if self.with_tt:
+            ax = fig.add_subplot(gs[1, 0])
+            ax.set_title('TT-erank'+ kind)
+            ax.set_xlabel('Time')
+            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
+            ax.plot(Thst, self.hst['rnk_mean'], **opts)
+
+        if self.with_tt:
+            ax = fig.add_subplot(gs[1, 1])
+            ax.set_title('TT-compression factor'+ kind)
+            ax.set_xlabel('Time')
+            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
+            ax.plot(Thst, 1./np.array(self.hst['cmp_calc']), **opts, label='Function evaluations')
+            opts = { 'color': 'blue', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
+            ax.plot(Thst, 1./np.array(self.hst['cmp_size']), **opts, label='Memory usage')
+            ax.legend(loc='best')
+            ax.semilogy()
+
+        plt.show()
 
     def plot_tm(self, x, opts={}):
         '''
