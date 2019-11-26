@@ -274,7 +274,15 @@ class Solver(object):
             'calc_last': 0.,
         }
 
-        self.res = deepcopy(self.hst)
+        self.res = {
+            'T': [],
+            'rnk_list': [],
+            'rnk_mean': [],
+            'cmp_calc': [],
+            'cmp_size': [],
+            'err_dert': [],
+        }
+
         self.res_conv = {}
 
     @tms('prep')
@@ -662,10 +670,10 @@ class Solver(object):
 
         res = {}
 
-        if is_hst:
+        if True:
             res['T'] = self.t
 
-        if self.opts['with_r_hst']:
+        if is_hst and self.opts['with_r_hst']:
             res['R'] = self.FN.Y.copy()
 
         if self.with_tt:
@@ -682,20 +690,20 @@ class Solver(object):
             for i in range(self.SG.d):
                 res['cmp_size']/= self.SG.n[i]
 
-        if self.MD.with_rt() or self.MD.with_rs():
+        if is_hst and (self.MD.with_rt() or self.MD.with_rs()):
             FN = self.FN.copy(eps=self.FN.eps/eps_mult, is_init=True)
 
         if True:
             res['err_dert'] = _err_calc(self.FN0.Y, self.FN.Y) / self.TG.h0
 
-        if self.opts['with_rhs']:
+        if is_hst and self.opts['with_rhs']:
             res['err_rhsn'] = self.comp_rhs()
 
-        if self.MD.with_rt():
+        if is_hst and self.MD.with_rt():
             FN.init(lambda X: self.MD.rt(X, self.t)).prep()
             res['err_real'] = _err_calc(self.FN.Y, FN.Y)
 
-        if self.MD.with_rs():
+        if is_hst and self.MD.with_rs():
             FN.init(lambda X: self.MD.rs(X)).prep()
             res['err_stat'] = _err_calc(self.FN.Y, FN.Y)
 
