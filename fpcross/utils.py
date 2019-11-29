@@ -16,12 +16,13 @@ def ij():
 def tms(name, with_list=False):
     '''
     @Decorator. Save time (duration) for function call inside the class.
-    The corresponding class should have tms dict with field name.
-    The field tms[name] (if exists) will be incremented by duration.
-    * Will return class instance (not result of the decorated function!) for
-    * the functions with special names: "init", "prep" and "calc".
+    The corresponding class may have tms dict with the field name (tms[name]),
+    which (if exists) will be incremented by duration.
+    * Will return class instance (not result of the decorated function!!!)
+    * for the functions with special names: "init", "prep" and "calc".
 
-    TODO Add check that tms is dict.
+    TODO Add check that tms and tms_list are dicts.
+    TODO Add doc for tms_list.
     '''
 
     def timer_(f):
@@ -48,6 +49,8 @@ class PrinterSl(object):
     '''
     Present (print in interactive mode) current calculation status
     for the solver (fpcross.Solver).
+
+    TODO Check displayed iteration number n0-1.
     '''
 
     def __init__(self, SL, with_print=False):

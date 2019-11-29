@@ -1,18 +1,19 @@
 import os
-from setuptools import setup #, find_packages
-
-here = os.path.abspath(os.path.dirname(__file__))
-desc = 'Solution of the multidimensional Fokker-Planck equation by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.'
-with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
-    desc_long = f.read()
+from setuptools import setup
 
 def find_packages(package, basepath):
     packages = [package]
     for name in os.listdir(basepath):
         path = os.path.join(basepath, name)
-        if not os.path.isdir(path): continue
+        if not os.path.isdir(path):
+            continue
         packages.extend(find_packages('%s.%s'%(package, name), path))
     return packages
+
+here = os.path.abspath(os.path.dirname(__file__))
+desc = 'Solution of the multidimensional Fokker-Planck equation by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.'
+with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
+    desc_long = f.read()
 
 setup(
     name = 'fpcross',
@@ -41,7 +42,7 @@ setup(
     ],
     keywords='Fokker-Planck equation stochastic differential equation probability density function low-rank representation tensor train format TT-decomposition cross approximation Chebyshev polynomial multivariate Ornstein-–Uhlenbeck process',
     packages=find_packages('fpcross', './fpcross/'),
-    python_requires='>=3.5',
+    python_requires='>=3.7',
     install_requires=['ttpy'],
     project_urls={
         'Source': 'https://github.com/AndreiChertkov/fpcross',

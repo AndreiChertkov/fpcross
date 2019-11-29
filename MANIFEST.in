@@ -1,5 +1,6 @@
-include README.md
-include LICENSE.txt
-recursive-include examples *
 recursive-include computations *
+recursive-include examples *
+recursive-include scripts *
 recursive-include tests *
+include LICENSE.txt
+include README.md

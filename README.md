@@ -4,7 +4,7 @@
 
 Solution of the multidimensional Fokker-Planck equation (FPE) of the form
 
-d r(x, t) / d t = D Nabla( r(x, t) ) - div( f(x, t) r(x, t) ),
+d r(x, t) / d t = D delta( r(x, t) ) - div( f(x, t) r(x, t) ),
 r(x,0) = r0(x),
 
 with known f(x, t), initial condition r0(x) and scalar diffusion coefficient D by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.
@@ -21,7 +21,7 @@ with known f(x, t), initial condition r0(x) and scalar diffusion coefficient D b
 
 ## Installation
 
-1. Install **python** (version >= 3.7) and standard python packages listed in the section `Requirements` above. The best way is to use **anaconda** distribution.
+1. Install **python** (version >= 3.7) and standard python packages listed in the section **Requirements** above. The best way is to install only **anaconda** distribution which includes this packages.
 
 1. Install **ttpy** python package according to instructions from the corresponding repository.
 
