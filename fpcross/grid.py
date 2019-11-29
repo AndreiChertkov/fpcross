@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 class Grid(object):
     '''
-    Class for representation and construction of the
+    Class for construction and representation of the
     uniform or Chebyshev multidimensional grid.
 
     Basic usage:
@@ -97,6 +97,8 @@ class Grid(object):
         enum:
             - 'u' - uniform grid
             - 'c' - Chebyshev grid
+
+        TODO Check statement 'int(n[i]) != n[i]'. Is it correct?
         '''
 
         # Check / prepare d
@@ -181,6 +183,8 @@ class Grid(object):
 
         GR - new class instance with the same parameters
         type: Grid
+
+        TODO Check how .copy function works for 2D array (self.l.copy()).
         '''
 
         d = kwargs.get('d', self.d)

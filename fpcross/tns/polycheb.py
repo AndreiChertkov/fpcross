@@ -17,7 +17,7 @@ def polycheb(X, m, l=None):
     * In case of 1D, it may be 1D ndarray (or list) (type2 or type3).
 
     m - max order of polynomial (function will calculate for 0, 1, ..., m-1)
-    type: int, > 0
+    type: int >= 1
 
     l - min-max values of variable for each dimension
     type1: list [dimensions, 2] of float
@@ -30,6 +30,10 @@ def polycheb(X, m, l=None):
     T - Chebyshev polynomials of order 0, 1, ..., m-1 in given points
     type: ndarray [m, *X.shape] of float
     * If X is float, it will be ndarray [m].
+
+    TODO Maybe replace input l by the corresponding grid.
+
+    TODO Replace by more compact code (if len(X.shape) may be combined).
     '''
 
     m = int(m)

@@ -14,7 +14,7 @@ def difscheb(SG, m):
     * and average number of the grid points (n0) will be used.
 
     m - maximum matrix order (will construct for 1, 2, ..., m)
-    type: int, >= 1
+    type: int >= 1
 
     OUTPUT:
 
