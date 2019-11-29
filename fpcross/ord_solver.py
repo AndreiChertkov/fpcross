@@ -12,6 +12,12 @@ class OrdSolver(object):
     1 Initialize class instance with time grid and solver options.
     2 Call "init" with the right hand side.
     3 Call "comp" to obtain the solution for given initial condition.
+
+    TODO Add copy method.
+
+    TODO Add opts object and move with_y0 to opts.
+
+    TODO Add support to not multiple initial conditions.
     '''
 
     def __init__(self, TG, kind='rk4', is_rev=False):
@@ -38,7 +44,7 @@ class OrdSolver(object):
         if TG.d != 1 or TG.k != 'u':
             raise ValueError('Invalid time grid (should be 1-dim. uniform).')
 
-        if kind != 'eul' and kind != 'rk4' and kind != 'ivp':
+        if not kind in ['eul', 'rk4', 'ivp']:
             raise ValueError('Invalid solver type.')
 
         self.TG = TG
@@ -108,7 +114,7 @@ class OrdSolver(object):
 
         t1 = self.TG.l1 if not self.is_rev else self.TG.l2
         t2 = self.TG.l2 if not self.is_rev else self.TG.l1
-        h0 = self.TG.h0 if not self.is_rev else self.TG.h0 * -1.
+        h0 = self.TG.h0 if not self.is_rev else self.TG.h0 * (-1.)
 
         t = t1
         y = y0.copy()
@@ -138,7 +144,7 @@ class OrdSolver(object):
                 k2 = h0 * func(y + 0.5 * k1, t + 0.5 * h0)
                 k3 = h0 * func(y + 0.5 * k2, t + 0.5 * h0)
                 k4 = h0 * func(y + k3, t + h0)
-                y+= (k1 + k2 + k2 + k3 + k3 + k4) / 6.
+                y+= (k1 + 2 * (k2 + k3) + k4) / 6.
 
             t+= h0
 

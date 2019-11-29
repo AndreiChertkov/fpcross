@@ -11,7 +11,7 @@ from .utils import tms
 
 class Func(object):
     '''
-    Class for the fast multidimensional function interpolation
+    Class for the fast interpolation of multidimensional function
     by Chebyshev polynomials in the dense (numpy) or sparse
     (tensor train (TT) with cross approximation) format
     using Fast Fourier Transform (FFT).
@@ -110,7 +110,7 @@ class Func(object):
         **kwargs - some arguments from Func.__init__
         type: dict
         * These values will replace the corresponding params in the new func.
-        * Is some of args are set, then is_init flag should be set as True.
+        * If some of args are set, then is_init flag should be set as True.
 
         OUTPUT:
 
@@ -248,6 +248,8 @@ class Func(object):
         TODO If Y0 is not set, how select best random value (rank, etc.)?
 
         TODO Set more accurate algorithm for tt-round of initial guess.
+
+        TODO Add catch (we should always remove log file).
         '''
 
         if self.Y is not None:
@@ -256,9 +258,7 @@ class Func(object):
         if self.f is None:
             raise ValueError('Function is not set. Can not prepare.')
 
-        if self.with_tt: # TT-format
-            log_file = './__tt-cross_tmp.txt'
-
+        if self.with_tt:
             def func(ind):
                 t = tpc()
                 X = self.SG.comp(ind)
@@ -274,17 +274,18 @@ class Func(object):
             def func_s(ind):
                 ind = ind.T.astype(int)
                 Y = np.zeros(ind.shape[1])
-                for i in range(ind.shape[1]):
-                    nm = '-'.join([str(j) for j in ind[:, i]])
+                for j in range(ind.shape[1]):
+                    nm = '-'.join([str(i) for i in ind[:, j]])
                     if nm in self.Y_hst:
                         y = self.Y_hst[nm]
                     else:
-                        y = func(ind[:, i].reshape(-1, 1))[0]
+                        y = func(ind[:, j].reshape(-1, 1))[0]
                         self.Y_hst[nm] = y
-                    Y[i] = y
+                    Y[j] = y
                 return Y
 
             f = func_s if self.opts['with_Y_hst'] else func_v
+            log_file = './__tt-cross_tmp.txt'
 
             if self.opts['Y0'] is None:
                 Z = tt.rand(self.SG.n, self.SG.d, 1)
@@ -325,7 +326,7 @@ class Func(object):
             log.close()
             os.remove(log_file)
 
-        else:            # NP-format
+        else:
             self.tms['func'] = tpc()
 
             if self.opts['is_f_with_i']:
@@ -338,7 +339,8 @@ class Func(object):
 
             self.Y = Y.reshape(self.SG.n, order='F')
 
-            self.tms['func'] = (tpc() - self.tms['func']) / X.shape[1]
+            self.res['evals'] = X.shape[1]
+            self.tms['func'] = (tpc() - self.tms['func']) / self.res['evals']
 
     @tms('calc')
     def calc(self):
@@ -356,7 +358,7 @@ class Func(object):
         if self.Y is None:
             raise ValueError('Train data is not set. Can not build interpolation coefficients. Call "prep" before.')
 
-        if self.with_tt: # TT-format
+        if self.with_tt:
             G = tt.tensor.to_list(self.Y)
 
             for i in range(self.SG.d):
@@ -370,7 +372,7 @@ class Func(object):
             self.A = tt.tensor.from_list(G)
             self.A = self.A.round(self.eps)
 
-        else:            # NP-format
+        else:
             self.A = self.Y.copy()
 
             for i in range(self.SG.d):
@@ -420,7 +422,7 @@ class Func(object):
         Y = np.ones(X.shape[1]) * float(z)
         T = polycheb(X, np.max(self.SG.n), self.SG.l)
 
-        if self.with_tt: # TT-format
+        if self.with_tt:
             G = tt.tensor.to_list(self.A)
 
             for j in range(X.shape[1]):
@@ -434,7 +436,7 @@ class Func(object):
 
                 Y[j] = Q[0, 0]
 
-        else:            # NP-format
+        else:
             for j in range(X.shape[1]):
                 if self.SG.is_out(X[:, j]):
                     continue

@@ -15,3 +15,5 @@ from .check import Check
 #      type: list/arr [5] of int).
 
 # TODO Add convention about init/prep/calc to the README file.
+
+# TODO Add kwargs support (not only opts) for init functions in all classes.
