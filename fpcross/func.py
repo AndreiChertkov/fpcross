@@ -130,6 +130,7 @@ class Func(object):
         if not is_init:
             FN.f = self.f
             FN.Y = self.Y.copy() if self.Y is not None else None
+            FN.Y_hst = self.Y_hst.copy() if self.Y_hst is not None else None
             FN.A = self.A.copy() if self.A is not None else None
 
             FN.tms = self.tms.copy() if self.tms is not None else None
@@ -188,6 +189,12 @@ class Func(object):
             type1: None
             type2: ndarray [*n] of float
             type3: TT-tensor [*n] of float
+        fld : with_Y_hst - flag:
+                True  - function construction in the scalar fassion
+                        (calculated values are kept in the hash and reused)
+                False - vectorized function calls will be used
+            default: False
+            type: bool
         * Only provided fields will be used. Values of the missed fields will
         * not be changed and will be the same as after the previous call
         * or will be equal to the corresponding default values.
@@ -203,6 +210,7 @@ class Func(object):
 
         self.f = f
         self.Y = Y
+        self.Y_hst = {}
         self.A = None
 
         self.tms = {
@@ -225,6 +233,7 @@ class Func(object):
         set_opt('kickrank', 1)
         set_opt('rf', 2)
         set_opt('Y0', None)
+        set_opt('with_Y_hst', False)
 
     @tms('prep')
     def prep(self):
@@ -251,13 +260,31 @@ class Func(object):
             log_file = './__tt-cross_tmp.txt'
 
             def func(ind):
-                ind = ind.T.astype(int)
                 t = tpc()
                 X = self.SG.comp(ind)
                 Y = self.f(X, ind) if self.opts['is_f_with_i'] else self.f(X)
                 self.tms['func']+= tpc() - t
                 self.res['evals']+= X.shape[1]
                 return Y
+
+            def func_v(ind):
+                ind = ind.T.astype(int)
+                return func(ind)
+
+            def func_s(ind):
+                ind = ind.T.astype(int)
+                Y = np.zeros(ind.shape[1])
+                for i in range(ind.shape[1]):
+                    nm = '-'.join([str(j) for j in ind[:, i]])
+                    if nm in self.Y_hst:
+                        y = self.Y_hst[nm]
+                    else:
+                        y = func(ind[:, i].reshape(-1, 1))[0]
+                        self.Y_hst[nm] = y
+                    Y[i] = y
+                return Y
+
+            f = func_s if self.opts['with_Y_hst'] else func_v
 
             if self.opts['Y0'] is None:
                 Z = tt.rand(self.SG.n, self.SG.d, 1)
@@ -276,7 +303,7 @@ class Func(object):
                 stdout0 = sys.stdout
                 sys.stdout = log
 
-                self.Y = cross(func, Z, eps=self.eps,
+                self.Y = cross(f, Z, eps=self.eps,
                     nswp=self.opts['nswp'], kickrank=self.opts['kickrank'],
                     rf=self.opts['rf'], verbose=True
                 )

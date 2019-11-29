@@ -182,6 +182,8 @@ class Solver(object):
         self.opts = {}
         self.init()
 
+        self.xxx = []
+
     def save(self, fpath):
         data = {
             'opts': self.opts,
@@ -497,10 +499,12 @@ class Solver(object):
             type: ndarray [number of points] of float
             '''
 
-            TG = Grid(d=1, n=2, l=[self.t - self.TG.h0, self.t], k='u')
+            TG = Grid(d=1, n=20, l=[self.t - self.TG.h0, self.t], k='u')
             kd = 'eul' if self.ord == 1 else 'rk4'
             X0 = OrdSolver(TG, kind=kd, is_rev=True).init(self.MD.f0).comp(X)
+            _t = time.perf_counter()
             w0 = FN.comp(X0)
+            self.xxx.append(time.perf_counter()-_t)
             y0 = np.vstack([X0, w0])
             y1 = OrdSolver(TG, kind=kd).init(func).comp(y0)
             w1 = y1[-1, :]
@@ -516,8 +520,13 @@ class Solver(object):
         self.FN.A = mult * self.FN.A
         FN = self.FN.copy()
 
-        opts={ 'nswp': 200, 'kickrank': 1, 'rf': 2, 'Y0': self.W0 }
-        self.FN.init(step, opts=opts).prep()
+        self.FN.init(step, opts={
+            'nswp': 200,
+            'kickrank': 1,
+            'rf': 2,
+            'Y0': self.W0,
+            #p'with_Y_hst': True,
+        }).prep()
         self.res_conv = self.FN.res.copy()
 
         self.W0 = self.FN.Y.copy()
@@ -537,6 +546,11 @@ class Solver(object):
 
         if self.opts['f_post'] is not None:
             self.opts['f_post'](self)
+
+        self.FN.calc()                   # REMOVE
+        mult = 1. / self.FN.comp_int()
+        self.FN.Y = mult * self.FN.Y
+        self.FN.A = mult * self.FN.A
 
         self.exam(self.res)
         if is_hst:
