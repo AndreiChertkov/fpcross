@@ -41,7 +41,7 @@ class Func(object):
     opts - computation options (max ranks, initial guess, etc.)
     type: dict
 
-    tms - saved durations of the main operations
+    tms - saved durations (in seconds) of the main operations
     type: dict
     fld : prep - construction of the function values on the Chebyshev grid
         type: float >= 0
@@ -58,6 +58,8 @@ class Func(object):
     err - abs. value of the relative error of result for some non grid points
     type: np.ndarray [number of test points] of float >= 0.
     * Is calculated in self.test.
+
+    TODO Add computation of compression TT-factors.
     '''
 
     def __init__(self, SG, eps=1.E-6, with_tt=False):
@@ -408,7 +410,8 @@ class Func(object):
 
         TODO Add support for 1D input.
 
-        TODO Check if correct calculate Cheb. pol. until max(n) for all dims.
+        TODO Check if correct calculate Cheb. pol. until max(n) for all dims
+             (for the case of non symmetric grid).
         '''
 
         if self.A is None:
@@ -472,7 +475,7 @@ class Func(object):
         if not self.SG.is_sym():
             raise ValueError('Can integrate only for symmetric spatial grid.')
 
-        if self.with_tt: # TT-format
+        if self.with_tt:
             G = tt.tensor.to_list(self.A)
             v = np.array([[1.]])
 
@@ -488,7 +491,7 @@ class Func(object):
 
             v = v[0, 0]
 
-        else:            # NP-format
+        else:
             v = self.A.copy()
 
             for k in range(self.SG.d):
@@ -500,7 +503,7 @@ class Func(object):
 
         return v
 
-    def info(self, n_test=None, is_test_u=False, is_ret=False):
+    def info(self, n_test=None, is_test_u=False, is_test_abs=False, is_ret=False):
         '''
         Present info about interpolation result, including error check.
 
@@ -522,6 +525,11 @@ class Func(object):
         * used for the test due to rounding of the d-root and using of the only
         * inner grid points.
 
+        is_test_abs - flag:
+            True  - absolute error will be calculated while error check
+            False - relative error will be calculated while error check
+        type: bool
+
         is_ret - flag:
             True  - return string info
             False - print string info
@@ -531,14 +539,20 @@ class Func(object):
 
         s - (if is_ret) string with info
         type: str
+
+        TODO Set more compact output.
+
+        TODO Add more info about coeff. tensor A (ranks, etc.).
+
+        TODO Add more info about computations (compression factors, etc).
         '''
 
         if self.A is not None and self.f is not None and n_test:
-            self.test(n_test, is_test_u)
+            self.test(n_test, is_test_u, is_test_abs)
 
         s = '------------------ Function  \n'
         s+= 'Format           : %1dD, '%self.SG.d
-        s+= 'TT, eps= %8.2e\n'%self.eps if self.with_tt else 'NP\n'
+        s+= 'TT, eps= %8.2e\n'%self.eps if self.with_tt else 'NP'
 
         if True:
             s+= '--> Time (sec.)  |       \n'
@@ -578,7 +592,7 @@ class Func(object):
             return s
         print(s[:-1])
 
-    def test(self, n=100, is_u=False):
+    def test(self, n=100, is_u=False, is_abs=False):
         '''
         Calculate interpolation error on a set of random (from the uniform
         distribution) or uniform points with proper limits.
@@ -593,6 +607,11 @@ class Func(object):
             False - random points will be used
         type: bool
 
+        is_abs - flag:
+            True  - absolute error will be calculated
+            False - relative error will be calculated
+        type: bool
+
         OUTPUT:
 
         err - absolute value of relative error for the generated random points
@@ -601,7 +620,7 @@ class Func(object):
         * for the test due to rounding of the d-root and using of the only
         * inner grid points, hence number of points <= n.
 
-        TODO Add support for absolute error.
+        TODO Add error comment for absolute error.
 
         TODO Check that number of points is > 0 for is_u case.
         '''
@@ -617,9 +636,13 @@ class Func(object):
         else:
             X = self.SG.rand(n)
 
-        u = self.f(X)
-        v = self.comp(X)
-        self.err = np.abs((u - v) / u)
+        v_real = self.f(X)
+        v_calc = self.comp(X)
+
+        if is_abs:
+            self.err = np.abs(v_calc - v_real)
+        else:
+            self.err = np.abs((v_calc - v_real) / v_real)
 
         return self.err
 
@@ -709,6 +732,8 @@ class Func(object):
         on the interval (-1, 1).
 
         It can find integrals for several functions on the one call.
+
+        WARNING This method is valid only for symmetric grids.
 
         INPUT:
 

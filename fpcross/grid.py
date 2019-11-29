@@ -426,17 +426,15 @@ class Grid(object):
 
         is_square = self.is_square()
 
-        s = '------------------ Grid'
-        s+= '\n'
+        s = '------------------ Grid\n'
 
         if self.k == 'u':
-            s+= 'Kind             : Uniform'
+            s+= 'Kind             : Uniform\n'
         if self.k == 'c':
-            s+= 'Kind             : Chebyshev'
+            s+= 'Kind             : Chebyshev\n'
         s+= '\n'
 
-        s+= 'Dimensions       : %-2d'%self.d
-        s+= '\n'
+        s+= 'Dimensions       : %-2d\n'%self.d
 
         s+= '%s             : '%('Mean' if not is_square else '    ')
         s+= 'Poi %-3d | '%self.n0
@@ -455,9 +453,11 @@ class Grid(object):
                 s+= 'Min %-6.3f | '%l[0]
                 s+= 'Max %-6.3f | '%l[1]
 
+        if not s.endswith('\n'):
+            s+= '\n'
         if is_ret:
-            return s + '\n'
-        print(s)
+            return s
+        print(s[:-1])
 
     def plot(self, I=None, n=None, x0=None):
         '''

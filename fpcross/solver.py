@@ -71,14 +71,19 @@ class Solver(object):
         type1: list [0]
         type2: list [opts.n_hst] of float > 0
         * Is empty list (type1) if flag with_tt is not set.
-    fld : cmp_calc - relative number of points used for drift construction
+    fld : cmp_calc - inverse to relative number of points used
+                     for drift construction
         type: list [opts.n_hst] of float, > 0
         * This is the calc. economy due to the cross approximation
-        * (we calculate only portion cmp_calc of all tensor elements).
-    fld : cmp_size - relative number of items for the TT-cores
+        * (we calculate only portion 1/cmp_calc of all tensor elements,
+        * so this value is full-tensor-size / func-calls, and for the case
+        * of "scalar" func-callc it is >= 1).
+    fld : cmp_size - inverse to relative number of items for the TT-cores
         type: list [opts.n_hst] of float, > 0
         * This is the compression factor due to the tt-format
-        * (we keep in memory only portion cmp_size of all tensor elements).
+        * (we keep in memory only portion 1/cmp_size of all tensor elements,
+        * so this value is full-tensor-size / tt_cores_size, and is >= 1
+        * for the case of real compression).
     fld : err_real - errors vs analytic (real) solution
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
@@ -90,14 +95,18 @@ class Solver(object):
     fld : err_dert - approximated time derivative of the solution (d r / dt)
                      (norm of the derivative devided by the norm of solution)
         type: list [opts.n_hst] of float, >= 0
+        * Derivative is calculated as (r_new - r_old) / h.
+        * We expects that this value is related to the rhs of the PDF and
+        * correlates with the real solution error.
     fld : err_rhsn - norm of the rhs devided by the norm of solution
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if flag with_rhs is not set.
+        * We expects that this value  correlates with the real solution error.
 
     res - dictionary with saved values from each time step
           * It has the same fields as hst, but without
-          * T, R, err_real, err_stat and err_rhsn.
+          * R, err_real, err_stat and err_rhsn.
 
     tms - saved durations (in seconds) of the main operations
     type: dict
@@ -105,7 +114,7 @@ class Solver(object):
         type: float, >= 0
     fld : prep - time spent to prepare required matrices, etc.
         type: float, >= 0
-    fld : calc - time spent to perform calculations (init+diff+conv+post+last)
+    fld : calc - time spent to perform the calculations
         type: float, >= 0
     fld : calc_init - time to perform operations before the first time step
         type: float, >= 0
@@ -119,6 +128,8 @@ class Solver(object):
         type: float, >= 0
     fld : calc_last - time to perform operations after the last time step
         type: float, >= 0
+
+    TODO Replace hst.rnk_mean by its computation from hst.rnk_list.
     '''
 
     def __init__(self, TG, SG, MD, eps=1.E-6, ord=2, with_tt=False):
@@ -159,16 +170,16 @@ class Solver(object):
         '''
 
         if TG.d != 1 or TG.k != 'u':
-            raise ValueError('Invalid time grid (should be 1-dim. uniform).')
+            raise ValueError('Invalid time grid (should be one-diminsional uniform grid).')
 
         if SG.k != 'c' or not SG.is_square():
-            raise ValueError('Invalid spatial grid (should be square Cheb.).')
+            raise ValueError('Invalid spatial grid (should be square Chebyshev grid).')
 
         if not isinstance(eps, (int, float)) or eps < 1.E-20:
-            raise ValueError('Invalid accuracy parameter (should be >= 1E-20).')
+            raise ValueError('Invalid accuracy parameter (should be float >= 1E-20).')
 
         if not ord in [1, 2]:
-            raise ValueError('Invalid order parameter (should be 1 or 2).')
+            raise ValueError('Invalid order parameter (should be equal to 1 or 2).')
 
         self.TG = TG
         self.SG = SG
@@ -182,9 +193,23 @@ class Solver(object):
         self.opts = {}
         self.init()
 
-        self.xxx = []
-
     def save(self, fpath):
+        '''
+        Save solver to file.
+
+        INPUT:
+
+        fpath - absolute or relative path to the file
+        type: str
+
+        TODO Add file extension check.
+
+        TODO Save also grids, model etc (add to_dict method to the
+             corresponding classes).
+
+        TODO Add try block.
+        '''
+
         data = {
             'opts': self.opts,
             'hst': self.hst,
@@ -197,6 +222,21 @@ class Solver(object):
             pickle.dump(data, f)
 
     def load(self, fpath):
+        '''
+        Load solver from the file.
+
+        INPUT:
+
+        fpath - absolute or relative path to the file
+        type: str
+
+        TODO Add file extension check.
+
+        TODO Add try block.
+
+        TODO Add aufo keys extraction (in the loop).
+        '''
+
         with open(fpath, 'rb') as f:
             data = pickle.load(f)
 
@@ -217,16 +257,16 @@ class Solver(object):
         opts - dictionary with optional parameters
         type: dict
         fld : n_hst - number of points for history
-            default: 10
+            default: min(10, number_of_time_poins)
             type: int, >= 0, <= number_of_time_poins
-            * Ranks, errors, etc. will be saved for related time moments.
+            * Errors will be computed and saved for related time moments.
         fld : with_r_hst - flag:
-                True  - solution will be saved to history on t_hst steps
+                True  - solution will be saved to history on hist. steps
                 False - solution will not be saved to history
             default: False
             type: bool
         fld : with_rhs - flag:
-                True  - the rhs of the equation will be calc. on t_hst steps
+                True  - the rhs of the equation will be calc. on hist. steps
                 False - the rhs of the equation will not be calculated
             default: False
             type: bool
@@ -235,11 +275,11 @@ class Solver(object):
             default: None
             type: function
         fld : f_post - function that will be called after each step
-                       with self argument (after self.calc_post)
+                       with self argument (after not hst part of self.calc_post)
             default: None
             type: function
-        fld : f_post_hst - function that will be called after each step in hst
-                       with self argument (after self.calc_post)
+        fld : f_post_hst - function that will be called after each hst step
+                       with self argument (after self.calc_post and f_post)
             default: None
             type: function
         * Only provided fields will be used. Values of the missed fields will
@@ -258,20 +298,14 @@ class Solver(object):
             elif not name in self.opts:
                 self.opts[name] = dflt
 
-        set_opt('n_hst', 10)
+        set_opt('n_hst', np.min(10, self.TG.n0))
         set_opt('with_r_hst', False)
         set_opt('with_rhs', False)
         set_opt('f_prep', None)
         set_opt('f_post', None)
         set_opt('f_post_hst', None)
 
-        if self.opts['n_hst']:
-            self.opts['n_hst'] = int(self.opts['n_hst'])
-            self.opts['t_hst'] = int(self.TG.n0 / self.opts['n_hst'])
-        else:
-            self.opts['n_hst'] = 0
-            self.opts['t_hst'] = 0.
-
+        self.opts['n_hst'] = int(self.opts['n_hst']) or 0
         self.opts['with_r_hst'] = bool(self.opts['with_r_hst'])
         self.opts['with_rhs'] = bool(self.opts['with_rhs'])
 
@@ -329,6 +363,7 @@ class Solver(object):
         type: fpcross.Solver
 
         TODO Check usage of J matrix.
+
         TODO Add more accurate J matrix construction.
         '''
 
@@ -399,7 +434,6 @@ class Solver(object):
         self.FN.init(self.MD.r0).prep()
         self.W0 = self.FN.Y.copy()
         self.FN0 = self.FN.copy()
-        self.msg = None
 
     @tms('calc_prep', with_list=True)
     def calc_prep(self):
@@ -541,7 +575,7 @@ class Solver(object):
         TODO Add initial guess r to rt and maybe rs.
         '''
 
-        t_hst = self.opts['t_hst']
+        t_hst = int(self.TG.n0/self.opts['n_hst']) if self.opts['n_hst'] else 0.
         is_hst = t_hst and (self.m % t_hst == 0 or self.m == self.TG.n0 - 1)
 
         if self.opts['f_post'] is not None:

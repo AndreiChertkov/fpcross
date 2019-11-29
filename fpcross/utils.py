@@ -21,6 +21,16 @@ def tms(name, with_list=False):
     * Will return class instance (not result of the decorated function!!!)
     * for the functions with special names: "init", "prep" and "calc".
 
+    INPUT:
+
+    name - name of the operation
+    type: str
+
+    with_list - flag:
+        True  - duration will be also saved to the list in tms_list if exists
+        False - duration will not be saved to the list
+    type: bool
+
     TODO Add check that tms and tms_list are dicts.
     TODO Add doc for tms_list.
     '''
