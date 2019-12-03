@@ -290,6 +290,8 @@ class Solver(object):
 
         SL - self
         type: fpcross.Solver
+
+        TODO Check that f_prep, f_post and f_post_hst are functions.
         '''
 
         def set_opt(name, dflt=None):
@@ -298,7 +300,7 @@ class Solver(object):
             elif not name in self.opts:
                 self.opts[name] = dflt
 
-        set_opt('n_hst', np.min(10, self.TG.n0))
+        set_opt('n_hst', np.min([10, self.TG.n0]))
         set_opt('with_r_hst', False)
         set_opt('with_rhs', False)
         set_opt('f_prep', None)
@@ -350,7 +352,7 @@ class Solver(object):
             'err_dert': [],
         }
 
-        self.res_conv = {}
+        self.res_conv = []
 
     @tms('prep')
     def prep(self):
@@ -486,6 +488,9 @@ class Solver(object):
         TODO Try initial guess in the form of the Euler solution?
 
         TODO Check various numbers of points for ODE-solvers.
+
+        TODO df/dx is not matrix, but vector in the model. Add more correct
+             name for the corresponding function.
         '''
 
         def func(y, t):
@@ -533,12 +538,10 @@ class Solver(object):
             type: ndarray [number of points] of float
             '''
 
-            TG = Grid(d=1, n=20, l=[self.t - self.TG.h0, self.t], k='u')
+            TG = Grid(d=1, n=2, l=[self.t - self.TG.h0, self.t], k='u')
             kd = 'eul' if self.ord == 1 else 'rk4'
             X0 = OrdSolver(TG, kind=kd, is_rev=True).init(self.MD.f0).comp(X)
-            _t = time.perf_counter()
             w0 = FN.comp(X0)
-            self.xxx.append(time.perf_counter()-_t)
             y0 = np.vstack([X0, w0])
             y1 = OrdSolver(TG, kind=kd).init(func).comp(y0)
             w1 = y1[-1, :]
@@ -548,20 +551,22 @@ class Solver(object):
 
             return w1
 
-        self.FN.calc()
-        mult = 1. / self.FN.comp_int()
-        self.FN.Y = mult * self.FN.Y
-        self.FN.A = mult * self.FN.A
+        # self.FN.calc()
+        # mult = 1. / self.FN.comp_int()
+        # self.FN.Y = mult * self.FN.Y
+        # self.FN.A = mult * self.FN.A
         FN = self.FN.copy()
+        FN.calc()
 
         self.FN.init(step, opts={
             'nswp': 200,
             'kickrank': 1,
             'rf': 2,
             'Y0': self.W0,
-            #p'with_Y_hst': True,
+            #'with_Y_hst': True,
         }).prep()
-        self.res_conv = self.FN.res.copy()
+
+        self.res_conv.append(deepcopy(self.FN.res))
 
         self.W0 = self.FN.Y.copy()
 
@@ -581,7 +586,7 @@ class Solver(object):
         if self.opts['f_post'] is not None:
             self.opts['f_post'](self)
 
-        self.FN.calc()                   # REMOVE
+        self.FN.calc()                   # REMOVE ???
         mult = 1. / self.FN.comp_int()
         self.FN.Y = mult * self.FN.Y
         self.FN.A = mult * self.FN.A
@@ -759,7 +764,7 @@ class Solver(object):
             res['rnk_list'] = self.FN.Y.r.copy()
             res['rnk_mean'] = self.FN.Y.erank
 
-            res['cmp_calc'] = self.res_conv['evals']
+            res['cmp_calc'] = self.res_conv['evals'] # ZZZ
             for i in range(self.SG.d):
                 res['cmp_calc']/= self.SG.n[i]
             res['cmp_calc'] = 1. / res['cmp_calc']

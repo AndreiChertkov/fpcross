@@ -59,7 +59,7 @@ class Func(object):
     type: np.ndarray [number of test points] of float >= 0.
     * Is calculated in self.test.
 
-    TODO Add computation of compression TT-factors.
+    TODO Add computation of compression TT-factors to res.
     '''
 
     def __init__(self, SG, eps=1.E-6, with_tt=False):
