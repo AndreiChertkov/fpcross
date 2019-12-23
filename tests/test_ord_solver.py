@@ -3,21 +3,26 @@ import numpy as np
 
 from fpcross import Grid, OrdSolver
 
+
 def func_f0_1d(r, t, r0):
     return r*r
 
+
 def func_rt_1d(t, r0):
     return r0 / (1. - r0 * t)
+
 
 def func_f0_2d(r, t, r0):
     v1 = +4. * t * (r[1, :] - r0[1, :] + 1.)
     v2 = -4. * t * (r[0, :] - r0[0, :])
     return np.vstack([v1, v2])
 
+
 def func_rt_2d(t, r0):
     v1 = np.sin(2. * t * t) + r0[0, :]
     v2 = np.cos(2. * t * t) + r0[1, :] - 1.
     return np.vstack([v1, v2])
+
 
 class TestOrdSolver(unittest.TestCase):
     '''
@@ -70,6 +75,7 @@ class TestOrdSolver(unittest.TestCase):
         e = np.mean(np.abs((r_real - SL.comp(r0)) / r_real))
 
         self.assertTrue(e < 1.E-07)
+
 
 if __name__ == '__main__':
     unittest.main()

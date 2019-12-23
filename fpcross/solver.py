@@ -10,11 +10,12 @@ from copy import deepcopy
 import tt
 
 from . import config
-from . import difscheb
 from . import Grid
 from . import Func
 from . import OrdSolver
+from .mtr import difscheb
 from .utils import tms, PrinterSl
+
 
 class Solver(object):
     '''
@@ -598,7 +599,7 @@ class Solver(object):
         self.FN0 = self.FN.copy()
 
         if not is_hst:
-            self.PR.update()
+            self.PR.refr()
             return
 
         msg = '| At T=%-6.1e : '%self.t + ' ' * 100
@@ -614,7 +615,7 @@ class Solver(object):
         if self.with_tt:
             msg+= ' r=%-6.2e'%self.hst['rnk_mean'][-1]
 
-        self.PR.update(msg)
+        self.PR.refr(msg)
         self.FN0 = self.FN.copy()
 
         if self.opts['f_post_hst'] is not None:

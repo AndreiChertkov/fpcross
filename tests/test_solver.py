@@ -3,6 +3,7 @@ import numpy as np
 
 from fpcross import Grid, Solver, Model
 
+
 class TestSolver(unittest.TestCase):
     '''
     Tests for solver.
@@ -37,6 +38,7 @@ class TestSolver(unittest.TestCase):
         SL.prep()
         SL.calc(dsbl_print=True)
         self.assertTrue(SL.hst['err_real'][-1] < 4.48e-03)
+
 
 if __name__ == '__main__':
     unittest.main()

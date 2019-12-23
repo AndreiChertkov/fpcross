@@ -3,6 +3,7 @@ import numpy as np
 
 from fpcross import Model
 
+
 class TestModel(unittest.TestCase):
     '''
     Tests for the models.
@@ -50,6 +51,7 @@ class TestModel(unittest.TestCase):
         self.assertEqual(MD._D, 0.9)
         np.testing.assert_array_equal(MD._A, A)
         self.assertEqual(MD._s, 2.)
+
 
 if __name__ == '__main__':
     unittest.main()

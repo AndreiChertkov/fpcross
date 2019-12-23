@@ -1,7 +1,9 @@
 import unittest
 import numpy as np
 
-from fpcross import Grid, difscheb, dif1cheb, dif2cheb
+from fpcross import Grid
+from fpcross.mtr import difscheb, dif1cheb, dif2cheb
+
 
 class TestMtrDifscheb(unittest.TestCase):
     '''
@@ -35,6 +37,7 @@ class TestMtrDifscheb(unittest.TestCase):
 
         e = D1 @ D1 - D2
         self.assertTrue(np.max(np.abs(e)) < 1.E-13)
+
 
 if __name__ == '__main__':
     unittest.main()

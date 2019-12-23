@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 
+
 class OrdSolver(object):
     '''
     Class for solution of system of ordinary differential equations (ODE)

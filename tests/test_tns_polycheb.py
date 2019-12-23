@@ -1,7 +1,8 @@
 import unittest
 import numpy as np
 
-from fpcross import polycheb
+from fpcross.tns import polycheb
+
 
 class TestTnsPolycheb(unittest.TestCase):
     '''
@@ -50,6 +51,7 @@ class TestTnsPolycheb(unittest.TestCase):
             [ 1., +1.,  1.],
             [ 1., +1.,  1.],
         ]).T)
+
 
 if __name__ == '__main__':
     unittest.main()

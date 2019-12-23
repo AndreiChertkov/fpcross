@@ -3,6 +3,7 @@ import numpy as np
 
 from fpcross import Grid
 
+
 class TestGrid(unittest.TestCase):
     '''
     Tests for Grid class.
@@ -277,6 +278,7 @@ class TestGrid(unittest.TestCase):
         self.assertTrue(Grid(n=5, l=[[-3., 3.], [-4., 4.]], k='u').is_sym())
         self.assertFalse(Grid(n=5, l=[[-4., 3.], [-2, 2.]], k='u').is_sym())
         self.assertFalse(Grid(n=5, l=[[-2, 2.], [1., 3.]], k='u').is_sym())
+
 
 if __name__ == '__main__':
     unittest.main()

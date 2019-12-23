@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.linalg import toeplitz
 
+
 def difscheb(SG, m):
     '''
     Construct differentiation matrices on the Chebyshev grid
@@ -66,6 +67,7 @@ def difscheb(SG, m):
 
     return tuple(D_list)
 
+
 def dif1cheb(SG):
     '''
     Construct the 1th order differentiation matrix on the Chebyshev grid
@@ -85,6 +87,7 @@ def dif1cheb(SG):
     '''
 
     return difscheb(SG, 1)[0]
+
 
 def dif2cheb(SG):
     '''

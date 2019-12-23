@@ -2,6 +2,7 @@ import types
 import numpy as np
 from importlib import import_module
 
+
 class Model(object):
     '''
     Base (abstract) class for all models of equations.

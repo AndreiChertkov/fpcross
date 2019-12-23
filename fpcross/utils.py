@@ -1,17 +1,18 @@
 import time
 import platform
 from tqdm import tqdm
-from time import perf_counter as tpc
 
 from . import config
 
+
 def ij():
     t = time.strftime('%l:%M%p %Z on %b %d, %Y')
-    print('Start | %s | python %-8s |'%(t, platform.python_version()))
-    print('-'*55)
+    v = platform.python_version()
+    print('Start | %s | python %-8s |\n'%(t, v) + '-'*55)
 
     from IPython.core.display import HTML
     return HTML('<style>%s</style>'%config['css'])
+
 
 def tms(name, with_list=False):
     '''
@@ -37,9 +38,9 @@ def tms(name, with_list=False):
 
     def timer_(f):
         def timer__(self, *args, **kwargs):
-            t = tpc()
+            t = time.perf_counter()
             r = f(self, *args, **kwargs)
-            t = tpc() - t
+            t = time.perf_counter() - t
 
             if True:
                 if hasattr(self, 'tms') and name in self.tms:
@@ -54,6 +55,7 @@ def tms(name, with_list=False):
         return timer__
 
     return timer_
+
 
 class PrinterSl(object):
     '''
@@ -75,11 +77,10 @@ class PrinterSl(object):
 
         return self
 
-    def update(self, msg=None):
-        if self.with_print and msg:
-            self.tqdm.set_postfix_str(msg, refresh=True)
-
+    def refr(self, msg=None):
         if self.with_print:
+            if msg:
+                self.tqdm.set_postfix_str(msg, refresh=True)
             self.tqdm.update(1)
 
         return self

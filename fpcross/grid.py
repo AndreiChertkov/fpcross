@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 class Grid(object):
     '''
     Class for construction and representation of the

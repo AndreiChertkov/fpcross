@@ -3,21 +3,27 @@ import numpy as np
 
 from fpcross import Grid, Func
 
+
 def func_1d(x):
     return 2.*np.sin(np.pi * x[0, ])
+
 
 def func_2d(x):
     return 2.*np.sin(np.pi * x[0, ]) + np.exp(-x[1, ])
 
+
 def func_3d(x):
     return 2.*np.sin(np.pi * x[0, ]) + np.exp(-x[1, ]) + x[2, ]/2.
+
 
 def func_4d(x):
     return 2.*np.sin(np.pi * x[0, ]) + np.exp(-x[1, ]) + x[2, ]/2. * x[3, ]**2
 
+
 def func_for_int(X, d, a=2.):
     r = np.exp(-np.sum(X*X, axis=0) / a) / (np.pi * a)**(d/2)
     return r.reshape(-1)
+
 
 class TestFunc(unittest.TestCase):
     '''
@@ -157,6 +163,7 @@ class TestFunc(unittest.TestCase):
 
         e = np.abs(1. - FN.comp_int()) / np.abs(1.)
         self.assertTrue(e < 6.0E-7)
+
 
 if __name__ == '__main__':
     unittest.main()

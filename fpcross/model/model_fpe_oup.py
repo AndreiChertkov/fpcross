@@ -3,6 +3,7 @@ from scipy.linalg import solve_lyapunov
 
 from .model import Model as ModelBase
 
+
 class Model(ModelBase):
 
     def name(self):

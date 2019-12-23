@@ -6,8 +6,9 @@ from time import perf_counter as tpc
 import tt
 from tt.cross.rectcross import cross
 
-from . import polycheb
+from .tns import polycheb
 from .utils import tms
+
 
 class Func(object):
     '''

@@ -2,6 +2,7 @@ import numpy as np
 
 from .model import Model as ModelBase
 
+
 class Model(ModelBase):
 
     def name(self):

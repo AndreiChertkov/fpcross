@@ -8,6 +8,7 @@ from . import config
 from . import Grid
 from . import Solver
 
+
 class Check(object):
     '''
     Class for multiple computations and result representation.
