@@ -361,6 +361,6 @@ class Model(object):
 
         name = name.replace('-', '_')
 
-        MD = import_module('.models.model_%s'%name, 'fpcross').Model()
+        MD = import_module('.model.model_%s'%name, 'fpcross').Model()
 
         return MD

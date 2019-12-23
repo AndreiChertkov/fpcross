@@ -77,7 +77,7 @@ All examples are performed as interactive browser-based jupyter lab notebooks. T
 
 * [ ] Add advanced tests for all modules.
 
-* [ ] Find a more suitable name for the package and rename it.
+* ~~Find a more suitable name for the package and rename it.~~
 
 * [ ] Add package to pypi.
 
