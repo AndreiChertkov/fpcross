@@ -28,6 +28,7 @@ class Model(object):
                 v = opts.get('dflt')
                 if isinstance(v, types.FunctionType):
                     v = v(kwargs)
+
             setattr(self, '_' + name, v)
 
         return self
@@ -150,7 +151,7 @@ class Model(object):
 
         OUTPUT:
 
-        s - (if is_out) string with info
+        s - (if is_ret) string with info
         type: str
 
         TODO Check replacement for indents.
@@ -168,9 +169,10 @@ class Model(object):
             s = 'Model : %-22s | %s\n'%(name, repr)
             s+= '>>>>>>> Description            : %s'%(desc or '...')
 
-            if not s.endswith('\n'):
-                s+= '\n'
-            return s if is_ret else print(s[:-1])
+            if is_ret:
+                return s + '\n'
+            print(s)
+            return
 
         s_name = r'<div class="head0__name">%s</div>'%name
         s_tags = r' [%s]'%(', '.join(tags)) if len(tags) else ''
@@ -246,7 +248,7 @@ class Model(object):
 
     def f1(self, X, t):
         '''
-        Function f(x, t) / d x.
+        Function d f_i(x, t) / d x_i (i = 1, 2, ..., d).
 
         INPUT:
 
