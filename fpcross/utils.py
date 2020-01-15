@@ -2,7 +2,7 @@ import time
 import platform
 from tqdm import tqdm
 
-from . import config
+from .config import config
 
 
 def ij():

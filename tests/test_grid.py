@@ -4,12 +4,12 @@ import numpy as np
 from fpcross import Grid
 
 
-class TestGrid(unittest.TestCase):
+class TestGrid1d(unittest.TestCase):
     '''
-    Tests for Grid class.
+    Tests for Grid class for the 1d case.
     '''
 
-    def test_1d_init1(self):
+    def test_init1(self):
         n = 3
         l = [-2, 4]
         GR = Grid(n=n, l=l)
@@ -18,7 +18,7 @@ class TestGrid(unittest.TestCase):
         np.testing.assert_array_equal(GR.n, np.array([3]))
         np.testing.assert_almost_equal(GR.l, np.array([[-2., 4.]]))
 
-    def test_1d_init2(self):
+    def test_init2(self):
         n = [3]
         l = np.array([-2, 4])
         GR = Grid(n=n, l=l)
@@ -27,7 +27,7 @@ class TestGrid(unittest.TestCase):
         np.testing.assert_array_equal(GR.n, np.array([3]))
         np.testing.assert_almost_equal(GR.l, np.array([[-2., 4.]]))
 
-    def test_1d_init3(self):
+    def test_init3(self):
         n = 3
         l = np.array([[-2, 4]])
         GR = Grid(n=n, l=l)
@@ -36,7 +36,7 @@ class TestGrid(unittest.TestCase):
         np.testing.assert_array_equal(GR.n, np.array([3]))
         np.testing.assert_almost_equal(GR.l, np.array([[-2., 4.]]))
 
-    def test_1d_init4(self):
+    def test_init4(self):
         n = np.array([3])
         l = np.array([[-2, 4]])
         GR = Grid(n=n, l=l)
@@ -45,7 +45,33 @@ class TestGrid(unittest.TestCase):
         np.testing.assert_array_equal(GR.n, np.array([3]))
         np.testing.assert_almost_equal(GR.l, np.array([[-2., 4.]]))
 
-    def test_2d_init1(self):
+    def test_pars(self):
+        d = 1
+        n = [11]
+        l = [[-4., 6.]]
+        k = 'u'
+        e = 1.E-10
+
+        GR = Grid(d, n, l, k, e)
+
+        np.testing.assert_equal(GR.d, d)
+        np.testing.assert_array_equal(GR.n, n)
+        np.testing.assert_array_equal(GR.l, np.array(l))
+        np.testing.assert_equal(GR.k, k)
+        np.testing.assert_equal(GR.e, e)
+        np.testing.assert_array_equal(GR.h, [1.])
+        np.testing.assert_array_equal(GR.n0, 11)
+        np.testing.assert_equal(GR.l1, -4.)
+        np.testing.assert_equal(GR.l2, +6.)
+        np.testing.assert_equal(GR.h0, +1.)
+
+
+class TestGrid2d(unittest.TestCase):
+    '''
+    Tests for Grid class for the 2d case.
+    '''
+
+    def test_init1(self):
         d = 2
         n = 3
         l = [-2, 4]
@@ -55,7 +81,7 @@ class TestGrid(unittest.TestCase):
         np.testing.assert_array_equal(GR.n, np.array([3, 3]))
         np.testing.assert_almost_equal(GR.l, np.array([[-2., 4.], [-2., 4.]]))
 
-    def test_2d_init2(self):
+    def test_init2(self):
         n = [3, 4]
         l = np.array([-2, 4])
         GR = Grid(n=n, l=l)
@@ -64,7 +90,7 @@ class TestGrid(unittest.TestCase):
         np.testing.assert_array_equal(GR.n, np.array([3, 4]))
         np.testing.assert_almost_equal(GR.l, np.array([[-2., 4.], [-2., 4.]]))
 
-    def test_2d_init3(self):
+    def test_init3(self):
         n = 3
         l = np.array([[-2, 4], [-5, 7]])
         GR = Grid(n=n, l=l)
@@ -73,7 +99,7 @@ class TestGrid(unittest.TestCase):
         np.testing.assert_array_equal(GR.n, np.array([3, 3]))
         np.testing.assert_almost_equal(GR.l, np.array([[-2., 4.], [-5., 7.]]))
 
-    def test_2d_init4(self):
+    def test_init4(self):
         n = np.array([3, 4])
         l = np.array([[-2, 4], [-5, 7]])
         GR = Grid(n=n, l=l)
@@ -82,7 +108,33 @@ class TestGrid(unittest.TestCase):
         np.testing.assert_array_equal(GR.n, np.array([3, 4]))
         np.testing.assert_almost_equal(GR.l, np.array([[-2., 4.], [-5., 7.]]))
 
-    def test_3d_init(self):
+    def test_pars(self):
+        d = 2
+        n = [11, 5]
+        l = [[-4., 6.], [2., 4.]]
+        k = 'u'
+        e = 1.E-10
+
+        GR = Grid(d, n, l, k, e)
+
+        np.testing.assert_equal(GR.d, d)
+        np.testing.assert_array_equal(GR.n, n)
+        np.testing.assert_array_equal(GR.l, np.array(l))
+        np.testing.assert_equal(GR.k, k)
+        np.testing.assert_equal(GR.e, e)
+        np.testing.assert_array_equal(GR.h, [1., 0.5])
+        np.testing.assert_array_equal(GR.n0, 8)
+        np.testing.assert_equal(GR.l1, -1.)
+        np.testing.assert_equal(GR.l2, +5.)
+        np.testing.assert_equal(GR.h0, +0.75)
+
+
+class TestGrid3d(unittest.TestCase):
+    '''
+    Tests for Grid class for the 3d case.
+    '''
+
+    def test_init(self):
         d = 3
         n = np.array([5, 7, 8])
         l = np.array([[-2., 3.], [-4., 5.], [-6., 9.]])
@@ -90,13 +142,39 @@ class TestGrid(unittest.TestCase):
 
         self.assertEqual(
             GR.d, 3
-        )
+            )
         np.testing.assert_array_equal(
             GR.n, np.array([5, 7, 8])
-        )
+            )
         np.testing.assert_almost_equal(
             GR.l, np.array([[-2., 3.], [-4., 5.], [-6., 9.]])
-        )
+            )
+
+    def test_pars(self):
+        d = 3
+        n = [8, 7, 11]
+        l = [[-4., 3.], [-1., 2.], [-5., 5.]]
+        k = 'u'
+        e = 1.E-10
+
+        GR = Grid(d, n, l, k, e)
+
+        np.testing.assert_equal(GR.d, d)
+        np.testing.assert_array_equal(GR.n, n)
+        np.testing.assert_array_equal(GR.l, np.array(l))
+        np.testing.assert_equal(GR.k, k)
+        np.testing.assert_equal(GR.e, e)
+        np.testing.assert_array_equal(GR.h, [1., 0.5, 1. ])
+        np.testing.assert_array_equal(GR.n0, 9)
+        np.testing.assert_equal(GR.l1, -3.3333333333333335)
+        np.testing.assert_equal(GR.l2, +3.3333333333333335)
+        np.testing.assert_equal(GR.h0, +2.5 / 3)
+
+
+class TestGrid(unittest.TestCase):
+    '''
+    Tests for Grid class.
+    '''
 
     def test_init_kind(self):
         d = 2

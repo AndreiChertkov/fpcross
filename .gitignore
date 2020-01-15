@@ -1,66 +1,18 @@
-# ----------------------------------------------------------------------------
-# File with meta information
-
-fpcross.md
-
-# ----------------------------------------------------------------------------
-# Folders with auxiliary untracked information
-
-packages/
-texts/
-tmp/
-
-# ----------------------------------------------------------------------------
-# OS service files
-
 .thumbs.db
 .Thumbs.db
 .DS_Store
-*~
-
-# ----------------------------------------------------------------------------
-# Google drive
-
-Icon?
-
-# ----------------------------------------------------------------------------
-# Python service files
-
+.ipynb_checkpoints
 __pycache__/
+build/
+dist/
+Icon?
+index.md
+package/
+text/
+tmp/
+
+*~
 *synctex.gz*
 *.egg-info/
 *.egg
 *.py[cod]
-.ipynb_checkpoints
-
-# ----------------------------------------------------------------------------
-# Python package service files
-
-build/
-dist/
-
-# ----------------------------------------------------------------------------
-# Latex service files
-
-*.aux
-*.log
-*.out
-*.bbl
-*.blg
-*.fls
-*.fdb_latexmk
-
-# ----------------------------------------------------------------------------
-# Javascript service files
-
-# /dist
-package-lock.json
-node_modules
-.quasar
-
-# ----------------------------------------------------------------------------
-# Various service files
-
-*.sublime*
-.idea/
-.vscode/settings.json
