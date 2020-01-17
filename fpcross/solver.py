@@ -143,7 +143,7 @@ class Solver(object):
 
         SG - one- or multi-dimensional spatial grid
         type: fpcross.Grid
-        * Only Chebyshev "square" grids (each dimension has the same total
+        * Only Chebyshev "sym" grids (each dimension has the same total
         number of points and limits) are supported in the current version.
 
         MD - model for equation with functions and coefficients
@@ -167,14 +167,14 @@ class Solver(object):
             False - dense (numpy, NP) format will be used
         type: bool
 
-        TODO Add support for non square Chebyshev grids.
+        TODO Add support for non sym Chebyshev grids.
         '''
 
         if TG.d != 1 or TG.k != 'u':
             raise ValueError('Invalid time grid (should be one-diminsional uniform grid).')
 
-        if SG.k != 'c' or not SG.is_square():
-            raise ValueError('Invalid spatial grid (should be square Chebyshev grid).')
+        if SG.k != 'c' or not SG.is_sym():
+            raise ValueError('Invalid spatial grid (should be sym Chebyshev grid).')
 
         if not isinstance(eps, (int, float)) or eps < 1.E-20:
             raise ValueError('Invalid accuracy parameter (should be float >= 1E-20).')

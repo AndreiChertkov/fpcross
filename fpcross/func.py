@@ -498,8 +498,8 @@ class Func(object):
         if self.A is None:
             raise ValueError('Interpolation is not done. Can not compute integral of the function. Call "calc" before.')
 
-        if not self.SG.is_sym():
-            raise ValueError('Can integrate only for symmetric spatial grid.')
+        if not self.SG.is_sym_zero():
+            raise ValueError('Can integrate only for symmetric vs zero spatial grid.')
 
         if self.with_tt:
             G = tt.tensor.to_list(self.A)

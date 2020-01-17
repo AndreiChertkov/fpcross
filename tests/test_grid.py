@@ -95,10 +95,10 @@ class TestGrid1d(unittest.TestCase):
         self.assertEqual(GR.l2, +6.)
         self.assertEqual(GR.h0, +1.)
 
-    def test_is_sym(self):
-        self.assertTrue(Grid(n=5, l=[[-3., 3.]], k='u').is_sym())
-        self.assertFalse(Grid(n=5, l=[[-4., 3.]], k='u').is_sym())
-        self.assertFalse(Grid(n=5, l=[[1., 3.]], k='u').is_sym())
+    def test_is_sym_zero(self):
+        self.assertTrue(Grid(n=5, l=[[-3., 3.]], k='u').is_sym_zero())
+        self.assertFalse(Grid(n=5, l=[[-4., 3.]], k='u').is_sym_zero())
+        self.assertFalse(Grid(n=5, l=[[1., 3.]], k='u').is_sym_zero())
 
 
 class TestGrid2d(unittest.TestCase):
@@ -290,29 +290,19 @@ class TestGrid2d(unittest.TestCase):
         np.testing.assert_almost_equal(GR.l2, +4.)
         np.testing.assert_equal(GR.h0, 0.5 * (7./7. + 7./9.))
 
-    def test_square(self):
-        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]])
-        self.assertFalse(GR.is_square())
-
-        GR = Grid(n=[5, 5], l=[[-4., 2.], [-4., 2.]])
-        self.assertTrue(GR.is_square())
-
-        GR = Grid(d=5, n=6, l=[2., 8.])
-        self.assertTrue(GR.is_square())
-
     def test_find_u(self):
         GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='u')
 
-        self.assertEqual(GR.find([-0.9, -1.2]), 2)
-        self.assertEqual(GR.find([+1.9, -0.1]), 13)
-        self.assertEqual(GR.find([11.9, 22.1]), 34)
+        self.assertEqual(GR.find([-0.9, -1.2], is_f=True), 2)
+        self.assertEqual(GR.find([+1.9, -0.1], is_f=True), 13)
+        self.assertEqual(GR.find([11.9, 22.1], is_f=True), 34)
 
     def test_find_c(self):
         GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='c')
 
-        self.assertEqual(GR.find([-0.9, -1.2]), 32)
-        self.assertEqual(GR.find([+1.9, -0.1]), 21)
-        self.assertEqual(GR.find([11.9, 22.1]), 0)
+        self.assertEqual(GR.find([-0.9, -1.2], is_f=True), 32)
+        self.assertEqual(GR.find([+1.9, -0.1], is_f=True), 21)
+        self.assertEqual(GR.find([11.9, 22.1], is_f=True), 0)
 
     def test_is_out_u(self):
         GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='u')
@@ -321,15 +311,28 @@ class TestGrid2d(unittest.TestCase):
         self.assertTrue(GR.is_out([+4., +1.4]))
 
     def test_is_out_c(self):
-        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='u')
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]], k='c')
 
         self.assertFalse(GR.is_out([-1., +1.4]))
         self.assertTrue(GR.is_out([+4., +1.4]))
 
-    def test_is_sym(self):
-        self.assertTrue(Grid(n=5, l=[[-3., 3.], [-4., 4.]], k='u').is_sym())
-        self.assertFalse(Grid(n=5, l=[[-4., 3.], [-2, 2.]], k='u').is_sym())
-        self.assertFalse(Grid(n=5, l=[[-2, 2.], [1., 3.]], k='u').is_sym())
+    def test_sym(self):
+        GR = Grid(n=[5, 7], l=[[-4., 3.], [-1., 2.]])
+        self.assertFalse(GR.is_sym())
+
+        GR = Grid(n=[5, 5], l=[[-4., 3.], [-1., 2.]])
+        self.assertFalse(GR.is_sym())
+
+        GR = Grid(n=[5, 5], l=[[-4., 2.], [-4., 2.]])
+        self.assertTrue(GR.is_sym())
+
+        GR = Grid(d=5, n=6, l=[2., 8.])
+        self.assertTrue(GR.is_sym())
+
+    def test_is_sym_zero(self):
+        self.assertTrue(Grid(n=5, l=[[-3., 3.], [-4., 4.]], k='u').is_sym_zero())
+        self.assertFalse(Grid(n=5, l=[[-4., 3.], [-2, 2.]], k='u').is_sym_zero())
+        self.assertFalse(Grid(n=5, l=[[-2, 2.], [1., 3.]], k='u').is_sym_zero())
 
 
 class TestGrid3d(unittest.TestCase):

@@ -19,8 +19,8 @@ class Grid(object):
     - Call "plot" for plot of some or all grid points (or random points).
     - Call "is_in" to check if given point is inside the grid.
     - Call "is_out" to check if given point is outside the grid.
-    - Call "is_sym" to check if grid is symmetric (l_max = - l_min).
-    - Call "is_square" to check if grid is square.
+    - Call "is_sym" to check if grid is symmetric.
+    - Call "is_sym_zero" to check if grid is symmetric vs zero.
 
     PROPS:
 
@@ -282,7 +282,7 @@ class Grid(object):
 
         return X
 
-    def find(self, x):
+    def find(self, x, is_f=False):
         '''
         Find the nearest flatten grid index for the given spatial point.
 
@@ -290,20 +290,23 @@ class Grid(object):
 
         x - spatial point
         type1: float
-        type2: list [dimensions] of float
-        type3: ndarray [dimensions] of float
+        type2: list/ndarray [dimensions] of float
         * May be float (type1) for the 1-dimensional case.
+
+        is_f - flag:
+            True  - return flatten index
+            False - feturn multi index
+        type: bool
 
         OUTPUT:
 
-        i - flatten index of the grid point.
+        i - (if is_f == False) multi index of the grid point.
+        type: ndarray [dimensions] of int >= 0, i_m[i] < n[i] for each i
+
+        i - (if is_f == True) flatten index of the grid point.
         type: int >= 0 and < prod(n)
 
-        TODO Add flag to select output (flatten or multi index).
-
         TODO Add support for several points at one call.
-
-        TODO Replace default output to multi index (not flatten).
         '''
 
         x = self._prep_poi(x)
@@ -323,7 +326,10 @@ class Grid(object):
         i[i <= 0] = 0
         i[i >= n] = n[i >= n] - 1.
 
-        return self.indf(i)
+        if is_f:
+            i = self.indf(i)
+
+        return i
 
     def indm(self, i_f):
         '''
@@ -353,8 +359,7 @@ class Grid(object):
         INPUT:
 
         i_m - multi index of the grid point
-        type1: list [dimensions] of int >= 0, i_m[i] < n[i] for each i
-        type2: ndarray [dimensions] of int >= 0, i_m[i] < n[i] for each i
+        type: list/ndarray [dimensions] of int >= 0, i_m[i] < n[i] for each i
 
         OUTPUT:
 
@@ -410,7 +415,7 @@ class Grid(object):
         type: str
         '''
 
-        is_square = self.is_square()
+        is_sym = self.is_sym()
 
         s = '------------------ Grid\n'
 
@@ -421,13 +426,13 @@ class Grid(object):
 
         s+= 'Dimensions       : %-2d\n'%self.d
 
-        s+= '%s             : '%('Mean' if not is_square else '    ')
+        s+= '%s             : '%('Mean' if not is_sym else '    ')
         s+= 'Poi %-3d | '%self.n0
         s+= 'Min %-6.3f | '%self.l1
         s+= 'Max %-6.3f | '%self.l2
         s+= '\n'
 
-        if not is_square:
+        if not is_sym:
             for i, [n, l] in enumerate(zip(self.n, self.l)):
                 if i >= 5 and i < self.d - 5:
                     if i == 5:
@@ -442,6 +447,7 @@ class Grid(object):
 
         if is_ret:
             return s
+
         print(s[:-1])
 
     def plot(self, I=None, n=None, x0=None):
@@ -557,27 +563,13 @@ class Grid(object):
 
     def is_sym(self):
         '''
-        Check if grid is symmetric (l_min = - l_max for all dimensions).
+        Check if grid is symmetric (all dimensions are equal in terms of
+        numbers of grid points and limits).
 
         OUTPUT:
 
         res - True if grid is symmetric and False otherwise
         type: bool
-        '''
-
-        return self._is_zero(self.l[:, 0] + self.l[:, 1])
-
-    def is_square(self):
-        '''
-        Check if grid is square (all dimensions are equal in terms of
-        numbers of grid points and limits).
-
-        OUTPUT:
-
-        res - True if grid is square and False otherwise
-        type: bool
-
-        TODO Rename this function.
         '''
 
         n0 = self.n0
@@ -592,6 +584,19 @@ class Grid(object):
 
         return True
 
+    def is_sym_zero(self):
+        '''
+        Check if grid is symmetric vs zero point
+        (l_min = - l_max for all dimensions).
+
+        OUTPUT:
+
+        res - True if grid is symmetric and False otherwise
+        type: bool
+        '''
+
+        return self._is_zero(self.l[:, 0] + self.l[:, 1])
+
     def _prep_poi(self, x=None, is_opt=False):
         '''
         Check and prepare given point:
@@ -602,7 +607,7 @@ class Grid(object):
         x - spatial point
         type1: None
         type2: float
-        type3: list.ndarray [dimensions] of float
+        type3: list/ndarray [dimensions] of float
         * May be float (type2) for the 1-dimensional case.
 
         is_opt - flag:
