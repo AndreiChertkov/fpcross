@@ -455,6 +455,31 @@ class Func(object):
 
         return Y
 
+    def comp_grid(self, SG):
+        '''
+        Compute values of interpolated function on given grid.
+
+        INPUT:
+
+        X - values of the spatial variable
+        type1: list [dimensions, number of points] of float
+        type2: ndarray [dimensions, number of points] of float
+
+        z - value for points outside the interpolation limits
+        type: float
+        * If some points are not belong to the interpolation limits, then
+        * the corresponding values will be set to the z-value.
+
+        OUTPUT:
+
+        Y - approximated values of the function on grid
+        type: ndarray or tt.tensor [*SG.n] of float
+        '''
+
+        Y = 0.
+
+        return Y
+
     def comp_int(self):
         '''
         Compute integral of the function on the full grid domain.
@@ -553,7 +578,7 @@ class Func(object):
 
         s = '------------------ Function  \n'
         s+= 'Format           : %1dD, '%self.SG.d
-        s+= 'TT, eps= %8.2e\n'%self.eps if self.with_tt else 'NP'
+        s+= 'TT, eps= %8.2e\n'%self.eps if self.with_tt else 'NP\n'
 
         if True:
             s+= '--> Time (sec.)  |       \n'

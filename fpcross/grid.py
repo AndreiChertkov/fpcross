@@ -164,7 +164,7 @@ class Grid(object):
         self.h = (self.l[:, 1] - self.l[:, 0]) / (self.n - 1)
 
         # Set mean values for parameters:
-        self.n0 = int(round(np.mean(self.n)))
+        self.n0 = round(np.mean(self.n))
         self.l1 = np.mean(self.l[:, 0])
         self.l2 = np.mean(self.l[:, 1])
         self.h0 = np.mean(self.h)
@@ -175,7 +175,7 @@ class Grid(object):
 
         INPUT:
 
-        **kwargs - some arguments from Grid.__init__
+        kwargs - some arguments from Grid.__init__
         type: dict
         * These values will replace the corresponding params in the new grid.
 
@@ -184,7 +184,7 @@ class Grid(object):
         GR - new class instance with the same parameters
         type: Grid
 
-        TODO Check how .copy function works for 2D array (self.l.copy()).
+        TODO Disable unchanged parameters check while init.
         '''
 
         d = kwargs.get('d', self.d)
@@ -208,16 +208,13 @@ class Grid(object):
         I - indices of grid points
         type1: None
         type2: int
-        type3: list [number of points] of int
-        type4: ndarray [number of points] of int
-        type5: list [dimensions] of int
-        type6: ndarray [dimensions] of int
-        type7: list [dimensions, number of points] of int
-        type8: ndarray [dimensions, number of points] of int
+        type3: list/ndarray [number of points] of int
+        type4: list/ndarray [dimensions] of int
+        type5: list/ndarray [dimensions, number of points] of int
         * If is None (type1), then the full grid will be constructed.
         * Type2 is available only for the case of only one point in 1D.
-        * Type3 and type4 are available only for 1D case. Type5 and type6
-        * are available for only one point in the multidimensional case.
+        * Type3 is available only for 1D case.
+        * Type4 is available for only one point in the multidimensional case.
 
         is_ind - flag:
             True  - only prepared indices of points will be returned
@@ -233,9 +230,11 @@ class Grid(object):
 
         I - (if is_ind == True) prepared indices of grid points
         type: ndarray [dimensions, number of points] of int
+        * If is_inner flag is set, then array has less than "number of points"
 
         X - (if is_ind == False) calculated grid points
         type: ndarray [dimensions, number of points] of float
+        * If is_inner flag is set, then array has less than "number of points"
 
         TODO Maybe raise error for attempt of construction too large full grid.
 
@@ -460,8 +459,7 @@ class Grid(object):
         x0 - special spatial point for present on the plot if required
         type1: None
         type2: float
-        type3: list [dimensions] of float
-        type4: ndarray [dimensions] of float
+        type3: list/ndarray [dimensions] of float
         * May be float (type2) for the 1-dimensional case.
         '''
 
@@ -482,7 +480,7 @@ class Grid(object):
         if x0 is not None:
             plt.scatter(
                 x0[0], x0[1], s=80., c='#8b1d1d', marker='*', alpha=0.9
-            )
+                )
 
         plt.show()
 
@@ -639,7 +637,7 @@ class Grid(object):
 
     def _is_zero(self, r):
         '''
-        Check if given vector is zero (2-norm is less than e).
+        Check if given vector is zero (condition: 2-norm is less than e).
 
         INPUT:
 
