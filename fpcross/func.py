@@ -31,6 +31,17 @@ class Func(object):
 
     PROPS:
 
+    SG - spatial grid for function interpolation
+    type: fpcross.Grid
+
+    eps - is the desired accuracy of the approximation
+    type: float >= 1.E-20
+
+    with_tt - flag:
+        True  - sparse (tensor train, TT) format will be used
+        False - dense (numpy, NP) format will be used
+    type: bool
+
     Y - tensor of function values on nodes of the Chebyshev grid
     type: ndarray or TT-tensor [*(numbers of points)] of float
     * Is set in self.init or calculated in self.prep.
@@ -218,11 +229,11 @@ class Func(object):
 
         self.tms = {
             'init': 0., 'prep': 0., 'calc': 0., 'comp': 0., 'func': 0.
-        }
+            }
         self.res = {
             'evals': 0, 't_func': 0., 'iters': 0,
             'err_rel': 0., 'err_abs': 0., 'erank': 0.
-        }
+            }
         self.err = None
 
         def set_opt(name, dflt=None):
@@ -319,7 +330,7 @@ class Func(object):
 
             log = open(log_file, 'r')
             res = log.readlines()[-1].split('swp: ')[1]
-            self.res['iters'] = int(res.split('/')[0])+1
+            self.res['iters'] = int(res.split('/')[0]) + 1
             res = res.split('er_rel = ')[1]
             self.res['err_rel'] = float(res.split('er_abs = ')[0])
             res = res.split('er_abs = ')[1]
@@ -328,6 +339,13 @@ class Func(object):
             self.res['erank'] = float(res.split('fun_eval')[0])
             log.close()
             os.remove(log_file)
+
+            if self.opts['Y0'] is None:
+                self.err0 = None
+            else:
+                Y1 = self.opts['Y0']
+                Y2 = self.Y
+                self.err0 = (Y1 - Y2).norm() / Y2.norm()
 
         else:
             self.tms['func'] = tpc()
@@ -341,6 +359,13 @@ class Func(object):
                 Y = self.f(X)
 
             self.Y = Y.reshape(self.SG.n, order='F')
+
+            if self.opts['Y0'] is None:
+                self.err0 = None
+            else:
+                Y1 = self.opts['Y0']
+                Y2 = self.Y
+                self.err0 = np.linalg.norm(Y1 - Y2) / np.linalg.norm(Y2)
 
             self.res['evals'] = X.shape[1]
             self.tms['func'] = (tpc() - self.tms['func']) / self.res['evals']
@@ -394,8 +419,7 @@ class Func(object):
         INPUT:
 
         X - values of the spatial variable
-        type1: list [dimensions, number of points] of float
-        type2: ndarray [dimensions, number of points] of float
+        type: list/ndarray [dimensions, number of points] of float
 
         z - value for points outside the interpolation limits
         type: float
@@ -461,19 +485,15 @@ class Func(object):
 
         INPUT:
 
-        X - values of the spatial variable
-        type1: list [dimensions, number of points] of float
-        type2: ndarray [dimensions, number of points] of float
-
-        z - value for points outside the interpolation limits
-        type: float
-        * If some points are not belong to the interpolation limits, then
-        * the corresponding values will be set to the z-value.
+        SG - one- or multi-dimensional spatial grid for values construction
+        type: fpcross.Grid
 
         OUTPUT:
 
         Y - approximated values of the function on grid
         type: ndarray or tt.tensor [*SG.n] of float
+
+        TODO Add code.
         '''
 
         Y = 0.
@@ -594,6 +614,9 @@ class Func(object):
             s+= 'Error (max)      : %8.2e \n'%np.max(self.err)
             s+= 'Error (mean)     : %8.2e \n'%np.mean(self.err)
             s+= 'Error (min)      : %8.2e \n'%np.min(self.err)
+
+        if self.err0 is not None:
+            s+= 'Error (vs Y0)    : %8.2e \n'%self.err0
 
         if self.with_tt:
             with_guess = 'No' if self.opts['Y0'] is None else 'Yes'
