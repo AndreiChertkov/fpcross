@@ -164,7 +164,7 @@ class Grid(object):
         self.h = (self.l[:, 1] - self.l[:, 0]) / (self.n - 1)
 
         # Set mean values for parameters:
-        self.n0 = round(np.mean(self.n))
+        self.n0 = int(round(np.mean(self.n)))
         self.l1 = np.mean(self.l[:, 0])
         self.l2 = np.mean(self.l[:, 1])
         self.h0 = np.mean(self.h)

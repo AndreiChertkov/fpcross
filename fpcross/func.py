@@ -6,7 +6,7 @@ from time import perf_counter as tpc
 import tt
 from tt.cross.rectcross import cross
 
-from .tns import polycheb
+from .cheb import poly
 from .utils import tms
 
 
@@ -424,7 +424,7 @@ class Func(object):
         self.tms['comp'] = tpc()
 
         Y = np.ones(X.shape[1]) * float(z)
-        T = polycheb(X, np.max(self.SG.n), self.SG.l)
+        T = poly(X, np.max(self.SG.n), self.SG.l)
 
         if self.with_tt:
             G = tt.tensor.to_list(self.A)
