@@ -13,7 +13,7 @@ from . import config
 from . import Grid
 from . import Func
 from . import OrdSolver
-from .mtr import difscheb
+from .cheb import difs
 from .utils import tms, PrinterSl
 
 
@@ -372,7 +372,7 @@ class Solver(object):
 
         self.MD.prep()
 
-        self.D1, self.D2 = difscheb(self.SG, 2)
+        self.D1, self.D2 = difs(self.SG, 2)
 
         h0 = self.TG.h0 if self.ord == 1 else self.TG.h0 / 2.
         Dc = self.MD.D()

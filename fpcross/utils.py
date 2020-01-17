@@ -19,6 +19,10 @@ def tms(name, with_list=False):
     @Decorator. Save time (duration) for function call inside the class.
     The corresponding class may have tms dict with the field name (tms[name]),
     which (if exists) will be incremented by duration.
+    The corresponding class may have also tms_list dict with the field name
+    which is list (if exists) of the corresponding values for each call
+    (the new value will be appended).
+
     * Will return class instance (not result of the decorated function!!!)
     * for the functions with special names: "init", "prep" and "calc".
 
@@ -33,7 +37,6 @@ def tms(name, with_list=False):
     type: bool
 
     TODO Add check that tms and tms_list are dicts.
-    TODO Add doc for tms_list.
     '''
 
     def timer_(f):
