@@ -498,7 +498,7 @@ class Func(object):
 
         Y = 0.
 
-        return Y
+        raise NotImplementedError()
 
     def comp_int(self):
         '''
@@ -549,7 +549,7 @@ class Func(object):
 
         return v
 
-    def info(self, n_test=None, is_test_u=False, is_test_abs=False, is_ret=False):
+    def info(self, n_test=None, is_u=False, is_abs=False, is_ret=False):
         '''
         Present info about interpolation result, including error check.
 
@@ -561,9 +561,9 @@ class Func(object):
         * If is set (is not None and is greater than zero) and interpolation is
         * ready, then interpolation result will be checked on a set
         * of random points from the uniform distribution or on a set of
-        * uniform points with proper limits (depends on the value of is_test_u).
+        * uniform points with proper limits (depends on the value of is_u).
 
-        is_test_u - flag:
+        is__u - flag:
             True  - uniform points will be used for error check
             False - random points will be used for error check
         type: bool
@@ -571,7 +571,7 @@ class Func(object):
         * used for the test due to rounding of the d-root and using of the only
         * inner grid points.
 
-        is_test_abs - flag:
+        is_abs - flag:
             True  - absolute error will be calculated while error check
             False - relative error will be calculated while error check
         type: bool
@@ -594,7 +594,7 @@ class Func(object):
         '''
 
         if self.A is not None and self.f is not None and n_test:
-            self.test(n_test, is_test_u, is_test_abs)
+            self.test(n_test, is_u, is_abs)
 
         s = '------------------ Function  \n'
         s+= 'Format           : %1dD, '%self.SG.d
@@ -609,7 +609,7 @@ class Func(object):
 
         if self.A is not None and self.f is not None and n_test:
             s+= '--> Test         |       \n'
-            s+= 'Random points    : %8s   \n'%('No' if is_test_u else 'Yes')
+            s+= 'Random points    : %8s   \n'%('No' if is_u else 'Yes')
             s+= 'Number of points : %8d   \n'%self.err.size
             s+= 'Error (max)      : %8.2e \n'%np.max(self.err)
             s+= 'Error (mean)     : %8.2e \n'%np.mean(self.err)
@@ -635,10 +635,9 @@ class Func(object):
             s+= 'Cross err (rel)  : %8.2e \n'%self.res['err_rel']
             s+= 'Cross err (abs)  : %8.2e \n'%self.res['err_abs']
 
-        if not s.endswith('\n'):
-            s+= '\n'
         if is_ret:
             return s
+
         print(s[:-1])
 
     def test(self, n=100, is_u=False, is_abs=False):
@@ -709,11 +708,9 @@ class Func(object):
         Y - values of function at the nodes of the Chebyshev grid
             x_j = cos(\pi j / (N - 1)), j = 0, 1 ,..., N-1,
             where N is a number of points
-        type1: list [number of points] of float
-        type2: ndarray [number of points] of float
-        type3: list [number of points, number of functions] of float
-        type4: ndarray [number of points, number of functions] of float
-        * It may be of type1 or type2 only in the case of only one function.
+        type1: list/ndarray [number of points] of float
+        type2: list/ndarray [number of points, number of functions] of float
+        * It may be of type1 only in the case of only one function.
 
         OUTPUT:
 
@@ -750,11 +747,9 @@ class Func(object):
         Y - values of function at the nodes of the Chebyshev grid
             x_j = cos(\pi j / (N - 1)), j = 0, 1 ,..., N-1,
             where N is a number of points
-        type1: list [number of points] of float
-        type2: ndarray [number of points] of float
-        type3: list [number of points, number of functions] of float
-        type4: ndarray [number of points, number of functions] of float
-        * It may be of type1 or type2 only in the case of only one function.
+        type1: list/ndarray [number of points] of float
+        type2: list/ndarray [number of points, number of functions] of float
+        * It may be of type1 only in the case of only one function.
 
         OUTPUT:
 
@@ -787,11 +782,9 @@ class Func(object):
         INPUT:
 
         A - interpolation coefficients
-        type1: list [number of points] of float
-        type2: ndarray [number of points] of float
-        type3: list [number of points, number of functions] of float
-        type4: ndarray [number of points, number of functions] of float
-        * It may be of type1 or type2 only in the case of only one function.
+        type1: list/ndarray [number of points] of float
+        type2: list/ndarray [number of points, number of functions] of float
+        * It may be of type1 only in the case of only one function.
 
         OUTPUT:
 

@@ -25,38 +25,42 @@ def func_for_int(X, d, a=2.):
     return r.reshape(-1)
 
 
-class TestFunc(unittest.TestCase):
+class TestFunc1D(unittest.TestCase):
     '''
-    Tests for Func class.
+    Tests for Func class in the 1D case.
     '''
 
     def test_1d_np(self):
         GR = Grid(d=1, n=[50], l=[[-3., 4.]])
-        FN = Func(GR)
-        FN.init(func_1d)
-        FN.prep()
-        FN.calc()
+        FN = Func(GR).init(func_1d).prep().calc()
 
         self.assertTrue(np.max(FN.test(1000, is_u=True)) < 1.0E-12)
 
     def test_1d_tt(self):
         GR = Grid(d=1, n=[50], l=[[-3., 4.]])
-        FN = Func(GR, with_tt=True)
-        FN.init(func_1d)
-        FN.prep()
-        FN.calc()
+        FN = Func(GR, with_tt=True).init(func_1d).prep().calc()
 
         self.assertTrue(np.max(FN.test(1000, is_u=True)) < 1.1E-12)
+
+    def test_int_1d_np(self):
+        GR = Grid(n=61, l=[-10., 10.])
+        FN = Func(GR).init(lambda X: func_for_int(X, 1)).prep().calc()
+
+        e = np.abs(1. - FN.comp_int()) / np.abs(1.)
+        self.assertTrue(e < 5.5E-13)
+
+
+class TestFunc2D(unittest.TestCase):
+    '''
+    Tests for Func class in the 2D case.
+    '''
 
     def test_2d_np(self):
         GR = Grid(d=2, n=[28, 30], l=[
             [-3., 4.],
             [-2., 3.],
         ])
-        FN = Func(GR)
-        FN.init(func_2d)
-        FN.prep()
-        FN.calc()
+        FN = Func(GR).init(func_2d).prep().calc()
 
         self.assertTrue(np.max(FN.test(1000, is_u=True)) < 8.0E-2)
 
@@ -65,12 +69,22 @@ class TestFunc(unittest.TestCase):
             [-3., 4.],
             [-2., 3.],
         ])
-        FN = Func(GR, with_tt=True)
-        FN.init(func_2d)
-        FN.prep()
-        FN.calc()
+        FN = Func(GR, with_tt=True).init(func_2d).prep().calc()
 
         self.assertTrue(np.max(FN.test(1000, is_u=True)) < 8.0E-2)
+
+    def test_int_2d_np(self):
+        GR = Grid(n=[60, 80], l=[-10., 10.])
+        FN = Func(GR).init(lambda X: func_for_int(X, 2)).prep().calc()
+
+        e = np.abs(1. - FN.comp_int()) / np.abs(1.)
+        self.assertTrue(e < 5.1E-13)
+
+
+class TestFunc3D(unittest.TestCase):
+    '''
+    Tests for Func class in the 3D case.
+    '''
 
     def test_3d_np(self):
         GR = Grid(d=3, n=[24, 26, 28], l=[
@@ -78,10 +92,7 @@ class TestFunc(unittest.TestCase):
             [-2., 3.],
             [-1., 1.],
         ])
-        FN = Func(GR)
-        FN.init(func_3d)
-        FN.prep()
-        FN.calc()
+        FN = Func(GR).init(func_3d).prep().calc()
 
         self.assertTrue(np.max(FN.test(1000, is_u=True)) < 5.0E-2)
 
@@ -91,64 +102,13 @@ class TestFunc(unittest.TestCase):
             [-2., 3.],
             [-1., 1.],
         ])
-        FN = Func(GR, with_tt=True)
-        FN.init(func_3d)
-        FN.prep()
-        FN.calc()
+        FN = Func(GR, with_tt=True).init(func_3d).prep().calc()
 
         self.assertTrue(np.max(FN.test(1000, is_u=True)) < 5.0E-2)
 
-    def test_4d_np(self):
-        GR = Grid(d=4, n=[30, 31, 32, 33], l=[
-            [-3., 4.],
-            [-2., 3.],
-            [-1., 1.],
-            [-1., 3.],
-        ])
-        FN = Func(GR)
-        FN.init(func_4d)
-        FN.prep()
-        FN.calc()
-
-        self.assertTrue(np.max(FN.test(1000, is_u=True)) < 3.0E-10)
-
-    def test_4d_tt(self):
-        GR = Grid(d=4, n=[30, 31, 32, 33], l=[
-            [-3., 4.],
-            [-2., 3.],
-            [-1., 1.],
-            [-1., 3.],
-        ])
-        FN = Func(GR, with_tt=True)
-        FN.init(func_4d)
-        FN.prep()
-        FN.calc()
-
-        self.assertTrue(np.max(FN.test(1000, is_u=True)) < 3.0E-10)
-
-    def test_int_1d_np(self):
-        GR = Grid(n=61, l=[-10., 10.])
-        FN = Func(GR).init(lambda X: func_for_int(X, 1))
-        FN.prep()
-        FN.calc()
-
-        e = np.abs(1. - FN.comp_int()) / np.abs(1.)
-        self.assertTrue(e < 5.5E-13)
-
-    def test_int_2d_np(self):
-        GR = Grid(n=[60, 80], l=[-10., 10.])
-        FN = Func(GR).init(lambda X: func_for_int(X, 2))
-        FN.prep()
-        FN.calc()
-
-        e = np.abs(1. - FN.comp_int()) / np.abs(1.)
-        self.assertTrue(e < 5.1E-13)
-
     def test_int_3d_np(self):
         GR = Grid(n=[35, 35, 35], l=[-10., 10.])
-        FN = Func(GR).init(lambda X: func_for_int(X, 3))
-        FN.prep()
-        FN.calc()
+        FN = Func(GR).init(lambda X: func_for_int(X, 3)).prep().calc()
 
         e = np.abs(1. - FN.comp_int()) / np.abs(1.)
         self.assertTrue(e < 6.0E-7)
@@ -157,12 +117,38 @@ class TestFunc(unittest.TestCase):
         return # DRAFT
         GR = Grid(n=[35, 35, 35], l=[-10., 10.])
         FN = Func(GR, eps=1.E-6, with_tt=True)
-        FN.init(lambda X: func_for_int(X, 3))
-        FN.prep()
-        FN.calc()
+        FN.init(lambda X: func_for_int(X, 3)).prep().calc()
 
         e = np.abs(1. - FN.comp_int()) / np.abs(1.)
         self.assertTrue(e < 6.0E-7)
+
+
+class TestFunc4D(unittest.TestCase):
+    '''
+    Tests for Func class in the 4D case.
+    '''
+
+    def test_4d_np(self):
+        GR = Grid(d=4, n=[30, 31, 32, 33], l=[
+            [-3., 4.],
+            [-2., 3.],
+            [-1., 1.],
+            [-1., 3.],
+        ])
+        FN = Func(GR).init(func_4d).prep().calc()
+
+        self.assertTrue(np.max(FN.test(1000, is_u=True)) < 9.0E-09)
+
+    def test_4d_tt(self):
+        GR = Grid(d=4, n=[30, 31, 32, 33], l=[
+            [-3., 4.],
+            [-2., 3.],
+            [-1., 1.],
+            [-1., 3.],
+        ])
+        FN = Func(GR, with_tt=True).init(func_4d).prep().calc()
+
+        self.assertTrue(np.max(FN.test(1000, is_u=True)) < 9.0E-09)
 
 
 if __name__ == '__main__':
