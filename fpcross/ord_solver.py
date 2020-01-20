@@ -18,7 +18,7 @@ class OrdSolver(object):
 
     TODO Add opts object and move with_y0 to opts.
 
-    TODO Add support to not multiple initial conditions.
+    TODO Add support to simple (not multiple) initial conditions.
     '''
 
     def __init__(self, TG, kind='rk4', is_rev=False):
@@ -98,8 +98,7 @@ class OrdSolver(object):
         INPUT:
 
         y0 - initial values of the variable
-        type1: list [dimensions, number of points] of float
-        type2: ndarray [dimensions, number of points] of float
+        type: list/ndarray [dimensions, number of points] of float
 
         OUTPUT:
 

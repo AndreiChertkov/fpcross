@@ -71,6 +71,11 @@ class Func(object):
     type: np.ndarray [number of test points] of float >= 0.
     * Is calculated in self.test.
 
+    err0 - relative error of constructed tensor of function values vs given
+           initial guess
+    type: float >= 0.
+    * Is calculated in self.prep.
+
     TODO Add computation of compression TT-factors to res.
     '''
 
@@ -235,6 +240,7 @@ class Func(object):
             'err_rel': 0., 'err_abs': 0., 'erank': 0.
             }
         self.err = None
+        self.err0 = None
 
         def set_opt(name, dflt=None):
             if name in (opts or {}):
@@ -493,12 +499,30 @@ class Func(object):
         Y - approximated values of the function on grid
         type: ndarray or tt.tensor [*SG.n] of float
 
-        TODO Add code.
+        TODO Check (especially for np format).
         '''
 
-        Y = 0.
+        # X = SG.comp()
+        # return self.comp(X).reshape(SG.n, order='F')
 
-        raise NotImplementedError()
+        if self.with_tt:
+            G = tt.tensor.to_list(self.A)
+            G_new = []
+
+            for i in range(self.SG.d):
+                x = SG.comp_1d(i)
+                T = poly(x, self.SG.n[i], self.SG.l)
+                Q = np.einsum('riq,ij->rjq', G[i], T)
+                G_new.append(Q)
+
+            Y = tt.tensor.from_list(G_new)
+            Y = Y.round(self.eps)
+
+        else:
+            X = SG.comp()
+            Y = self.comp(X).reshape(SG.n, order='F')
+
+        return Y
 
     def comp_int(self):
         '''

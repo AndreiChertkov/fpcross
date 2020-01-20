@@ -282,6 +282,35 @@ class Grid(object):
 
         return X
 
+    def comp_1d(self, k):
+        '''
+        Compute vector of grid points for given direction.
+
+        INPUT:
+
+        k - dimension number
+        type: int, >= 0 and < d
+
+        OUTPUT:
+
+        x - vector of grid points
+        type: ndarray [n[k]] of float
+        '''
+
+        l1 = self.l[k, 0]
+        l2 = self.l[k, 1]
+        n = self.n[k]
+        i = np.arange(n)
+
+        if self.k == 'u':
+            t = i / (n - 1)
+            x = t * (l2 - l1) + l1
+        if self.k == 'c':
+            t = np.cos(np.pi * i / (n - 1))
+            x = t * (l2 - l1) / 2. + (l2 + l1) / 2.
+
+        return x
+
     def find(self, x, is_f=False):
         '''
         Find the nearest flatten grid index for the given spatial point.
