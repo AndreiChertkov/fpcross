@@ -4,15 +4,10 @@ import numpy as np
 from fpcross import Model
 
 
-class TestModel(unittest.TestCase):
-    '''
-    Tests for the models.
-    '''
+class TestModel_1d_oup(unittest.TestCase):
 
-    def test_1d_oup(self):
+    def test_base(self):
         MD = Model.select('fpe_1d_oup')
-        self.assertEqual(MD.name(), 'fpe-1d-oup')
-        MD = Model.select('fpe-1d-oup')
         self.assertEqual(MD.name(), 'fpe-1d-oup')
         self.assertEqual(MD._D, 0.5)
         self.assertEqual(MD._A, 1.)
@@ -23,7 +18,10 @@ class TestModel(unittest.TestCase):
         self.assertEqual(MD._A, 1.)
         self.assertEqual(MD._s, 2.)
 
-    def test_3d_oup(self):
+
+class TestModel_3d_oup(unittest.TestCase):
+
+    def test_base(self):
         MD = Model.select('fpe_oup')
         self.assertEqual(MD.name(), 'fpe-oup')
         self.assertEqual(MD.d(), 1)

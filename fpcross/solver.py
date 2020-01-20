@@ -1,11 +1,11 @@
+import copy
 import time
 import pickle
 import numpy as np
+import scipy as sc
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from scipy.linalg import expm
 from matplotlib import animation, rc
-from copy import deepcopy
 
 import tt
 
@@ -37,8 +37,8 @@ class Solver(object):
 
     Advanced usage:
     - Call "plot" for plot of error and tt-compression factors.
-    - Call "plot_tm" for plot of solution and error at selected spatial point.
-    - Call "plot_sp" for plot of solution and error at selected time moment.
+    - Call "plot_t" for plot of solution and error at selected spatial point.
+    - Call "plot_x" for plot of solution and error at selected time moment.
 
     PROPS:
 
@@ -78,7 +78,7 @@ class Solver(object):
         * This is the calc. economy due to the cross approximation
         * (we calculate only portion 1/cmp_calc of all tensor elements,
         * so this value is full-tensor-size / func-calls, and for the case
-        * of "scalar" func-callc it is >= 1).
+        * of "scalar" func-calls it is >= 1).
     fld : cmp_size - inverse to relative number of items for the TT-cores
         type: list [opts.n_hst] of float, > 0
         * This is the compression factor due to the tt-format
@@ -108,6 +108,10 @@ class Solver(object):
     res - dictionary with saved values from each time step
           * It has the same fields as hst, but without
           * R, err_real, err_stat and err_rhsn.
+    type: dict
+
+    res_conv - dictionary with cross info from each time step
+    type: dict
 
     tms - saved durations (in seconds) of the main operations
     type: dict
@@ -129,6 +133,10 @@ class Solver(object):
         type: float, >= 0
     fld : calc_last - time to perform operations after the last time step
         type: float, >= 0
+
+    tms_list - saved durations (in seconds) of the main operations for
+               each time step (for calc_prep, calc_diff, calc_conv, calc_post)
+    type: dict
 
     TODO Replace hst.rnk_mean by its computation from hst.rnk_list.
     '''
@@ -219,6 +227,7 @@ class Solver(object):
             'res': self.res,
             'res_conv': self.res_conv,
         }
+
         with open(fpath, 'wb') as f:
             pickle.dump(data, f)
 
@@ -380,7 +389,7 @@ class Solver(object):
         J0[+0, +0] = 0.
         J0[-1, -1] = 0.
         D0 = self.D2
-        self.Z0 = expm(h0 * Dc * J0 @ D0)
+        self.Z0 = sc.linalg.expm(h0 * Dc * J0 @ D0)
 
         if not self.with_tt:
             if self.opts['with_rhs']:
@@ -484,7 +493,7 @@ class Solver(object):
 
         TODO Try interpolation of the log.
 
-        TODO Is it requared to add eps to prevent zero division in cross (???) ?
+        TODO Is it required to add eps to prevent zero division in cross (???) ?
 
         TODO Try initial guess in the form of the Euler solution?
 
@@ -515,16 +524,11 @@ class Solver(object):
             type: ndarray [dimensions + 1, number of points] of float
             '''
 
-            x = y[:-1, :]
-            r = y[-1, :]
+            X, r = y[:-1, :], y[-1, :]
 
-            f0 = self.MD.f0(x, t)
-            f1 = self.MD.f1(x, t)
+            f0, f1 = self.MD.f0(X, t), self.MD.f1(X, t)
 
-            return np.vstack([
-                f0,
-                -np.sum(f1, axis=0) * r
-            ])
+            return np.vstack([f0, -np.sum(f1, axis=0) * r])
 
         def step(X):
             '''
@@ -539,7 +543,7 @@ class Solver(object):
             type: ndarray [number of points] of float
             '''
 
-            TG = Grid(d=1, n=2, l=[self.t - self.TG.h0, self.t], k='u')
+            TG = Grid(n=2, l=[self.t - self.TG.h0, self.t], k='u')
             kd = 'eul' if self.ord == 1 else 'rk4'
             X0 = OrdSolver(TG, kind=kd, is_rev=True).init(self.MD.f0).comp(X)
             w0 = FN.comp(X0)
@@ -556,6 +560,7 @@ class Solver(object):
         # mult = 1. / self.FN.comp_int()
         # self.FN.Y = mult * self.FN.Y
         # self.FN.A = mult * self.FN.A
+
         FN = self.FN.copy()
         FN.calc()
 
@@ -567,7 +572,7 @@ class Solver(object):
             #'with_Y_hst': True,
         }).prep()
 
-        self.res_conv.append(deepcopy(self.FN.res))
+        self.res_conv.append(copy.deepcopy(self.FN.res))
 
         self.W0 = self.FN.Y.copy()
 
@@ -627,7 +632,7 @@ class Solver(object):
         Some operations after the final computation step.
         '''
 
-        self.FN.calc()
+        self.FN.calc()                 # REMOVE ???
         mult = 1. / self.FN.comp_int()
         self.FN.Y = mult * self.FN.Y
         self.FN.A = mult * self.FN.A
@@ -654,7 +659,9 @@ class Solver(object):
         if self.FN.A is None:
             raise ValueError('Solution of the equation is not calculated yet. Call "prep" and "calc" functions before.')
 
-        return self.FN.comp(X)
+        r = self.FN.comp(X)
+
+        return r
 
     def comp_rhs(self, t=None, is_real=False, is_stat=False):
         '''
@@ -747,6 +754,10 @@ class Solver(object):
         return res
 
     def exam(self, obj=None, eps_mult=100, is_hst=False):
+        '''
+        Check of current result.
+        '''
+
         def _err_calc(r_calc, r_real):
             dr = r_real - r_calc
             n0 = r_real.norm() if self.with_tt else np.linalg.norm(r_real)
@@ -765,7 +776,7 @@ class Solver(object):
             res['rnk_list'] = self.FN.Y.r.copy()
             res['rnk_mean'] = self.FN.Y.erank
 
-            res['cmp_calc'] = self.res_conv['evals'] # ZZZ
+            res['cmp_calc'] = self.res_conv['evals']
             for i in range(self.SG.d):
                 res['cmp_calc']/= self.SG.n[i]
             res['cmp_calc'] = 1. / res['cmp_calc']
@@ -849,6 +860,7 @@ class Solver(object):
 
         if is_ret:
             return s + '\n'
+
         print(s)
 
     def anim(self, ffmpeg_path, delt=50):
@@ -924,6 +936,8 @@ class Solver(object):
         '''
         Plot results of the last computation (errors, times, TT-ranks
         and compression factors).
+
+        TODO Set correct diff time (add odd and even).
         '''
 
         kind = ' (N=%d^%d, M=%d points)'%(self.SG.n0, self.SG.d, self.TG.n0)
@@ -988,7 +1002,6 @@ class Solver(object):
             ax = fig.add_subplot(gs[0, 1])
             ax.set_title('Step duration'+ kind)
             ax.set_xlabel('Time')
-            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
             ax.plot(Tall, tms_prep, **{
                 **conf['line']['l1'],
                 'label': 'Prepare before step',
@@ -1012,7 +1025,6 @@ class Solver(object):
             ax = fig.add_subplot(gs[1, 0])
             ax.set_title('TT-erank'+ kind)
             ax.set_xlabel('Time')
-            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
             ax.plot(Thst, rnk_mean, **{
                 **conf['line']['l14'],
             })
@@ -1021,7 +1033,6 @@ class Solver(object):
             ax = fig.add_subplot(gs[1, 1])
             ax.set_title('TT-compression factor'+ kind)
             ax.set_xlabel('Time')
-            opts = { 'color': 'orange', 'marker': '*', 'markersize': 8, 'markeredgecolor': 'orange' }
             ax.plot(Thst, cmp_calc, **{
                 **conf['line']['l13'],
                 'label': 'Function evaluations',
@@ -1035,7 +1046,7 @@ class Solver(object):
 
         plt.show()
 
-    def plot_tm(self, x, opts={}):
+    def plot_t(self, x, opts={}):
         '''
         Plot solution dependence of time at given spatial grid point x: for the
         given x it finds the closest point on the spatial grid. Initial value,
@@ -1192,7 +1203,7 @@ class Solver(object):
 
         plt.show()
 
-    def plot_sp(self, t=None, opts={}):
+    def plot_x(self, t=None, opts={}):
         '''
         Plot solution on the spatial grid at given time t: for the given t it
         finds the closest point on the time history grid. Initial value,

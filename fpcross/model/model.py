@@ -156,6 +156,8 @@ class Model(object):
         type: str
 
         TODO Check replacement for indents.
+
+        TODO Replace by more accurate string interpolation format.
         '''
 
         name = self.name() or '?????'
@@ -168,10 +170,11 @@ class Model(object):
 
         if is_comp:
             s = 'Model : %-22s | %s\n'%(name, repr)
-            s+= '>>>>>>> Description            : %s'%(desc or '...')
+            s+= '>>>>>>> Description            : %s'%desc
 
             if is_ret:
                 return s + '\n'
+
             print(s)
             return
 
