@@ -9,13 +9,12 @@ from matplotlib import animation, rc
 
 import tt
 
-from . import config
 from . import Grid
 from . import Func
 from . import OrdSolver
 from .cheb import difs
 from .utils import tms, PrinterSl
-
+from .config import config
 
 class Solver(object):
     '''
@@ -321,19 +320,6 @@ class Solver(object):
         self.opts['with_r_hst'] = bool(self.opts['with_r_hst'])
         self.opts['with_rhs'] = bool(self.opts['with_rhs'])
 
-        self.hst = {
-            'T': [],
-            'R': [],
-            'rnk_list': [],
-            'rnk_mean': [],
-            'cmp_calc': [],
-            'cmp_size': [],
-            'err_real': [],
-            'err_stat': [],
-            'err_dert': [],
-            'err_rhsn': [],
-        }
-
         self.tms = {
             'init': 0.,
             'prep': 0.,
@@ -351,6 +337,19 @@ class Solver(object):
             'calc_diff': [],
             'calc_conv': [],
             'calc_post': [],
+        }
+
+        self.hst = {
+            'T': [],
+            'R': [],
+            'rnk_list': [],
+            'rnk_mean': [],
+            'cmp_calc': [],
+            'cmp_size': [],
+            'err_real': [],
+            'err_stat': [],
+            'err_dert': [],
+            'err_rhsn': [],
         }
 
         self.res = {
@@ -561,8 +560,7 @@ class Solver(object):
         # self.FN.Y = mult * self.FN.Y
         # self.FN.A = mult * self.FN.A
 
-        FN = self.FN.copy()
-        FN.calc()
+        FN = self.FN.copy().calc()
 
         self.FN.init(step, opts={
             'nswp': 200,
@@ -601,9 +599,8 @@ class Solver(object):
         if is_hst:
             self.exam(self.hst, is_hst=True)
 
-        self.FN0 = self.FN.copy()
-
         if not is_hst:
+            self.FN0 = self.FN.copy()
             self.PR.refr()
             return
 
@@ -620,8 +617,8 @@ class Solver(object):
         if self.with_tt:
             msg+= ' r=%-6.2e'%self.hst['rnk_mean'][-1]
 
-        self.PR.refr(msg)
         self.FN0 = self.FN.copy()
+        self.PR.refr(msg)
 
         if self.opts['f_post_hst'] is not None:
             self.opts['f_post_hst'](self)
@@ -776,7 +773,7 @@ class Solver(object):
             res['rnk_list'] = self.FN.Y.r.copy()
             res['rnk_mean'] = self.FN.Y.erank
 
-            res['cmp_calc'] = self.res_conv['evals']
+            res['cmp_calc'] = self.res_conv[-1]['evals']
             for i in range(self.SG.d):
                 res['cmp_calc']/= self.SG.n[i]
             res['cmp_calc'] = 1. / res['cmp_calc']
