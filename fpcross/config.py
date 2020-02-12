@@ -346,9 +346,3 @@ config = {
         }
     ''',
 }
-
-# TODO Add color dict and generate css, using color names.
-
-# TODO Maybe move css into separate .css file.
-
-# TODO Remove config['plot'].

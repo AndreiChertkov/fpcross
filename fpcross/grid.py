@@ -28,11 +28,11 @@ class Grid(object):
     type: int >= 1
 
     n - total number of points for each dimension
-    type: ndarray [dimensions] of int >= 2
+    type: ndarray [d] of int >= 2
 
     l - min ([:, 0]) and max ([:, 1]) values of variable for each dimension
-    type: ndarray [dimensions, 2] of float,
-          [i, 0] < [i, 1] for each i
+    type: ndarray [d, 2] of float,
+          [k, 0] < [k, 1] for each k
 
     k - kind of the grid
     type: str
@@ -44,8 +44,8 @@ class Grid(object):
     type: float > 0
 
     h - grid steps assuming uniformity for each dimension
-    type: ndarray [dimensions] of float > 0,
-          h[i] <= l[i, 1] - l[i, 0] for each i
+    type: ndarray [d] of float > 0,
+          h[k] <= l[k, 1] - l[k, 0] for each k
 
     n0 - average number of grid points (mean for n)
     type: int >= 2
@@ -79,14 +79,14 @@ class Grid(object):
 
         n - total number of points for each dimension
         type1: int >= 2
-        type2: list/ndarray [dimensions] of int >= 2
+        type2: list/ndarray [d] of int >= 2
         * If is int (type1), then it will be used for each dimension.
 
         l - min and max values of variable for each dimension
         type1: list/ndarray [2] of float,
                [0] < [1]
-        type2: list/ndarray [dimensions, 2] of float,
-               [i, 0] < [i, 1] for each i
+        type2: list/ndarray [d, 2] of float,
+               [k, 0] < [k, 1] for each k
         * Note that [:, 0] (or [0]) are min and [:, 1] (or [1]) are max
         * values for each dimension. If it is 1D list or array (type1),
         * then the same values will be used for each dimension.
@@ -165,9 +165,9 @@ class Grid(object):
 
         # Set mean values for parameters:
         self.n0 = int(round(np.mean(self.n)))
-        self.l1 = np.mean(self.l[:, 0])
-        self.l2 = np.mean(self.l[:, 1])
-        self.h0 = np.mean(self.h)
+        self.l1 = float(np.mean(self.l[:, 0]))
+        self.l2 = float(np.mean(self.l[:, 1]))
+        self.h0 = float(np.mean(self.h))
 
     def copy(self, **kwargs):
         '''
@@ -175,16 +175,16 @@ class Grid(object):
 
         INPUT:
 
-        kwargs - some arguments from Grid.__init__
+        kwargs - some arguments for Grid.__init__
         type: dict
         * These values will replace the corresponding params in the new grid.
 
         OUTPUT:
 
-        GR - new class instance with the same parameters
+        GR - new class instance with the same parameters (except kwargs)
         type: Grid
 
-        TODO Disable unchanged parameters check while init.
+        TODO Disable unchanged parameters check while __init__.
         '''
 
         d = kwargs.get('d', self.d)
@@ -209,8 +209,8 @@ class Grid(object):
         type1: None
         type2: int
         type3: list/ndarray [number of points] of int
-        type4: list/ndarray [dimensions] of int
-        type5: list/ndarray [dimensions, number of points] of int
+        type4: list/ndarray [d] of int
+        type5: list/ndarray [d, number of points] of int
         * If is None (type1), then the full grid will be constructed.
         * Type2 is available only for the case of only one point in 1D.
         * Type3 is available only for 1D case.
@@ -229,12 +229,13 @@ class Grid(object):
         OUTPUT:
 
         I - (if is_ind == True) prepared indices of grid points
-        type: ndarray [dimensions, number of points] of int
+        type: ndarray [d, number of points] of int
         * If is_inner flag is set, then array has less than "number of points"
 
         X - (if is_ind == False) calculated grid points
-        type: ndarray [dimensions, number of points] of float
-        * If is_inner flag is set, then array has less than "number of points"
+        type: ndarray [d, number of points] of float
+        * If is_inner flag is set, then array has less than
+        * "number of points" points.
 
         TODO Maybe raise error for attempt of construction too large full grid.
 
@@ -243,8 +244,8 @@ class Grid(object):
 
         if I is None:
             I = []
-            for i in range(self.d):
-                I_ = np.arange(self.n[i])
+            for k in range(self.d):
+                I_ = np.arange(self.n[k])
                 if is_inner:
                     I_ = I_[1:-1]
                 I.append(I_.reshape(1, -1))
@@ -274,11 +275,11 @@ class Grid(object):
         l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), I.shape[1], axis=1)
 
         if self.k == 'u':
-            t = I * 1. / (n_ - 1)
+            t = I / (n_ - 1)
             X = t * (l2 - l1) + l1
         if self.k == 'c':
             t = np.cos(np.pi * I / (n_ - 1))
-            X = t * (l2 - l1) / 2. + (l2 + l1) / 2.
+            X = t * (l2 - l1) / 2 + (l2 + l1) / 2
 
         return X
 
@@ -296,6 +297,9 @@ class Grid(object):
         x - vector of grid points
         type: ndarray [n[k]] of float
         '''
+
+        if not isinstance(k, (int, float)) or k < 1 or k > self.d:
+            raise ValueError('Invalid dimension number (k).')
 
         l1 = self.l[k, 0]
         l2 = self.l[k, 1]
@@ -319,7 +323,7 @@ class Grid(object):
 
         x - spatial point
         type1: float
-        type2: list/ndarray [dimensions] of float
+        type2: list/ndarray [d] of float
         * May be float (type1) for the 1-dimensional case.
 
         is_f - flag:
@@ -330,7 +334,7 @@ class Grid(object):
         OUTPUT:
 
         i - (if is_f == False) multi index of the grid point.
-        type: ndarray [dimensions] of int >= 0, i_m[i] < n[i] for each i
+        type: ndarray [d] of int >= 0, i[k] < n[k] for each k
 
         i - (if is_f == True) flatten index of the grid point.
         type: int >= 0 and < prod(n)
@@ -373,7 +377,7 @@ class Grid(object):
         OUTPUT:
 
         i_m - multi index of the grid point
-        type: ndarray [dimensions] of int >= 0, i_m[i] < n[i] for each i
+        type: ndarray [d] of int >= 0, i_m[k] < n[k] for each k
         '''
 
         i_m = np.unravel_index(i_f, self.n, order='F')
@@ -388,7 +392,7 @@ class Grid(object):
         INPUT:
 
         i_m - multi index of the grid point
-        type: list/ndarray [dimensions] of int >= 0, i_m[i] < n[i] for each i
+        type: list/ndarray [dimensions] of int >= 0, i_m[k] < n[k] for each k
 
         OUTPUT:
 
@@ -413,14 +417,18 @@ class Grid(object):
         OUTPUT:
 
         X - calculated random points
-        type: ndarray [dimensions, n] of float
+        type: ndarray [d, n] of float
 
         TODO Add selection of the distribution kind.
         '''
 
+        if not isinstance(n, (int, float)) or n < 1:
+            raise ValueError('Invalid number of points (n).')
+
         n = round(n)
+
         if n <= 0:
-            raise ValueError('Invalid number of points.')
+            raise ValueError('Invalid number of points (n).')
 
         l1 = np.repeat(self.l[:, 0].reshape((-1, 1)), n, axis=1)
         l2 = np.repeat(self.l[:, 1].reshape((-1, 1)), n, axis=1)
@@ -494,7 +502,7 @@ class Grid(object):
         x0 - special spatial point for present on the plot if required
         type1: None
         type2: float
-        type3: list/ndarray [dimensions] of float
+        type3: list/ndarray [d] of float
         * May be float (type2) for the 1-dimensional case.
         '''
 
@@ -527,8 +535,7 @@ class Grid(object):
 
         x - spatial point
         type1: float
-        type2: list [dimensions] of float
-        type3: ndarray [dimensions] of float
+        type2: list/ndarray [d] of float
         * May be float (type1) for the 1-dimensional case.
 
         OUTPUT:
@@ -544,14 +551,13 @@ class Grid(object):
 
     def is_out(self, x):
         '''
-        Check if given point is out of the grid.
+        Check if given point is outside the grid.
 
         INPUT:
 
         x - spatial point
         type1: float
-        type2: list [dimensions] of float
-        type3: ndarray [dimensions] of float
+        type2: list/ndarray [d] of float
         * May be float (type1) for the 1-dimensional case.
 
         OUTPUT:
@@ -573,7 +579,7 @@ class Grid(object):
 
         x - spatial point
         type1: float
-        type2: list/ndarray [dimensions] of float
+        type2: list/ndarray [d] of float
         * May be float (type1) for the 1-dimensional case.
 
         OUTPUT:
@@ -636,7 +642,7 @@ class Grid(object):
         x - spatial point
         type1: None
         type2: float
-        type3: list/ndarray [dimensions] of float
+        type3: list/ndarray [d] of float
         * May be float (type2) for the 1-dimensional case.
 
         is_opt - flag:
@@ -647,7 +653,7 @@ class Grid(object):
         OUTPUT:
 
         res - prepared spatial point
-        type1: ndarray [dimensions] of float
+        type1: ndarray [d] of float
         type2: None
         * May return None (type2) if input (x) is None.
         '''
