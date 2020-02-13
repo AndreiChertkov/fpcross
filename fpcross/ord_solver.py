@@ -27,7 +27,7 @@ class OrdSolver(object):
 
         TG - one-dimensional time grid
         type: fpcross.Grid
-        * Only uniform grids are supported in the current version.
+        * Only uniform 1D grids are supported in the current version.
 
         kind - type of the solver
         type: str

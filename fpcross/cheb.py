@@ -35,7 +35,11 @@ def poly(X, m, l=None):
     TODO Replace by more compact code (if len(X.shape) may be combined).
     '''
 
+    if not isinstance(m, (int, float)):
+        raise ValueError('Invalid parameter m (should be int).')
+
     m = int(m)
+
     if m <= 0:
         raise ValueError('Invalid parameter m (should be > 0).')
 
@@ -90,7 +94,11 @@ def difs(SG, m):
     TODO Check and update the code.
     '''
 
+    if not isinstance(m, (int, float)):
+        raise ValueError('Invalid parameter m (should be int).')
+
     m = int(m)
+
     if m <= 0:
         raise ValueError('Invalid parameter m (should be > 0).')
 

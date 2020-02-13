@@ -38,8 +38,8 @@ class Func(object):
     type: float >= 1.E-20
 
     with_tt - flag:
-        True  - sparse (tensor train, TT) format will be used
-        False - dense (numpy, NP) format will be used
+        True  - sparse (tensor train, TT) format is used
+        False - dense (numpy, NP) format is used
     type: bool
 
     Y - tensor of function values on nodes of the Chebyshev grid
@@ -209,7 +209,7 @@ class Func(object):
             type2: ndarray [*n] of float
             type3: TT-tensor [*n] of float
         fld : with_Y_hst - flag:
-                True  - function construction in the scalar fassion
+                True  - function construction in the scalar fashion
                         (calculated values are kept in the hash and reused)
                 False - vectorized function calls will be used
             default: False
@@ -395,13 +395,13 @@ class Func(object):
         if self.with_tt:
             G = tt.tensor.to_list(self.Y)
 
-            for i in range(self.SG.d):
-                G_sh = G[i].shape
-                G[i] = np.swapaxes(G[i], 0, 1)
-                G[i] = G[i].reshape((G_sh[1], -1))
-                G[i] = Func.interpolate_cheb(G[i])
-                G[i] = G[i].reshape((G_sh[1], G_sh[0], G_sh[2]))
-                G[i] = np.swapaxes(G[i], 0, 1)
+            for k in range(self.SG.d):
+                G_sh = G[k].shape
+                G[k] = np.swapaxes(G[k], 0, 1)
+                G[k] = G[k].reshape((G_sh[1], -1))
+                G[k] = Func.interpolate_cheb(G[k])
+                G[k] = G[k].reshape((G_sh[1], G_sh[0], G_sh[2]))
+                G[k] = np.swapaxes(G[k], 0, 1)
 
             self.A = tt.tensor.from_list(G)
             self.A = self.A.round(self.eps)
@@ -409,14 +409,14 @@ class Func(object):
         else:
             self.A = self.Y.copy()
 
-            for i in range(self.SG.d):
+            for k in range(self.SG.d):
                 n_ = self.SG.n.copy()
-                n_[[0, i]] = n_[[i, 0]]
-                self.A = np.swapaxes(self.A, 0, i)
-                self.A = self.A.reshape((self.SG.n[i], -1), order='F')
+                n_[[0, k]] = n_[[k, 0]]
+                self.A = np.swapaxes(self.A, 0, k)
+                self.A = self.A.reshape((self.SG.n[k], -1), order='F')
                 self.A = Func.interpolate_cheb(self.A)
                 self.A = self.A.reshape(n_, order='F')
-                self.A = np.swapaxes(self.A, 0, i)
+                self.A = np.swapaxes(self.A, 0, k)
 
     def comp(self, X, z=0.):
         '''
@@ -443,6 +443,8 @@ class Func(object):
 
         TODO Check if correct calculate Cheb. pol. until max(n) for all dims
              (for the case of non symmetric grid).
+
+        TODO Move some code to a new comp_one function.
         '''
 
         if self.A is None:
@@ -454,7 +456,7 @@ class Func(object):
         self.tms['comp'] = tpc()
 
         Y = np.ones(X.shape[1]) * float(z)
-        T = poly(X, np.max(self.SG.n), self.SG.l)
+        T = poly(X, int(np.max(self.SG.n)), self.SG.l)
 
         if self.with_tt:
             G = tt.tensor.to_list(self.A)
@@ -500,10 +502,9 @@ class Func(object):
         type: ndarray or tt.tensor [*SG.n] of float
 
         TODO Check (especially for np format).
-        '''
 
-        # X = SG.comp()
-        # return self.comp(X).reshape(SG.n, order='F')
+        TODO Should we round Y tensor after construction?
+        '''
 
         if self.with_tt:
             G = tt.tensor.to_list(self.A)
@@ -537,6 +538,8 @@ class Func(object):
              or by the corresponding flag for selection.
 
         TODO Add support for nonsymmetric case.
+
+        TODO Check.
         '''
 
         if self.A is None:
@@ -801,7 +804,9 @@ class Func(object):
 
         It can find integrals for several functions on the one call.
 
-        WARNING This method is valid only for symmetric grids.
+        WARNING:
+
+        - This method is valid only for symmetric grids.
 
         INPUT:
 
