@@ -196,6 +196,9 @@ class Solver(object):
         self.ord = int(ord)
         self.with_tt = bool(with_tt)
 
+        self.TG.name = 'Temporal grid'
+        self.SG.name = 'Spatial grid'
+
         self.FN = Func(self.SG, self.eps, self.with_tt)
 
         self.opts = {}

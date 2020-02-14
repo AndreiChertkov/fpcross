@@ -63,10 +63,13 @@ class Grid(object):
     type: float > 0 and <= l2 - l1
     * For the 1D grid it is scalar grid step (assuming uniformity).
 
+    name - display name of the grid
+    type: str
+
     TODO Add function that scale points to/from limits l and [0, 1].
     '''
 
-    def __init__(self, d=None, n=2, l=[-1., 1.], k='c', e=1.E-20):
+    def __init__(self, d=None, n=2, l=[-1., 1.], k='c', e=1.E-20, name='Grid'):
         '''
         INPUT:
 
@@ -99,6 +102,9 @@ class Grid(object):
 
         e - accuracy for statements checks
         type: float > 0
+
+        name - display name of the grid
+        type: str
         '''
 
         # Check and prepare d:
@@ -168,6 +174,8 @@ class Grid(object):
         self.l1 = float(np.mean(self.l[:, 0]))
         self.l2 = float(np.mean(self.l[:, 1]))
         self.h0 = float(np.mean(self.h))
+
+        self.name = str(name)
 
     def copy(self, **kwargs):
         '''
@@ -454,7 +462,7 @@ class Grid(object):
 
         is_sym = self.is_sym()
 
-        s = '------------------ Grid\n'
+        s = f'------------------ {self.name}\n'
 
         if self.k == 'u':
             s+= 'Kind             : Uniform\n'

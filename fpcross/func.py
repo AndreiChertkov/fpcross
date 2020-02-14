@@ -75,8 +75,6 @@ class Func(object):
            initial guess
     type: float >= 0.
     * Is calculated in self.prep.
-
-    TODO Add computation of compression TT-factors to res.
     '''
 
     def __init__(self, SG, eps=1.E-6, with_tt=False):

@@ -45,7 +45,15 @@ All examples are performed as interactive browser-based jupyter lab notebooks. T
 
 1. Open one of the jupyter lab notebooks from this folder.
 
-    > See `./examples/func.ipynb` for interpolation submodule details, `./examples/fpe.ipynb` for example of solver usage and another jupyter lab notebooks in `./examples/` folder for examples of various special use cases.
+    - See `./examples/func.ipynb` for interpolation submodule details;
+
+      ![Screenshot examples func](./utils/screen_examples_func.png)
+
+    - See `./examples/fpe.ipynb` for example of solver usage;
+
+      ![Screenshot examples fpe](./utils/screen_examples_fpe.png)
+
+    - See another jupyter lab notebooks in `./examples/` folder for examples of various special use cases.
 
 1. Run all cells in the jupyter lab notebook one by one.
 
