@@ -96,13 +96,13 @@ class Solver(object):
                      (norm of the derivative devided by the norm of solution)
         type: list [opts.n_hst] of float, >= 0
         * Derivative is calculated as (r_new - r_old) / h.
-        * We expects that this value is related to the rhs of the PDF and
+        * We expect that this value is related to the rhs of the PDF and
         * correlates with the real solution error.
     fld : err_rhsn - norm of the rhs devided by the norm of solution
         type1: list [0]
         type2: list [opts.n_hst] of float, >= 0
         * Is empty list (type1) if flag with_rhs is not set.
-        * We expects that this value  correlates with the real solution error.
+        * We expect that this value correlates with the real solution error.
 
     res - dictionary with saved values from each time step
           * It has the same fields as hst, but without
@@ -178,7 +178,7 @@ class Solver(object):
         '''
 
         if TG.d != 1 or TG.k != 'u':
-            raise ValueError('Invalid time grid (should be one-diminsional uniform grid).')
+            raise ValueError('Invalid temporal grid (should be one-diminsional uniform grid).')
 
         if SG.k != 'c' or not SG.is_sym():
             raise ValueError('Invalid spatial grid (should be sym Chebyshev grid).')
@@ -246,7 +246,7 @@ class Solver(object):
 
         TODO Add try block.
 
-        TODO Add aufo keys extraction (in the loop).
+        TODO Add auto keys extraction (in the loop).
         '''
 
         with open(fpath, 'rb') as f:
@@ -475,8 +475,8 @@ class Solver(object):
 
         if self.with_tt:
             G = tt.tensor.to_list(v0)
-            for i in range(self.SG.d):
-                G[i] = np.einsum('ij,kjm->kim', self.Z0, G[i])
+            for k in range(self.SG.d):
+                G[k] = np.einsum('ij,kjm->kim', self.Z0, G[k])
 
             v = tt.tensor.from_list(G)
             v = v.round(self.eps)
@@ -630,9 +630,11 @@ class Solver(object):
     def calc_last(self):
         '''
         Some operations after the final computation step.
+
+        TODO Remove integration.
         '''
 
-        self.FN.calc()                 # REMOVE ???
+        self.FN.calc()
         mult = 1. / self.FN.comp_int()
         self.FN.Y = mult * self.FN.Y
         self.FN.A = mult * self.FN.A
@@ -831,8 +833,8 @@ class Solver(object):
         opts, hst, tms = self.opts, self.hst, self.tms
         n_hst = opts['n_hst']
 
-        s = '------------------ Solver\n'
-        s+= 'Format    : %1dD, '%self.SG.d
+        s = f'------------------ Solver\n'
+        s+= f'Format    : {self.SG.d:1d}D, '
         s+= 'TT, eps= %8.2e '%self.eps if self.with_tt else 'NP '
         s+= '[order=%d]\n'%self.ord
 
@@ -848,15 +850,15 @@ class Solver(object):
         if len(hst['err_stat']):
             s+= 'Err  stat : %8.2e\n'%hst['err_stat'][-1]
 
-        s+= 'Time full : %8.2e \n'%(tms['prep'] + tms['calc'])
-        s+= 'Time prep : %8.2e \n'%tms['prep']
-        s+= 'Time calc : %8.2e \n'%tms['calc']
-        s+= '    .init : %8.2e \n'%tms['calc_init']
-        s+= '    .prep : %8.2e \n'%tms['calc_prep']
-        s+= '    .diff : %8.2e \n'%tms['calc_diff']
-        s+= '    .conv : %8.2e \n'%tms['calc_conv']
-        s+= '    .post : %8.2e \n'%tms['calc_post']
-        s+= '    .last : %8.2e \n'%tms['calc_last']
+        s+= f'Time full : {(tms["prep"] + tms["calc"]):8.2e}\n'
+        s+= f'Time prep : {tms["prep"]:8.2e}\n'
+        s+= f'Time calc : {tms["calc"]:8.2e}\n'
+        s+= f'    .init : {tms["calc_init"]:8.2e}\n'
+        s+= f'    .prep : {tms["calc_prep"]:8.2e}\n'
+        s+= f'    .diff : {tms["calc_diff"]:8.2e}\n'
+        s+= f'    .conv : {tms["calc_conv"]:8.2e}\n'
+        s+= f'    .post : {tms["calc_post"]:8.2e}\n'
+        s+= f'    .last : {tms["calc_last"]:8.2e}\n'
 
         if is_ret:
             return s + '\n'
@@ -936,8 +938,6 @@ class Solver(object):
         '''
         Plot results of the last computation (errors, times, TT-ranks
         and compression factors).
-
-        TODO Set correct diff time (add odd and even).
         '''
 
         kind = ' (N=%d^%d, M=%d points)'%(self.SG.n0, self.SG.d, self.TG.n0)
@@ -951,17 +951,17 @@ class Solver(object):
         err_stat = self.hst['err_stat']
         err_real = self.hst['err_real']
 
-        tms_prep = self.tms_list['calc_prep']
-        tms_diff = self.tms_list['calc_diff']
-        tms_conv = self.tms_list['calc_conv']
-        tms_post = self.tms_list['calc_post']
+        tms_prep = np.array(self.tms_list['calc_prep'])
+        tms_diff = np.array(self.tms_list['calc_diff'])
+        tms_conv = np.array(self.tms_list['calc_conv'])
+        tms_post = np.array(self.tms_list['calc_post'])
 
         rnk_mean = self.hst['rnk_mean']
         cmp_calc = self.hst['cmp_calc']
         cmp_size = self.hst['cmp_size']
 
         if self.ord != 1:
-            tms_diff = tms_diff[0::2]
+            tms_diff = tms_diff[0::2] + tms_diff[1::2]
 
         opts = conf['fig']['base_2_2' if self.with_tt else 'base_1_2']
         fig = plt.figure(**opts)
