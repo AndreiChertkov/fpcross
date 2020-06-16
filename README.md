@@ -9,6 +9,12 @@ r(x,0) = r0(x),
 
 with known f(x, t), initial condition r0(x) and scalar diffusion coefficient D by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.
 
+## NOTE !!!
+
+The code in this repository and the description below are not relevant. The working version of the code is in the [colab notebook fpcross](https://colab.research.google.com/drive/18UcW4_4jNDYPK4pnxtAcmh8rWDcGvkHG?usp=sharing). The repository will be updated soon.
+
+> See also [colab notebook fpcross_recent](https://colab.research.google.com/drive/1yCFdhs9eec4bx3gDTy2J4w5d41MzvXUe?usp=sharing) with some auxiliary (outdated) code.
+
 ## Requirements
 
 1. [Python](https://www.python.org) programming language (version >= 3.7).
