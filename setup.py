@@ -1,6 +1,7 @@
 import os
 from setuptools import setup
 
+
 def find_packages(package, basepath):
     packages = [package]
     for name in os.listdir(basepath):
@@ -15,9 +16,10 @@ desc = 'Solution of the multidimensional Fokker-Planck equation by fast and accu
 with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
     desc_long = f.read()
 
+
 setup(
     name = 'fpcross',
-    version = '0.1',
+    version = '0.2',
     description=desc,
     long_description=desc_long,
     long_description_content_type='text/markdown',
@@ -35,6 +37,7 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
@@ -42,11 +45,9 @@ setup(
     ],
     keywords='Fokker-Planck equation stochastic differential equation probability density function low-rank representation tensor train format TT-decomposition cross approximation Chebyshev polynomial multivariate Ornstein-–Uhlenbeck process',
     packages=find_packages('fpcross', './fpcross/'),
-    python_requires='>=3.7',
+    python_requires='>=3.6',
     install_requires=['ttpy'],
     project_urls={
         'Source': 'https://github.com/AndreiChertkov/fpcross',
     },
 )
-
-# See great example https://github.com/pypa/sampleproject
