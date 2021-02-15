@@ -54,7 +54,7 @@ All examples are performed as interactive browser-based jupyter lab notebooks. T
 
 ## Authors
 
-- Andrei Chertkov (andrei.chertkov@skolkovotech.ru);
+- Andrei Chertkov (a.chertkov@skoltech.ru);
 - Ivan Oseledets (i.oseledets@skoltech.ru).
 
 ## Related publications
