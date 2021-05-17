@@ -24,3 +24,8 @@ tmp/
 *.egg-info/
 *.egg
 *.py[cod]
+
+_doc
+_pack
+_tmp
+old
