@@ -1,6 +1,3 @@
-_.md
-fpcross_reflection.md
-text/
 .thumbs.db
 .Thumbs.db
 .DS_Store
@@ -18,14 +15,11 @@ __pycache__/
 build/
 dist/
 package/
-tmp/
-*~
 *synctex.gz*
 *.egg-info/
 *.egg
-*.py[cod]
-
+_.md
 _doc
 _pack
 _tmp
-old
+calc
