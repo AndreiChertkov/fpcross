@@ -19,7 +19,8 @@ package/
 *.egg-info/
 *.egg
 _.md
-_doc
 _pack
 _tmp
-calc
+demo_result.png
+test_result/
+doc/_build/*

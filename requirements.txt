@@ -1,0 +1,5 @@
+matplotlib==3.3.4
+numpy==1.20.1
+scipy==1.6.2
+teneva==0.9.1
+tqdm>=4.46.1
