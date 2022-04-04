@@ -3,30 +3,44 @@
 
 ## Description
 
-Solution of the multidimensional Fokker-Planck equation (FPE) of the form
+This python package, named **fpcross** (**F**okker **P**lanck **cross**-approximation), provides a solver in the low-rank tensor-train format with cross approximation approach for solution of the multidimensional Fokker-Planck equation (FPE) of the form
 
+```
 d r(x, t) / d t = D delta( r(x, t) ) - div( f(x, t) r(x, t) ),
-r(x, 0) = r0(x),
+where r(x, 0) = r0(x).
+```
 
-with known f(x, t) and its partial derivatives, initial condition r0(x) and scalar diffusion coefficient D by fast and accurate tensor based methods with cross approximation in the tensor-train (TT) format.
+The function f(x, t), its diagonal partial derivatives d f_i (x, t) / d x_i, initial condition r0(x) and scalar diffusion coefficient D should be known. The equation is solved from the initial moment (t = 0) to the user-specified moment (t), while the solutions obtained at each time step can be used if necessary. The resulting solution r(x, t) represents both the TT-tensor on the multidimensional Chebyshev grid and the Chebyshev interpolation coefficients in the TT-format, and therefore it can be quickly calculated at an arbitrary spatial point.
 
-The working version of the code with all numerical examples is in the following colab notebooks:
-- [fpcross_np](https://colab.research.google.com/drive/1-1atifKoTE8nNSggsD42KFr28xk6MqIj?usp=sharing);
-  > "Numpy" version of the code. This code is computationally inefficient (except the case of one-dimensional tasks) and is provided for illustration only.
-- [fpcross_tt](https://colab.research.google.com/drive/19IfqOoexSr42xo_GCV3eZZpvTYg2YJhw?usp=sharing);
-  > Basic version of the code (TT-format is used).
-- See also folder `results_for_paper_fpcross` with scripts for generation plots for the paper.
+
+## Installation
+
+The package can be installed via pip: `pip install fpcross` (it requires the [Python](https://www.python.org) programming language of the version >= 3.7). It can be also downloaded from the repository [fpcross](https://github.com/AndreiChertkov/fpcross) and installed by `python setup.py install` command from the root folder of the project.
+
+> Required python packages [matplotlib](https://matplotlib.org/), [numpy](https://numpy.org), [scipy](https://www.scipy.org), [teneva](https://github.com/AndreiChertkov/teneva) and [tqdm](https://github.com/tqdm/tqdm) will be automatically installed during the installation of the main software product.
+
+
+## Usage
+
+A compact example of using the solver for a user-defined FPE is provided in the script `demo/demo.py` (run it as `python demo.py` from the `demo` folder).
+
+The software product also implements classes for the model FPEs:
+1. multidimensional simple diffusion problem (see `fpcross/EquationDif.py`);
+2. multidimensional Ornstein-Uhlenbeck process (see `fpcross/EquationOUP.py`);
+3. 3-dimensional dumbbell model (see `fpcross/EquationDum.py`).
+
+A demonstration of their solution is given in the script `demo/check.py` (run it as `python check.py` from the `demo` folder).
 
 
 ## Authors
 
-- Andrei Chertkov (a.chertkov@skoltech.ru);
-- Ivan Oseledets (i.oseledets@skoltech.ru).
+- [Andrei Chertkov](https://github.com/AndreiChertkov) (a.chertkov@skoltech.ru);
+- [Ivan Oseledets](https://github.com/oseledets) (i.oseledets@skoltech.ru).
 
 
 ## Citation
 
-If you find this code useful in your research, please consider citing:
+If you find this approach and/or code useful in your research, please consider citing:
 
 ```bibtex
 @article{chertkov2021solution,
