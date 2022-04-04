@@ -64,5 +64,11 @@ setup_args = dict(
 if __name__ == '__main__':
     setup(
         **setup_args,
-        install_requires=['numpy', 'scipy', 'teneva', 'tqdm', 'matplotlib'],
+        install_requires=[
+            'matplotlib>=3.3.4',
+            'numpy==1.21',
+            'scipy==1.6.2',
+            'teneva==0.9.1',
+            'tqdm>=4.46.1',
+        ],
         include_package_data=True)

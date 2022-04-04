@@ -21,6 +21,6 @@ package/
 _.md
 _pack
 _tmp
-demo_result.png
-test_result/
+demo/demo_result.png
+demo/test_result/*
 doc/_build/*
