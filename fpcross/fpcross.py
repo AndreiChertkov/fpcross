@@ -28,14 +28,13 @@ class FPCross:
         self.A = None  # Interpolation coefficients for the Y
         self.W = None  # Copy of the conv. solution from the previous time step
         self.Y = None  # Current solution r(x, t); it is tensor on the grid
-        self.Z = None  # Matrix exponent for finite difference matrices
+        self.Z = None  # Matrix exponent for the finite difference matrices
+        self.m = 0     # Current time-step
         self.s = None  # Current value of Y integral over the spatial domain
+        self.t = 0.    # Current value of the time variable
+        self.tc = 0.   # Computation time (duration of solver work)
 
-        self.m = 0         # Current time-step
-        self.t = 0.        # Current value of the time variable
-        self.t_calc = 0.   # Computation time (duration)
-
-        # History for ranks and errors while computation proccess
+        # History for errors, ranks ant integral while computation proccess:
         self.es_list = []
         self.et_list = []
         self.r_list = []
@@ -94,8 +93,45 @@ class FPCross:
         self.text += f'e_t={e:-8.2e}|'
         return e
 
+    def _conv_apply(self):
+        def func(y, t):
+            X, r = y[:, :-1], y[:, -1]
+            f0 = self.eq.f(X, self.t)
+            f1 = self.eq.f1(X, self.t)
+            f1_mult = - np.sum(f1, axis=1) * r
+            f1_mult = f1_mult.reshape(-1, 1)
+            return np.hstack([f0, f1_mult])
+
+        def step_conv(X):
+            X0 = ode_solve(self.eq.f, X, self.t, 2, -self.eq.h)
+
+            if self.is_full:
+                w0 = teneva.cheb_get_full(X0, self.A, self.eq.a, self.eq.b)
+            else:
+                w0 = teneva.cheb_get(X0, self.A, self.eq.a, self.eq.b)
+
+            y0 = np.hstack([X0, w0.reshape(-1, 1)])
+
+            y1 = ode_solve(func, y0, self.t-self.eq.h, 2, self.eq.h)
+
+            w1 = y1[:, -1]
+
+            return w1
+
+        self.Y = self.eq.build(step_conv, self.W)
+
+    def _diff_apply(self):
+        if self.is_full:
+            self.Y = self.Y.reshape(-1, order='F')
+            self.Y = self.Z @ self.Y
+            self.Y = self.Y.reshape(self.eq.n, order='F')
+        else:
+            for k in range(self.eq.d):
+                self.Y[k] = np.einsum('ij,kjm->kim', self.Z, self.Y[k])
+            self.Y = teneva.truncate(self.Y, self.eq.e)
+
     def _diff_init(self):
-        D1, D2 = dif_matrices(2, self.eq.n[0], self.eq.a[0], self.eq.b[0])
+        D1, D2 = diff_matrices(2, self.eq.n[0], self.eq.a[0], self.eq.b[0])
         h0 = self.eq.h / 2
         J0 = np.eye(self.eq.n[0])
         J0[+0, +0] = 0.
@@ -125,58 +161,21 @@ class FPCross:
             self.Y = teneva.mul(1. / self.s, self.Y)
 
     def _step(self):
-        t_ = tpc()
-        self._step_diff()
+        tc = tpc()
+        self._diff_apply()
         self._interpolate()
-        self._step_conv()
+        self._conv_apply()
         self._renormalize()
         self.W = teneva.copy(self.Y)
-        self._step_diff()
-        self.t_calc += tpc() - t_
-
-    def _step_conv(self):
-        def func(y, t):
-            X, r = y[:, :-1], y[:, -1]
-            f0 = self.eq.f(X, self.t)
-            f1 = self.eq.f1(X, self.t)
-            f1_mult = - np.sum(f1, axis=1) * r
-            f1_mult = f1_mult.reshape(-1, 1)
-            return np.hstack([f0, f1_mult])
-
-        def step_conv(X):
-            X0 = ode_solve(self.eq.f, X, self.t, 2, -self.eq.h)
-
-            if self.is_full:
-                w0 = teneva.cheb_get_full(X0, self.A, self.eq.a, self.eq.b)
-            else:
-                w0 = teneva.cheb_get(X0, self.A, self.eq.a, self.eq.b)
-
-            y0 = np.hstack([X0, w0.reshape(-1, 1)])
-
-            y1 = ode_solve(func, y0, self.t-self.eq.h, 2, self.eq.h)
-
-            w1 = y1[:, -1]
-
-            return w1
-
-        self.Y = self.eq.build(step_conv, self.W)
-
-    def _step_diff(self):
-        if self.is_full:
-            self.Y = self.Y.reshape(-1, order='F')
-            self.Y = self.Z @ self.Y
-            self.Y = self.Y.reshape(self.eq.n, order='F')
-        else:
-            for k in range(self.eq.d):
-                self.Y[k] = np.einsum('ij,kjm->kim', self.Z, self.Y[k])
-            self.Y = teneva.truncate(self.Y, self.eq.e)
+        self._diff_apply()
+        self.tc += tpc() - tc
 
     def _step_init(self):
-        t_ = tpc()
+        tc = tpc()
         self._diff_init()
         self.Y = self.eq.build_r0()
         self.W = teneva.copy(self.Y)
-        self.t_calc += tpc() - t_
+        self.tc += tpc() - tc
         self.tqdm = tqdm(desc='Solve', unit='step', total=self.eq.m-1, ncols=90)
 
     def _step_post(self):
@@ -200,7 +199,7 @@ class FPCross:
         self.tqdm.update(1)
 
 
-def dif_matrices(m, n, l_min, l_max):
+def diff_matrices(m, n, l_min, l_max):
     n1 = np.int(np.floor(n / 2))
     n2 = np.int(np.ceil(n / 2))
     k = np.arange(n)
