@@ -6,8 +6,8 @@ from ..equation import Equation
 
 
 class EquationOUP(Equation):
+    """Ornstein-Uhlenbeck process, a special case of the FPE."""
     def __init__(self, d=3, e=1.E-4, is_full=False, name='OUP'):
-        """Ornstein-Uhlenbeck process, a special case of the FPE."""
         super().__init__(d, e, is_full, name)
 
         self.set_coef_rhs()
@@ -18,7 +18,7 @@ class EquationOUP(Equation):
         return -X @ self.coef_rhs.T
 
     def f1(self, X, t):
-        return -np.ones(X.shape) @ self.coef_rhs
+        return -np.ones(X.shape) @ self.coef_rhs.T
 
     def init(self):
         self.with_rs = True
@@ -29,7 +29,7 @@ class EquationOUP(Equation):
         self.Wd = np.linalg.det(self.W)
 
     def rs(self, X):
-        r = np.exp(-0.5 * np.diag(X.T @ self.Wi @ X))
+        r = np.exp(-0.5 * np.diag(X @ self.Wi @ X.T))
         r /= np.sqrt(2**self.d * np.pi**self.d * self.Wd)
         return r
 
