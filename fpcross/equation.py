@@ -9,7 +9,8 @@ class Equation:
         Args:
             d (int): number of dimensions.
             e (float): desired accuracy of approximation. It will be used for
-                all truncations of the TT-tensors.
+                all truncations of the TT-tensors. Note that this parameter is
+                not used if "is_full" flag is set.
             is_full (bool): if flag is set, then full (numpy) format will be
                 used instead of the TT-format. Note that the full format may be
                 used only for small dimension numbers ("d").
@@ -85,7 +86,6 @@ class Equation:
         """
         func = self.r0
         self.Y0 = self.build(func)
-
         return self.Y0
 
     def build_rs(self):
@@ -100,10 +100,10 @@ class Equation:
         """
         if not self.with_rs:
             self.Ys = None
-        else:
-            func = self.rs
-            self.Ys = self.build(func, e=self.e/100)
+            return self.Ys
 
+        func = self.rs
+        self.Ys = self.build(func, e=self.e/100)
         return self.Ys
 
     def build_rt(self, t):
@@ -121,10 +121,10 @@ class Equation:
         """
         if not self.with_rt:
             self.Yt = None
-        else:
-            func = lambda X: self.rt(X, t)
-            self.Yt = self.build(func, e=self.e/100)
+            return self.Yt
 
+        func = lambda X: self.rt(X, t)
+        self.Yt = self.build(func, e=self.e/100)
         return self.Yt
 
     def callback(self, solver):
@@ -275,8 +275,8 @@ class Equation:
                 upper bounds for each dimension will be the same.
 
         Note:
-            Only "unfirom" grids are supported now, i.e., n / a / b should be
-            int/float.
+            Only "unfirom" grids are supported now (the size for each dimension
+            should be the same), i.e., n / a / b should be int/float.
 
         """
         if isinstance(n, (int, float)):
@@ -304,7 +304,7 @@ class Equation:
             raise ValueError('Invalid length of b')
 
     def set_grid_time(self, m=100, t=1.):
-        """Set spatial grid parameters for the discretization.
+        """Set time grid parameters for the discretization.
 
         Args:
             m (int, float): grid size (i.e., the number of time steps).
