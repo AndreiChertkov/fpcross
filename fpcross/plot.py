@@ -50,19 +50,22 @@ def plot_spec(res, fpath=None):
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(16, 8))
     plt.subplots_adjust(wspace=0.2)
 
+    with_psi = len(res.eq.psi_list) == len(t)
+    with_eta = len(res.eq.eta_list) == len(t)
+
     ax1.set_title('Computation results')
     ax1.set_xlabel('Time')
-    if len(res.eq.psi_list) == len(t):
+    if with_psi:
         ax1.plot(t, res.eq.psi_list, label='Value of $\psi$',
             linestyle='-', linewidth=2, color='#5f91ac',
             marker='o', markersize=7, markerfacecolor='#5f91ac',
             markeredgewidth=1, markeredgecolor='#5f91ac')
-    if len(res.eq.eta_list) == len(t):
+    if with_eta:
         ax1.plot(t, res.eq.eta_list, label='Value of $\eta$',
             linestyle='-', linewidth=2, color='#8b1d1d',
             marker='o', markersize=7, markerfacecolor='#8b1d1d',
             markeredgewidth=1, markeredgecolor='#8b1d1d')
-    prep(ax1, is_log=False)
+    prep(ax1, with_leg=(with_psi or with_eta), is_log=False)
 
     ax2.set_title('TT-rank')
     ax2.set_xlabel('Time')

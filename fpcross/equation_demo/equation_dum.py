@@ -54,7 +54,7 @@ class EquationDum(Equation):
         e_eta = abs(self.eta_real - self.eta_list[-1]) / abs(self.eta_real)
         e_psi = abs(self.psi_real - self.psi_list[-1]) / abs(self.psi_real)
 
-        return f'|e_eta={e_eta:-8.2e}|e_psi={e_psi:-8.2e}'
+        return f' | e_eta={e_eta:-8.2e} | e_psi={e_psi:-8.2e}'
 
     def dphi(self, X):
         X = X.T

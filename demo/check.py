@@ -156,5 +156,5 @@ if __name__ == '__main__':
         os.mkdir('./demo/result')
 
     run()
-    # run_np()
-    # run_spec()
+    run_np()
+    run_spec()

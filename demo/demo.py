@@ -4,6 +4,10 @@ To create the new equation, the base (abstract) class "Equation" should be
 inherited. See the detailed description of the base class methods and the
 format of input and output arguments in the module "fpcross/equation.py".
 
+Note that numerous parameters of the TT-CROSS method can be refined when
+calling the Equation class method "set_cross_opts". See the documentation for
+this function for more details.
+
 """
 import numpy as np
 

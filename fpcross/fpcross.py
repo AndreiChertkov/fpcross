@@ -111,7 +111,7 @@ class FPCross:
         e = teneva.accuracy(self.Y, self.eq.Ys)
         self.es_list.append(e)
 
-        self.text += f'e_s={e:-8.2e}|'
+        self.text += f' | e_s={e:-8.2e}'
         return e
 
     def _check_rt(self):
@@ -123,7 +123,7 @@ class FPCross:
         e = teneva.accuracy(self.Y, self.eq.Yt)
         self.et_list.append(e)
 
-        self.text += f'e_t={e:-8.2e}|'
+        self.text += f' | e_t={e:-8.2e}'
         return e
 
     def _conv_apply(self):
@@ -212,12 +212,12 @@ class FPCross:
         self.tc += tpc() - tc
 
     def _step_proc(self):
-        self.text = f'|t={self.t:-4.2f}|'
+        self.text = f' | t={self.t:-4.2f}'
 
         if not self.is_full:
             r = teneva.erank(self.Y)
             self.r_list.append(r)
-            self.text += f'r={r:-3.1f}|'
+            self.text += f' | r={r:-3.1f}'
 
         if self.with_hist or self.m == self.eq.m:
             self._check_rs()

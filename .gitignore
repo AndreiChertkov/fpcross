@@ -22,5 +22,5 @@ _.md
 _pack
 _tmp
 demo/demo_result.png
-demo/test_result/*
+demo/result/*
 doc/_build/*
