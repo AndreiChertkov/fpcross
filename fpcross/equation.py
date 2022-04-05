@@ -24,6 +24,7 @@ class Equation:
 
         self.set_coef()
         self.set_coef_pdf()
+        self.set_cross_opts()
         self.set_grid()
         self.set_grid_time()
 
@@ -39,7 +40,7 @@ class Equation:
                 should return 1D np.ndarray of the length equals to "samples".
             Y0 (list): TT-tensor, which is the initial approximation for the
                 TT-CROSS algorithm. If it is not set, then random TT-tensor of
-                the TT-ranks equals 1 will be used.
+                the TT-ranks equals "self.cross_r" will be used.
             e (float): convergence criterion for the TT-CROSS algorithm. If
                 between iterations the relative rate of solution change is less
                 than this value, then the operation of the algorithm will be
@@ -52,22 +53,25 @@ class Equation:
                 returned.
 
         """
+        self.cross_info = {}
+        self.cross_cache = {} if self.cross_with_cache else None
+
         if self.is_full:
             Y = teneva.cheb_bld_full(func, self.a, self.b, self.n)
         else:
             Y = teneva.cheb_bld(func, self.a, self.b, self.n,
                 eps=self.e,
-                Y0=teneva.rand(self.n, 1) if Y0 is None else Y0,
-                m=None,
+                Y0=teneva.rand(self.n, self.cross_r) if Y0 is None else Y0,
+                m=self.cross_m,
                 e=e or self.e,
-                nswp=10,
-                tau=1.1,
-                dr_min=1,
-                dr_max=2,
-                tau0=1.05,
-                k0=100,
-                info={},
-                cache=None)
+                nswp=self.cross_nswp,
+                tau=self.cross_tau,
+                dr_min=self.cross_dr_min,
+                dr_max=self.cross_dr_max,
+                tau0=self.cross_tau0,
+                k0=self.cross_k0,
+                info=self.cross_info,
+                cache=self.cross_cache)
 
         return Y
 
@@ -257,6 +261,27 @@ class Equation:
 
         """
         self.coef_pdf = coef_pdf
+
+    def set_cross_opts(self, m=None, e=None, nswp=10, tau=1.1, dr_min=1, dr_max=2, tau0=1.05, k0=100, with_cache=False, r=1):
+        """Set parameters for the TT-CROSS method.
+
+        See "https://teneva.readthedocs.io/code/core/cross.html" with a
+        detailed description of the parameters. In addition to the parameters
+        described on this page, this function also accepts "with_cache" (if
+        flag is True, then cache for TT-CROSS will be used), "r" (TT-rank for
+        initial approximation).
+
+        """
+        self.cross_m = m
+        self.cross_e = e
+        self.cross_nswp = nswp
+        self.cross_tau = tau
+        self.cross_dr_min = dr_min
+        self.cross_dr_max = dr_max
+        self.cross_tau0 = tau0
+        self.cross_k0 = k0
+        self.cross_with_cache = with_cache
+        self.cross_r = r
 
     def set_grid(self, n=10, a=-1., b=+1.):
         """Set spatial grid parameters for the discretization.

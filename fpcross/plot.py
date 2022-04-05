@@ -17,12 +17,12 @@ def plot(res, fpath=None):
 
     ax1.set_title('Relative error')
     ax1.set_xlabel('Time')
-    if len(res.es_list):
+    if len(res.es_list) == len(t):
         ax1.plot(t, res.es_list, label='vs stationary',
             linestyle='-', linewidth=2, color=COLOR1,
             marker='o', markersize=7, markerfacecolor=COLOR1,
             markeredgewidth=1, markeredgecolor=COLOR1)
-    if len(res.et_list):
+    if len(res.et_list) == len(t):
         ax1.plot(t, res.et_list, label='vs analytic',
             linestyle='-.', linewidth=2, color=COLOR2,
             marker='o', markersize=0, markerfacecolor=COLOR2,
@@ -52,14 +52,16 @@ def plot_spec(res, fpath=None):
 
     ax1.set_title('Computation results')
     ax1.set_xlabel('Time')
-    ax1.plot(t, res.eq.psi_list, label='Value of $\psi$',
-        linestyle='-', linewidth=2, color='#5f91ac',
-        marker='o', markersize=7, markerfacecolor='#5f91ac',
-        markeredgewidth=1, markeredgecolor='#5f91ac')
-    ax1.plot(t, res.eq.eta_list, label='Value of $\eta$',
-        linestyle='-', linewidth=2, color='#8b1d1d',
-        marker='o', markersize=7, markerfacecolor='#8b1d1d',
-        markeredgewidth=1, markeredgecolor='#8b1d1d')
+    if len(res.eq.psi_list) == len(t):
+        ax1.plot(t, res.eq.psi_list, label='Value of $\psi$',
+            linestyle='-', linewidth=2, color='#5f91ac',
+            marker='o', markersize=7, markerfacecolor='#5f91ac',
+            markeredgewidth=1, markeredgecolor='#5f91ac')
+    if len(res.eq.eta_list) == len(t):
+        ax1.plot(t, res.eq.eta_list, label='Value of $\eta$',
+            linestyle='-', linewidth=2, color='#8b1d1d',
+            marker='o', markersize=7, markerfacecolor='#8b1d1d',
+            markeredgewidth=1, markeredgecolor='#8b1d1d')
     prep(ax1, is_log=False)
 
     ax2.set_title('TT-rank')

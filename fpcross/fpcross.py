@@ -33,6 +33,7 @@ class FPCross:
         self.s = None  # Current value of Y integral over the spatial domain
         self.t = 0.    # Current value of the time variable
         self.tc = 0.   # Computation time (duration of solver work)
+        self.is_last = False
 
         # History for errors, ranks ant integral while computation proccess:
         self.es_list = []
@@ -83,17 +84,22 @@ class FPCross:
 
     def solve(self):
         """Solve the Fokker-Planck equation."""
+        tqdm_ = tqdm(desc='Solve', unit='step', total=self.eq.m-1, ncols=90)
         self._step_init()
 
         for m in range(1, self.eq.m + 1):
             self.m = m
             self.t = self.eq.h * self.m
+            self.is_last = m == self.eq.m
 
             self._step()
             self._step_proc()
-            self.eq.callback(self)
+            self.text += self.eq.callback(self) or ''
 
-        self._step_post()
+            tqdm_.set_postfix_str(self.text, refresh=True)
+            tqdm_.update(1)
+
+        tqdm_.close()
 
     def _check_rs(self):
         if not self.eq.with_rs:
@@ -204,10 +210,6 @@ class FPCross:
         self.Y = self.eq.build_r0()
         self.W = teneva.copy(self.Y)
         self.tc += tpc() - tc
-        self.tqdm = tqdm(desc='Solve', unit='step', total=self.eq.m-1, ncols=90)
-
-    def _step_post(self):
-        self.tqdm.close()
 
     def _step_proc(self):
         self.text = f'|t={self.t:-4.2f}|'
@@ -222,10 +224,6 @@ class FPCross:
             self._check_rt()
 
         self.s_list.append(self.s)
-
-        self.tqdm.set_postfix_str(self.text, refresh=True)
-        self.tqdm.update(1)
-
 
 def diff_matrices(m, n, l_min, l_max):
     n1 = np.int(np.floor(n / 2))
