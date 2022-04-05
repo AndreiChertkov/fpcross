@@ -22,14 +22,14 @@ The package can be installed via pip: `pip install fpcross` (it requires the [Py
 
 ## Usage
 
-A compact example of using the solver for a user-defined FPE is provided in the script `demo/demo.py` (run it as `python demo.py` from the `demo` folder).
+A compact example of using the solver for a user-defined FPE is provided in the script `demo/demo.py` (run it as `python demo/demo.py` from the root of the project).
 
 The software product also implements classes for the model FPEs:
-1. multidimensional simple diffusion problem (see `fpcross/EquationDif.py`);
-2. multidimensional Ornstein-Uhlenbeck process (see `fpcross/EquationOUP.py`);
-3. 3-dimensional dumbbell model (see `fpcross/EquationDum.py`).
+1. multidimensional simple diffusion problem (see `fpcross/equation_demo/EquationDif.py`);
+2. multidimensional Ornstein-Uhlenbeck process (see `fpcross/equation_demo/EquationOUP.py`);
+3. 3-dimensional dumbbell model (see `fpcross/equation_demo/EquationDum.py`).
 
-A demonstration of their solution is given in the script `demo/check.py` (run it as `python check.py` from the `demo` folder).
+A demonstration of their solution is given in the script `demo/check.py` (run it as `python cdemo/heck.py` from the root of the project).
 
 
 ## Authors
