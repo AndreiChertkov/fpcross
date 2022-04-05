@@ -3,7 +3,7 @@ import teneva
 import time
 
 
-from .equation import Equation
+from ..equation import Equation
 
 
 class EquationDum(Equation):

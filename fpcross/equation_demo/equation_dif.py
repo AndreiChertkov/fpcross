@@ -1,7 +1,7 @@
 import numpy as np
 
 
-from .equation import Equation
+from ..equation import Equation
 
 
 class EquationDif(Equation):

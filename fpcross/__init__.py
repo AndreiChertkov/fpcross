@@ -1,5 +1,6 @@
 __version__ = '0.1'
 
 
-from .equation import *
+from .equation import Equation
+from .equation_demo import *
 from .fpcross import FPCross

@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import solve_lyapunov
 
 
-from .equation import Equation
+from ..equation import Equation
 
 
 class EquationOUP(Equation):
