@@ -40,6 +40,33 @@ class FPCross:
         self.r_list = []
         self.s_list = []
 
+    def get(self, X):
+        """Calculate the current solution in the given spatial point.
+
+        Args:
+            X (np.ndarray): the spatial point (or several points) of interest.
+                It is np.ndarray of the shape [dimensions] or [samples,
+                dimensions].
+
+        Returns:
+            float or np.ndarray: the solution value for the given spatial
+            point. If only one point is provided (i.e., X has the shape
+            [dimensions]), then it will be float. If several points are
+            provided (i.e., X has the shape [samples, dimensions]), then it
+            will be np.ndarray of the shape [samples].
+
+        """
+        is_one = len(X.shape) == 1
+        if is_one:
+            X = X.reshape(1, -1)
+
+        if self.is_full:
+            y = teneva.cheb_get_full(X, self.A, self.eq.a, self.eq.b)
+        else:
+            y = teneva.cheb_get(X, self.A, self.eq.a, self.eq.b)
+
+        return y[0] if is_one else y
+
     def plot(self, fpath=None, is_spec=False):
         """Plot the computation result.
 
@@ -168,6 +195,7 @@ class FPCross:
         self._renormalize()
         self.W = teneva.copy(self.Y)
         self._diff_apply()
+        self._interpolate()
         self.tc += tpc() - tc
 
     def _step_init(self):
