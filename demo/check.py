@@ -61,7 +61,7 @@ def run_dif_3d():
 
     fpc = FPCross(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./result/dif_3d')
+    fpc.plot('./demo/result/dif_3d')
 
 
 def run_dif_3d_np():
@@ -70,7 +70,7 @@ def run_dif_3d_np():
 
     fpc = FPCross(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./result/dif_3d_np')
+    fpc.plot('./demo/result/dif_3d_np')
 
 
 def run_dum_3d():
@@ -79,7 +79,7 @@ def run_dum_3d():
 
     fpc = FPCross(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./result/dum_3d', is_spec=True)
+    fpc.plot('./demo/result/dum_3d', is_spec=True)
 
 
 def run_oup_1d_np():
@@ -91,7 +91,7 @@ def run_oup_1d_np():
 
     fpc = FPCross(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./result/oup_1d_np')
+    fpc.plot('./demo/result/oup_1d_np')
 
 
 def run_oup_2d_np():
@@ -104,7 +104,7 @@ def run_oup_2d_np():
 
     fpc = FPCross(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./result/oup_2d_np')
+    fpc.plot('./demo/result/oup_2d_np')
 
 
 def run_oup_3d():
@@ -118,7 +118,7 @@ def run_oup_3d():
 
     fpc = FPCross(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./result/oup_3d')
+    fpc.plot('./demo/result/oup_3d')
 
 
 def run_oup_3d_np():
@@ -132,7 +132,7 @@ def run_oup_3d_np():
 
     fpc = FPCross(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./result/oup_3d_np')
+    fpc.plot('./demo/result/oup_3d_np')
 
 
 def run_oup_5d():
@@ -148,12 +148,12 @@ def run_oup_5d():
 
     fpc = FPCross(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./result/oup_5d')
+    fpc.plot('./demo/result/oup_5d')
 
 
 if __name__ == '__main__':
-    if not os.path.isdir('./result'):
-        os.mkdir('./result')
+    if not os.path.isdir('./demo/result'):
+        os.mkdir('./demo/result')
 
     run()
     # run_np()

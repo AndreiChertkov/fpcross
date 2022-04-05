@@ -36,4 +36,4 @@ eq.init()
 
 fpc = FPCross(eq, with_hist=True)
 fpc.solve()
-fpc.plot('./demo_result.png')
+fpc.plot('./demo/demo_result.png')
