@@ -177,8 +177,6 @@ class Equation:
         self.with_rs = False
         self.with_rt = False
 
-        return self
-
     def r0(self, X):
         """The function computes initial PDF r(x, 0).
 

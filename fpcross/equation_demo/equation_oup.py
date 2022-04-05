@@ -28,8 +28,6 @@ class EquationOUP(Equation):
         self.Wi = np.linalg.inv(self.W)
         self.Wd = np.linalg.det(self.W)
 
-        return self
-
     def rs(self, X):
         r = np.exp(-0.5 * np.diag(X.T @ self.Wi @ X))
         r /= np.sqrt(2**self.d * np.pi**self.d * self.Wd)

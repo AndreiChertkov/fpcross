@@ -22,8 +22,6 @@ class EquationDif(Equation):
         self.with_rs = False
         self.with_rt = True
 
-        return self
-
     def rt(self, X, t):
         a = 2. * self.coef_pdf + 4. * self.coef * t
         r = np.exp(-np.sum(X*X, axis=1) / a)

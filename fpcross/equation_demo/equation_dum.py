@@ -94,5 +94,3 @@ class EquationDum(Equation):
         self.K = np.zeros((self.d, self.d))
         self.K[0, 1] = 1.
         self.K *= self.b_opt
-
-        return self
