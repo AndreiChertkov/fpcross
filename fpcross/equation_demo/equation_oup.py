@@ -7,6 +7,7 @@ from ..equation import Equation
 
 class EquationOUP(Equation):
     """Ornstein-Uhlenbeck process, a special case of the FPE."""
+
     def __init__(self, d=3, e=1.E-4, is_full=False, name='OUP'):
         super().__init__(d, e, is_full, name)
 

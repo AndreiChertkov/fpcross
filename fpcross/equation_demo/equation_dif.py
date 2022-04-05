@@ -6,6 +6,7 @@ from ..equation import Equation
 
 class EquationDif(Equation):
     """Simple diffusion problem, a special case of the FPE."""
+
     def __init__(self, d=3, e=1.E-6, is_full=False, name='Dif'):
         super().__init__(d, e, is_full, name)
 
