@@ -18,8 +18,8 @@ class EquationOwn(Equation):
 
         # We calculate the value of the solution at some point at each
         # time step (just for demonstration purposes):
-        v = solver.get(self.poi)
-        self.val.append(v)
+        self.t_list.append(solver.t)
+        self.y_list.append(solver.get(self.poi))
 
     def f(self, X, t):
         """The rhs."""
@@ -37,7 +37,8 @@ class EquationOwn(Equation):
         # We will calculate the value of the solution at this point at each
         # time step (just for demonstration purposes):
         self.poi = np.zeros(self.d)
-        self.val = []
+        self.t_list = []
+        self.y_list = []
 
     def r0(self, X, coef_pdf=1.):
         """Initial PDF r(x, 0)."""
@@ -73,4 +74,5 @@ fpc.solve()
 fpc.plot('./demo/demo_result.png')
 
 # We may print the computed values in selected point at each time step:
-print(eq.val)
+for t, y in zip(eq.t_list, eq.y_list):
+    print(f'Time {t:-8.4f} | {y:-8.4f}')
