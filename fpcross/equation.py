@@ -262,7 +262,7 @@ class Equation:
         """
         self.coef_pdf = coef_pdf
 
-    def set_cross_opts(self, m=None, e=None, nswp=10, tau=1.1, dr_min=1, dr_max=2, tau0=1.05, k0=100, with_cache=False, r=1):
+    def set_cross_opts(self, m=None, e=None, nswp=10, tau=1.1, dr_min=1, dr_max=2, tau0=1.05, k0=100, with_cache=True, r=1):
         """Set parameters for the TT-CROSS method.
 
         See "https://teneva.readthedocs.io/code/core/cross.html" with a

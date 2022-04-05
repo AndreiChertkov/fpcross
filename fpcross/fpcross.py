@@ -225,6 +225,7 @@ class FPCross:
 
         self.s_list.append(self.s)
 
+
 def diff_matrices(m, n, l_min, l_max):
     n1 = np.int(np.floor(n / 2))
     n2 = np.int(np.ceil(n / 2))
