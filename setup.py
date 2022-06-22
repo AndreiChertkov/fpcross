@@ -66,7 +66,7 @@ if __name__ == '__main__':
         **setup_args,
         install_requires=[
             'matplotlib>=3.3.4',
-            'numpy==1.21',
+            'numpy==1.22.0',
             'scipy==1.6.2',
             'teneva==0.9.1',
             'tqdm>=4.46.1',
