@@ -34,8 +34,8 @@ A demonstration of their solution is given in the script `demo/check.py` (run it
 
 ## Authors
 
-- [Andrei Chertkov](https://github.com/AndreiChertkov) (a.chertkov@skoltech.ru);
-- [Ivan Oseledets](https://github.com/oseledets) (i.oseledets@skoltech.ru).
+- [Andrei Chertkov](https://github.com/AndreiChertkov)
+- [Ivan Oseledets](https://github.com/oseledets)
 
 
 ## Citation
