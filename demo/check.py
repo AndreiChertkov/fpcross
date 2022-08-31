@@ -152,8 +152,7 @@ def run_oup_5d():
 
 
 if __name__ == '__main__':
-    if not os.path.isdir('./demo/result'):
-        os.mkdir('./demo/result')
+    os.makedirs('./demo/result', exist_ok=True)
 
     run()
     run_np()

@@ -1,5 +1,16 @@
 """Demo script that shows how to use the Fokker-Planck solver.
 
+The output should look like this:
+"
+Solve: 100step [00:06, 15.46step/s,  | t=2.50 | r=1.0 | e_t=1.50e-02]
+Time   0.0250 |   0.0433
+Time   0.0500 |   0.0423
+Time   0.0750 |   0.0413
+...
+Time   2.4750 |   0.0095
+Time   2.5000 |   0.0094
+".
+
 Note:
     To create the new equation, the base (abstract) class "Equation" should be
     inherited (see the class "EquationOwn" below). The detailed description of
