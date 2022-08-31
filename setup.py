@@ -32,7 +32,7 @@ setup_args = dict(
     long_description=desc_long,
     long_description_content_type='text/markdown',
     author='Andrei Chertkov',
-    author_email='a.chertkov@skoltech.ru',
+    author_email='andre.chertkov@gmail.com',
     url='https://github.com/AndreiChertkov/fpcross',
     classifiers=[
         'Development Status :: 3 - Alpha', # 4 - Beta, 5 - Production/Stable
@@ -65,10 +65,13 @@ if __name__ == '__main__':
     setup(
         **setup_args,
         install_requires=[
-            'matplotlib>=3.3.4',
-            'numpy==1.21',
-            'scipy==1.6.2',
-            'teneva==0.9.1',
-            'tqdm>=4.46.1',
+            'teneva==0.11.5',
+            'matplotlib==3.5.3',
+            'numba==0.56.0',
+            'numpy==1.22.0',
+            'scipy==1.9.1',
+            'tqdm==4.64.0',
+            'llvmlite==0.39.0',
+            'six==1.16.0',
         ],
         include_package_data=True)
