@@ -39,9 +39,9 @@ class Equation:
                 2D np.ndarray of the shape [samples, dimensions]. The function
                 should return 1D np.ndarray of the length equals to "samples".
             Y0 (list): TT-tensor, which is the initial approximation for the
-                TT-CROSS algorithm. If it is not set, then random TT-tensor of
+                TT-cross algorithm. If it is not set, then random TT-tensor of
                 the TT-ranks equals "self.cross_r" will be used.
-            e (float): convergence criterion for the TT-CROSS algorithm. If
+            e (float): convergence criterion for the TT-cross algorithm. If
                 between iterations the relative rate of solution change is less
                 than this value, then the operation of the algorithm will be
                 interrupted. If is not set, then "self.e" option will be used.
@@ -56,12 +56,13 @@ class Equation:
         self.cross_info = {}
         self.cross_cache = {} if self.cross_with_cache else None
 
+        if Y0 is None:
+            Y0 = teneva.tensor_rand(self.n, self.cross_r)
+
         if self.is_full:
             Y = teneva.cheb_bld_full(func, self.a, self.b, self.n)
         else:
-            Y = teneva.cheb_bld(func, self.a, self.b, self.n,
-                eps=self.e,
-                Y0=teneva.rand(self.n, self.cross_r) if Y0 is None else Y0,
+            Y = teneva.cheb_bld(func, self.a, self.b, self.n, eps=self.e, Y0=Y0,
                 m=self.cross_m,
                 e=e or self.e,
                 nswp=self.cross_nswp,

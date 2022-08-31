@@ -161,6 +161,7 @@ class FPCross:
         else:
             for k in range(self.eq.d):
                 self.Y[k] = np.einsum('ij,kjm->kim', self.Z, self.Y[k])
+            # TODO. Do we need truncation here (?):
             self.Y = teneva.truncate(self.Y, self.eq.e)
 
     def _diff_init(self):
@@ -181,6 +182,7 @@ class FPCross:
             self.A = teneva.cheb_int_full(self.Y)
         else:
             self.A = teneva.cheb_int(self.Y)
+            # TODO. Do we need truncation here (?):
             self.A = teneva.truncate(self.A, self.eq.e)
 
     def _renormalize(self):
@@ -191,6 +193,7 @@ class FPCross:
             self.Y = (1. / self.s) * self.Y
         else:
             self.s = teneva.cheb_sum(self.A, self.eq.a, self.eq.b)
+            # TODO. Maybe we need truncation after "mul" (?):
             self.Y = teneva.mul(1. / self.s, self.Y)
 
     def _step(self):
@@ -219,7 +222,7 @@ class FPCross:
             self.r_list.append(r)
             self.text += f' | r={r:-3.1f}'
 
-        if self.with_hist or self.m == self.eq.m:
+        if self.with_hist or self.is_last:
             self._check_rs()
             self._check_rt()
 

@@ -7,7 +7,7 @@ from ..equation import Equation
 
 class EquationDum(Equation):
     """Dumbbell model, a special case of the FPE (it works only for d=3)."""
-    
+
     def __init__(self, d=3, e=1.E-5, is_full=False, name='Dum'):
         super().__init__(d, e, is_full, name)
 

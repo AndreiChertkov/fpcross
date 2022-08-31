@@ -49,8 +49,8 @@ class EquationOUP(Equation):
         """Set coefficient matrix for the rhs.
 
         Args:
-            coef_rhs (np.ndarray): coefficient matrix for the rhs
-                (rhs = -1 * coef_rhs * x). It is np.ndarray of the shape [d, d].
+            coef_rhs (np.ndarray): coefficient matrix for the rhs (rhs = -1 *
+                coef_rhs * x). It is np.ndarray of the shape [d, d].
 
         """
         if coef_rhs is None:
