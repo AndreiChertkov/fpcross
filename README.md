@@ -1,9 +1,9 @@
-# Package fpcross
+# fpcross
 
 
 ## Description
 
-This python package, named **fpcross** (**F**okker **P**lanck **cross**-approximation), provides a solver in the low-rank tensor-train format with cross approximation approach for solution of the multidimensional Fokker-Planck equation (FPE) of the form
+This python package, named **fpcross** (**F**okker **P**lanck **cross**-approximation), provides a solver in the low-rank tensor train format with cross approximation approach for solution of the multidimensional Fokker-Planck equation (FPE) of the form
 
 ```
 d r(x, t) / d t = D delta( r(x, t) ) - div( f(x, t) r(x, t) ),
@@ -15,9 +15,9 @@ The function f(x, t), its diagonal partial derivatives d f_i (x, t) / d x_i, ini
 
 ## Installation
 
-The package can be installed via pip: `pip install fpcross` (it requires the [Python](https://www.python.org) programming language of the version >= 3.7). It can be also downloaded from the repository [fpcross](https://github.com/AndreiChertkov/fpcross) and installed by `python setup.py install` command from the root folder of the project.
+The package can be installed via pip: `pip install fpcross` (it requires the [Python](https://www.python.org) programming language of the version >= 3.8). It can be also downloaded from the repository [fpcross](https://github.com/AndreiChertkov/fpcross) and installed by `python setup.py install` command from the root folder of the project.
 
-> Required python packages [matplotlib](https://matplotlib.org/), [numpy](https://numpy.org), [scipy](https://www.scipy.org), [teneva](https://github.com/AndreiChertkov/teneva) and [tqdm](https://github.com/tqdm/tqdm) will be automatically installed during the installation of the main software product.
+> It is highly recommended to create a virtual environment before installing (`conda create --name fpcross python=3.8` and then `conda activate fpcross`). The setup file contains the versions of the packages that were used when testing the software product, but it may work correct on newer versions.
 
 
 ## Usage
@@ -25,11 +25,11 @@ The package can be installed via pip: `pip install fpcross` (it requires the [Py
 A compact example of using the solver for a user-defined FPE is provided in the script `demo/demo.py` (run it as `python demo/demo.py` from the root of the project).
 
 The software product also implements classes for the model FPEs:
-1. multidimensional simple diffusion problem (see `fpcross/equation_demo/EquationDif.py`);
-2. multidimensional Ornstein-Uhlenbeck process (see `fpcross/equation_demo/EquationOUP.py`);
-3. 3-dimensional dumbbell model (see `fpcross/equation_demo/EquationDum.py`).
+1. multidimensional simple diffusion problem (see `fpcross/equation_demo/equation_dif.py`);
+2. multidimensional Ornstein-Uhlenbeck process (see `fpcross/equation_demo/equation_oup.py`);
+3. 3-dimensional dumbbell model (see `fpcross/equation_demo/equation_dum.py`).
 
-A demonstration of their solution is given in the script `demo/check.py` (run it as `python cdemo/heck.py` from the root of the project).
+A demonstration of their solution is given in the script `demo/check.py` (run it as `python demo/check.py` from the root of the project).
 
 
 ## Authors
