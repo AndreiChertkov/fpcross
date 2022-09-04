@@ -165,9 +165,10 @@ class FPCross:
             self.Y = teneva.truncate(self.Y, self.eq.e)
 
     def _diff_init(self):
-        D1, D2 = diff_matrices(2, self.eq.n[0], self.eq.a[0], self.eq.b[0])
+        n = self.eq.n[0]
+        D1, D2 = teneva.cheb_diff_matrix(self.eq.a[0], self.eq.b[0], n, 2)
         h0 = self.eq.h / 2
-        J0 = np.eye(self.eq.n[0])
+        J0 = np.eye(n)
         J0[+0, +0] = 0.
         J0[-1, -1] = 0.
         self.Z = expm(h0 * self.eq.coef * J0 @ D2)
@@ -227,39 +228,6 @@ class FPCross:
             self._check_rt()
 
         self.s_list.append(self.s)
-
-
-def diff_matrices(m, n, l_min, l_max):
-    n1 = np.int(np.floor(n / 2))
-    n2 = np.int(np.ceil(n / 2))
-    k = np.arange(n)
-    th = k * np.pi / (n - 1)
-
-    T = np.tile(th/2, (n, 1))
-    DX = 2. * np.sin(T.T + T) * np.sin(T.T - T)
-    DX[n1:, :] = -np.flipud(np.fliplr(DX[0:n2, :]))
-    DX[range(n), range(n)] = 1.
-    DX = DX.T
-
-    Z = 1. / DX
-    Z[range(n), range(n)] = 0.
-
-    C = toeplitz((-1.)**k)
-    C[+0, :]*= 2
-    C[-1, :]*= 2
-    C[:, +0]*= 0.5
-    C[:, -1]*= 0.5
-
-    D_list = []
-    D = np.eye(n)
-    l = 2. / (l_max - l_min)
-    for i in range(m):
-        D = (i + 1) * Z * (C * np.tile(np.diag(D), (n, 1)).T - D)
-        D[range(n), range(n)] = -np.sum(D, axis=1)
-        D_list.append(D * l)
-        l = l * l
-
-    return D_list
 
 
 def ode_solve(f, y0, t, n, h):

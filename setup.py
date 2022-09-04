@@ -65,7 +65,7 @@ if __name__ == '__main__':
     setup(
         **setup_args,
         install_requires=[
-            'teneva==0.11.5',
+            'teneva==0.11.6',
             'matplotlib==3.5.3',
             'numba==0.56.0',
             'numpy==1.22.0',
