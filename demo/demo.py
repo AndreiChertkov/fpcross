@@ -1,14 +1,17 @@
 """Demo script that shows how to use the Fokker-Planck solver.
 
-The output should look like this:
+Run it from the root of the project as "clear && python demo/demo.py". The
+output should look like this (see also the plot "demo/demo_result.png"):
 "
-Solve: 100step [00:06, 15.46step/s,  | t=2.50 | r=1.0 | e_t=1.50e-02]
-Time   0.0250 |   0.0433
-Time   0.0500 |   0.0423
-Time   0.0750 |   0.0413
+Solve: 100step [00:06, 16.33step/s,  | t=2.50 | r=1.0 | e_t=1.50e-02]
+
+The value of PDF at poi=[0, 0, 0] for different time moments:
+Time   0.0250 | Value   0.0433
+Time   0.0500 | Value   0.0423
+Time   0.0750 | Value   0.0413
 ...
-Time   2.4750 |   0.0095
-Time   2.5000 |   0.0094
+Time   2.4750 | Value   0.0095
+Time   2.5000 | Value   0.0094
 ".
 
 Note:
@@ -115,5 +118,6 @@ fpc.solve()
 fpc.plot('./demo/demo_result.png')
 
 # We may print the computed values in selected point from each time step:
+print('\nThe value of PDF at poi=[0, 0, 0] for different time moments:')
 for t, y in zip(eq.t_list, eq.y_list):
-    print(f'Time {t:-8.4f} | {y:-8.4f}')
+    print(f'Time {t:-8.4f} | Value {y:-8.4f}')
