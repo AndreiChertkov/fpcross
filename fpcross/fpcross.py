@@ -126,7 +126,12 @@ class FPCross:
         self.text += f' | e_t={e:-8.2e}'
         return e
 
-    def _conv_apply(self):
+    def _conv_apply(self, n_fine_fact=None):
+        if n_fine_fact is not None:
+            # Experimental option!! Should be "None" in actual code
+            n_fine = self.eq.n * n_fine_fact
+            Z = teneva.cheb_gets(self.A, self.eq.a, self.eq.b, n_fine)
+
         def func(y, t):
             X, r = y[:, :-1], y[:, -1]
             f0 = self.eq.f(X, self.t)
@@ -141,7 +146,12 @@ class FPCross:
             if self.is_full:
                 w0 = teneva.cheb_get_full(X0, self.A, self.eq.a, self.eq.b)
             else:
-                w0 = teneva.cheb_get(X0, self.A, self.eq.a, self.eq.b)
+                if n_fine_fact is None:
+                    w0 = teneva.cheb_get(X0, self.A, self.eq.a, self.eq.b)
+                else:
+                    I0 = teneva.poi_to_ind(X0,
+                        self.eq.a, self.eq.b, n_fine, 'cheb')
+                    w0 = teneva.get_many(Z, I0)
 
             y0 = np.hstack([X0, w0.reshape(-1, 1)])
 
