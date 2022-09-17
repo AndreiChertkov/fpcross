@@ -3,7 +3,7 @@
 Run it from the root of the project as "clear && python demo/demo.py". The
 output should look like this (see also the plot "demo/demo_result.png"):
 "
-Solve: 100step [00:06, 16.33step/s,  | t=2.50 | r=1.0 | e_t=1.50e-02]
+Solve: 100step [00:06, 15.09step/s,  | t=2.50 | r=1.0 | e_t=1.50e-02]
 
 The value of PDF at poi=[0, 0, 0] for different time moments:
 Time   0.0250 | Value   0.0433
