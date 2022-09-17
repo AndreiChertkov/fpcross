@@ -127,7 +127,7 @@ class FPCross:
         return e
 
     def _conv_apply(self, n_fine_fact=None):
-        if n_fine_fact is not None:
+        if n_fine_fact is not None and not self.is_full:
             # Experimental option!! Should be "None" in actual code
             n_fine = self.eq.n * n_fine_fact
             Z = teneva.cheb_gets(self.A, self.eq.a, self.eq.b, n_fine)
