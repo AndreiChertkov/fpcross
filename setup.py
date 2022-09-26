@@ -25,6 +25,11 @@ with open(os.path.join(here, 'fpcross/__init__.py'), encoding='utf-8') as f:
     version = version.group(1)
 
 
+with open(os.path.join(here, 'requirements.txt'), encoding='utf-8') as f:
+    requirements = f.read().split('\n')
+    requirements = [r for r in requirements if len(r) >= 3]
+
+
 setup_args = dict(
     name='fpcross',
     version=version,
@@ -45,14 +50,13 @@ setup_args = dict(
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3 :: Only',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Framework :: Jupyter',
     ],
     keywords='Fokker-Planck equation low-rank representation tensor train format TT-decomposition cross approximation probability density estimation',
     packages=find_packages('fpcross', './fpcross/'),
-    python_requires='>=3.7',
+    python_requires='>=3.8',
     project_urls={
         'Source': 'https://github.com/AndreiChertkov/fpcross',
     },
@@ -64,14 +68,5 @@ setup_args = dict(
 if __name__ == '__main__':
     setup(
         **setup_args,
-        install_requires=[
-            'teneva==0.11.6',
-            'matplotlib==3.5.3',
-            'numba==0.56.0',
-            'numpy==1.22.0',
-            'scipy==1.9.1',
-            'tqdm==4.64.0',
-            'llvmlite==0.39.0',
-            'six==1.16.0',
-        ],
+        install_requires=requirements,
         include_package_data=True)
