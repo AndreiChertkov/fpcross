@@ -17,8 +17,6 @@ The function f(x, t), its diagonal partial derivatives d f_i (x, t) / d x_i, ini
 
 The package can be installed via pip: `pip install fpcross` (it requires the [Python](https://www.python.org) programming language of the version >= 3.8). It can be also downloaded from the repository [fpcross](https://github.com/AndreiChertkov/fpcross) and installed by `python setup.py install` command from the root folder of the project.
 
-> It is highly recommended to create a virtual environment before installing (`conda create --name fpcross python=3.8` and then `conda activate fpcross`). The setup file contains the versions of the packages that were used when testing the software product, but it may work correct on newer versions.
-
 
 ## Usage
 
