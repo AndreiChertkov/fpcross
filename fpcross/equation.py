@@ -48,9 +48,13 @@ class Equation:
 
         Returns:
             list: TT-Tensor with function values on the Chebyshev grid. If full
-                format is used (see flag "is_full"), then the d-dimensional
-                np.ndarray with function values on the Chebyshev grid will be
-                returned.
+            format is used (see flag "is_full"), then the d-dimensional
+            np.ndarray with function values on the Chebyshev grid will be
+            returned.
+
+        Note:
+            You can use the "set_cross_opts" function to refine the parameters
+            of the TT-cross method.
 
         """
         self.cross_info = {}
@@ -82,9 +86,9 @@ class Equation:
 
         Returns:
             list: TT-Tensor with function values on the Chebyshev grid. If full
-                format is used (see flag "is_full"), then the d-dimensional
-                np.ndarray with function values on the Chebyshev grid will be
-                returned.
+            format is used (see flag "is_full"), then the d-dimensional
+            np.ndarray with function values on the Chebyshev grid will be
+            returned.
 
         Note:
             The function specified in the "r0" method is used.
@@ -99,9 +103,9 @@ class Equation:
 
         Returns:
             list: TT-Tensor with function values on the Chebyshev grid. If full
-                format is used (see flag "is_full"), then the d-dimensional
-                np.ndarray with function values on the Chebyshev grid will be
-                returned. If flag "with_rs" is not set, then it returns None.
+            format is used (see flag "is_full"), then the d-dimensional
+            np.ndarray with function values on the Chebyshev grid will be
+            returned. If flag "with_rs" is not set, then it returns None.
 
         """
         if not self.with_rs:
@@ -120,9 +124,9 @@ class Equation:
 
         Returns:
             list: TT-Tensor with function values on the Chebyshev grid. If full
-                format is used (see flag "is_full"), then the d-dimensional
-                np.ndarray with function values on the Chebyshev grid will be
-                returned. If flag "with_rt" is not set, then it returns None.
+            format is used (see flag "is_full"), then the d-dimensional
+            np.ndarray with function values on the Chebyshev grid will be
+            returned. If flag "with_rt" is not set, then it returns None.
 
         """
         if not self.with_rt:
@@ -265,13 +269,12 @@ class Equation:
         self.coef_pdf = coef_pdf
 
     def set_cross_opts(self, m=None, e=None, nswp=10, tau=1.1, dr_min=1, dr_max=1, tau0=1.05, k0=100, with_cache=True, r=1):
-        """Set parameters for the TT-CROSS method.
+        """Set parameters for the TT-cross method.
 
         See "https://teneva.readthedocs.io/code/core/cross.html" with a
-        detailed description of the parameters. In addition to the parameters
-        described on this page, this function also accepts "with_cache" (if
-        flag is True, then cache for TT-CROSS will be used), "r" (TT-rank for
-        initial approximation).
+        detailed description of the parameters. In addition to this parameters,
+        function also accepts "with_cache" (if flag is True, then cache for
+        TT-cross will be used) and "r" (TT-rank for initial approximation).
 
         """
         self.cross_m = m
