@@ -19,7 +19,9 @@ class EquationOUP(Equation):
         return -X @ self.coef_rhs.T
 
     def f1(self, X, t):
-        return -np.ones(X.shape) @ self.coef_rhs.T
+        shape = X.shape[:-1] + (1, )  # Tiling directions for a row.
+        grads = np.tile(-np.diag(self.coef_rhs), shape)
+        return grads
 
     def init(self):
         self.with_rs = True
