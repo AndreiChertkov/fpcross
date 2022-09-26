@@ -11,7 +11,7 @@ from .plot import plot_spec
 
 
 class FPCross:
-    def __init__(self, eq, with_hist=False):
+    def __init__(self, eq, with_hist=False, with_y_list=False, with_a_list=False):
         """Class that represents the solver for the Fokker-Planck equation.
 
         Args:
@@ -19,6 +19,11 @@ class FPCross:
             with_hist (bool): if flag is set, then accuracy of the result will
                 be checked after each time step. Otherwise, the accuracy check
                 will be performed only after the solver has finished running.
+            with_y_list (bool): if flag is set, then solutions from each time
+                step will be saved in "Y_list" variable.
+            with_a_list (bool): if flag is set, then interpoltation
+                coefficients of the solutions from each time step will be saved
+                in "A_list" variable.
 
         """
         self.eq = eq
@@ -33,6 +38,8 @@ class FPCross:
         self.s = None  # Current value of Y integral over the spatial domain
         self.t = 0.    # Current value of the time variable
         self.tc = 0.   # Computation time (duration of solver work)
+
+        # Special varuables:
         self.is_last = False
 
         # History for errors, ranks ant integral while computation proccess:
@@ -40,6 +47,12 @@ class FPCross:
         self.et_list = []
         self.r_list = []
         self.s_list = []
+
+        # History for solutions from each time step:
+        self.with_y_list = bool(with_y_list)
+        self.Y_list = []
+        self.with_a_list = bool(with_a_list)
+        self.A_list = []
 
     def get(self, X):
         """Calculate the current solution in the given spatial point.
@@ -61,10 +74,8 @@ class FPCross:
         if is_one:
             X = X.reshape(1, -1)
 
-        if self.is_full:
-            y = teneva.cheb_get_full(X, self.A, self.eq.a, self.eq.b)
-        else:
-            y = teneva.cheb_get(X, self.A, self.eq.a, self.eq.b)
+        func = teneva.cheb_get_full if self.is_full else teneva.cheb_get
+        y = func(X, self.A, self.eq.a, self.eq.b)
 
         return y[0] if is_one else y
 
@@ -90,7 +101,7 @@ class FPCross:
         for m in range(1, self.eq.m + 1):
             self.m = m
             self.t = self.eq.h * self.m
-            self.is_last = m == self.eq.m
+            self.is_last = (m == self.eq.m)
 
             self._step()
             self._step_proc()
@@ -217,6 +228,13 @@ class FPCross:
         self._diff_apply()
         self._interpolate()
         self.tc += tpc() - tc
+
+        if self.with_y_list:
+            Y = self.Y.copy() if self.is_full else teneva.copy(self.Y)
+            self.Y_list.append(Y)
+        if self.with_a_list:
+            A = self.A.copy() if self.is_full else teneva.copy(self.A)
+            self.A_list.append(A)
 
     def _step_init(self):
         tc = tpc()
