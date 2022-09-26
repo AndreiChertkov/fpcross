@@ -21,7 +21,7 @@ Note:
     presented in the module "fpcross/equation.py" (online documentation will be
     available soon).
 
-    Numerous parameters of the TT-CROSS method can be refined when calling the
+    Numerous parameters of the TT-cross method can be refined when calling the
     "Equation" class method "set_cross_opts". See the documentation for this
     function for more details. At the same time, for all prepared model
     examples (multidimensional simple diffusion problem, multidimensional
