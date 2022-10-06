@@ -215,7 +215,6 @@ class FPCross:
             self.Y = (1. / self.s) * self.Y
         else:
             self.s = teneva.cheb_sum(self.A, self.eq.a, self.eq.b)
-            # TODO. Maybe we need truncation after "mul" (?):
             self.Y = teneva.mul(1. / self.s, self.Y)
 
     def _step(self):
@@ -229,6 +228,9 @@ class FPCross:
         self._interpolate()
         self.tc += tpc() - tc
 
+        self._step_hist()
+
+    def _step_hist(self):
         if self.with_y_list:
             Y = self.Y.copy() if self.is_full else teneva.copy(self.Y)
             self.Y_list.append(Y)
@@ -268,59 +270,3 @@ def ode_solve(f, y0, t, n, h):
         y += (k1 + 2 * (k2 + k3) + k4) / 6.
         t += h
     return y
-
-
-
-class FPCrossOUDiag(FPCross):
-
-    def apply_exact_OU(self, c, X, a, mu, t, cf=1):
-        X0 = X
-        #if quad is 'trap': #Trapezoidal rule
-        #    X0 = X*....
-
-        X0, X1 = np.meshgrid(X0, X, indexing='xy')
-        ae2a = (1 - np.exp(-2*a*t))/a
-        M = (-( mu - X1 + (X0 - mu)*np.exp(-a*t) )**2) / ae2a
-        
-        
-        Det = np.sqrt(np.pi*ae2a)
-        
-        M = cf*np.exp(M)
-        M /= Det
-        return M @ c
-
-    
-    def _step(self):
-        tc = tpc()
-
-        self.Y = [self.apply_exact_OU(c, X, A_i, self.eq.coef_mu, self.t, (b-a)/n) 
-                  for k, (c, A_i, X, a, b, n) in enumerate(zip(self.Y0, np.diag(self.eq.coef_rhs), self.X, self.eq.a, self.eq.b, self.eq.n))]
-
-        #self.Y = self._renormalize(self.Y)
-
-        self.tc += tpc() - tc
-
-        if self.with_y_list:
-            Y = self.Y.copy() if self.is_full else teneva.copy(self.Y)
-            self.Y_list.append(Y)
-        if self.with_a_list:
-            self._interpolate()
-            A = self.A.copy() if self.is_full else teneva.copy(self.A)
-            self.A_list.append(A)
-
-    def _renormalize(self, Y):
-        c = np.array([1.])
-        for ci, a, b, n in zip(Y, self.eq.a, self.eq.b, self.eq.n):
-            c = c @ ci.sum(axis=1)
-            c *= (b - a)/n
-        
-        self.s = c.item()
-        return teneva.mul(1. / self.s, Y)
-        
-    def _step_init(self):
-        tc = tpc()
-        self.X = [np.linspace(a, b, n) for a, b, n in zip(self.eq.a, self.eq.b, self.eq.n)]
-        self.Y0 = self._renormalize(self.eq.build_r0())
-        self.tc += tpc() - tc
-
-
