@@ -22,13 +22,13 @@ def run(d, A, m, t, is_new=True):
 
 
 if __name__ == '__main__':
-    a = [1.5, 1.0, 0.5, 2.0, 1.5]
+    a = [1.5, 1.0, 0.5, 2.0, 1.5, 1.2, 2.2, 3.3, 1.1, 5.1]
     A = np.diag(a)  # RHS matrix
     d = A.shape[0]  # Dimension
     m = 200         # Number of time points
     t = 10.         # Final time
 
     run(d, A, m, t)                # Run new solver (for diag OUP)
-    run(d, A, m, t, is_new=False)  # Run old solver (for general FPE)
+    # run(d, A, m, t, is_new=False)  # Run old solver (for general FPE)
 
     # Run it as "python demo/demo_oup_spec.py"
