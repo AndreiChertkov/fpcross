@@ -27,7 +27,7 @@ class EquationOUPUniv(EquationOUP):
 
         return teneva.truncate(Y, e)
 
-    def build_rs(self):
+    def build_rs_(self):
         # TODO: This function is completely identical to the function from the
         # base class. Why we need it?
 
@@ -38,10 +38,10 @@ class EquationOUPUniv(EquationOUP):
         func = self.rs
         self.cross_nswp = 100
         self.Ys = self.build(func, e=self.e/100)
-        # self.Ys = _renormalize_new(self.Ys, self.a, self.b, self.n)
+        self.Ys = _renormalize_new(self.Ys, self.a, self.b, self.n)
         return self.Ys
 
-    def rs(self, X):
+    def rs_(self, X):
         # TODO: What does it mean?
         self.log_M = (X - self.coef_mu) @ self.Wi @ (X.T - self.coef_mu)
         self.log_M =  -0.5 * np.diag(self.log_M)

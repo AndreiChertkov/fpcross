@@ -1,4 +1,3 @@
-"""Demo script that shows how to use the Fokker-Planck solver for OUP."""
 import numpy as np
 
 
@@ -8,34 +7,28 @@ from fpcross import FPCross
 from fpcross import FPCrossOUPDiag
 
 
-def run_new():
-    eq = EquationOUPUniv(d=3)
-    eq.set_coef_rhs(np.array([
-        [1.5, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.5, 0.3, 1.0],
-    ]))
+def run(d, A, m, t, is_new=True):
+    Equation_ = EquationOUPUniv if is_new else EquationOUP
+    FPCross_ = FPCrossOUPDiag if is_new else FPCross
+
+    eq = Equation_(d)
+    eq.set_grid_time(m, t)
+    eq.set_coef_rhs(A)
     eq.init()
 
-    fpc = FPCrossOUPDiag(eq, with_hist=True)
+    fpc = FPCross_(eq, with_hist=True)
     fpc.solve()
-    fpc.plot('./demo/result/oup_3d_test_new')
-
-
-def run_old():
-    eq = EquationOUP(d=3)
-    eq.set_coef_rhs(np.array([
-        [1.5, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.5, 0.3, 1.0],
-    ]))
-    eq.init()
-
-    fpc = FPCross(eq, with_hist=True)
-    fpc.solve()
-    fpc.plot('./demo/result/oup_3d_test_old')
+    fpc.plot('./demo/result/oup_3d_test_' + ('new' if is_new else 'old'))
 
 
 if __name__ == '__main__':
-    run_old()
-    run_new()
+    a = [1.5, 1.0, 0.5, 2.0, 1.5]
+    A = np.diag(a)  # RHS matrix
+    d = A.shape[0]  # Dimension
+    m = 200         # Number of time points
+    t = 10.         # Final time
+
+    run(d, A, m, t)                # Run new solver (for diag OUP)
+    run(d, A, m, t, is_new=False)  # Run old solver (for general FPE)
+
+    # Run it as "python demo/demo_oup_spec.py"

@@ -208,8 +208,6 @@ class FPCross:
             self.A = teneva.truncate(self.A, self.eq.e)
 
     def _renormalize(self):
-        self._interpolate()
-
         if self.is_full:
             self.s = teneva.cheb_sum_full(self.A, self.eq.a, self.eq.b)
             self.Y = (1. / self.s) * self.Y
@@ -222,7 +220,8 @@ class FPCross:
         self._diff_apply()
         self._interpolate()
         self._conv_apply()
-        self._renormalize()
+        #self._interpolate()
+        #self._renormalize()
         self.W = teneva.copy(self.Y)
         self._diff_apply()
         self._interpolate()
@@ -242,6 +241,12 @@ class FPCross:
         tc = tpc()
         self._diff_init()
         self.Y = self.eq.build_r0()
+
+        self._interpolate()
+        self._renormalize()
+
+
+
         self.W = teneva.copy(self.Y)
         self.tc += tpc() - tc
 
