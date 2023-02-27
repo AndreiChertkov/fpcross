@@ -61,7 +61,7 @@ class Equation:
         self.cross_cache = {} if self.cross_with_cache else None
 
         if Y0 is None:
-            Y0 = teneva.tensor_rand(self.n, self.cross_r)
+            Y0 = teneva.rand(self.n, self.cross_r)
 
         if self.is_full:
             Y = teneva.cheb_bld_full(func, self.a, self.b, self.n)
