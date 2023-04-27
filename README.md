@@ -17,6 +17,8 @@ The function f(x, t), its diagonal partial derivatives d f_i (x, t) / d x_i, ini
 
 The package can be installed via pip: `pip install fpcross` (it requires the [Python](https://www.python.org) programming language of the version >= 3.8). It can be also downloaded from the repository [fpcross](https://github.com/AndreiChertkov/fpcross) and installed by `python setup.py install` command from the root folder of the project.
 
+> Required python packages [teneva](https://github.com/AndreiChertkov/teneva) (0.14.1+), [matplotlib](https://matplotlib.org/) (3.7.0+) and [tqdm](https://github.com/tqdm/tqdm) (4.64.0+) will be automatically installed during the installation of the main software product.
+
 
 ## Usage
 
@@ -34,6 +36,8 @@ A demonstration of their solution is given in the script `demo/check.py` (run it
 
 - [Andrei Chertkov](https://github.com/AndreiChertkov)
 - [Ivan Oseledets](https://github.com/oseledets)
+
+> ✭__🚂  The stars that you give to **fpcross**, motivate us to develop faster and add new interesting features to the code 😃
 
 
 ## Citation
