@@ -1,3 +1,10 @@
+"""Package fpcross, module equation_demo.equation_oup: OUP problem.
+
+This module contains the class EquationOUP, which extends the base class
+Equation and provides a description of the multidimensional Ornstein-Uhlenbeck
+process, which is a case of the Fokker-Planck equation with linear term.
+
+"""
 import numpy as np
 from scipy.linalg import solve_lyapunov
 
