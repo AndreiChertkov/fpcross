@@ -1,7 +1,9 @@
-"""Apply the Fokker-Planck solver for different model problems.
+"""Package fpcross, module demo.check: usage of the solver for various problems.
 
-Run it from the root of the project as "clear && python demo/check.py". The
-output should look like this (see also the folder "demo/result" with plots):
+Script, which demonstrates how to apply the Fokker-Planck solver based on the
+cross approximation method for different model problems. Run it from the root
+of the project as "clear && python demo/check.py". The output should looks like
+this (see also the folder "demo/result" with auto-generated plots):
 "
 >>>>>  DIF-3D
 Solve: 100step [00:06, 15.47step/s,  | t=2.50 | r=1.0 | e_t=1.50e-02]
@@ -51,50 +53,50 @@ from fpcross import FPCross
 def run():
     print(f'>>>>>  DIF-3D')
     t = tpc()
-    run_dif_3d()
+    _calc_dif_3d()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
     print(f'>>>>>  OUP-3D')
     t = tpc()
-    run_oup_3d()
+    _calc_oup_3d()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
     print(f'>>>>>  OUP-5D')
     t = tpc()
-    run_oup_5d()
+    _calc_oup_5d()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
 
 def run_np():
     print(f'>>>>>  DIF-3D (Numpy format)')
     t = tpc()
-    run_dif_3d_np()
+    r_calc_dif_3d_np()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
     print(f'>>>>>  OUP-1D (Numpy format)')
     t = tpc()
-    run_oup_1d_np()
+    _calc_oup_1d_np()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
     print(f'>>>>>  OUP-2D (Numpy format)')
     t = tpc()
-    run_oup_2d_np()
+    _calc_oup_2d_np()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
     print(f'>>>>>  OUP-3D (Numpy format)')
     t = tpc()
-    run_oup_3d_np()
+    _calc_oup_3d_np()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
 
 def run_spec():
     print(f'>>>>>  DUM-3D')
     t = tpc()
-    run_dum_3d()
+    _calc_dum_3d()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
 
-def run_dif_3d():
+def _calc_dif_3d():
     eq = EquationDif(d=3)
     eq.init()
 
@@ -103,7 +105,7 @@ def run_dif_3d():
     fpc.plot('./demo/result/dif_3d')
 
 
-def run_dif_3d_np():
+def _calc_dif_3d_np():
     eq = EquationDif(d=3, is_full=True)
     eq.init()
 
@@ -112,7 +114,7 @@ def run_dif_3d_np():
     fpc.plot('./demo/result/dif_3d_np')
 
 
-def run_dum_3d():
+def _calc_dum_3d():
     eq = EquationDum(d=3)
     eq.init()
 
@@ -121,7 +123,7 @@ def run_dum_3d():
     fpc.plot('./demo/result/dum_3d', is_spec=True)
 
 
-def run_oup_1d_np():
+def _calc_oup_1d_np():
     eq = EquationOUP(d=1, is_full=True)
     eq.set_coef_rhs(np.array([
         [1.]
@@ -133,7 +135,7 @@ def run_oup_1d_np():
     fpc.plot('./demo/result/oup_1d_np')
 
 
-def run_oup_2d_np():
+def _calc_oup_2d_np():
     eq = EquationOUP(d=2, is_full=True)
     eq.set_coef_rhs(np.array([
         [1.0, 0.5],
@@ -146,7 +148,7 @@ def run_oup_2d_np():
     fpc.plot('./demo/result/oup_2d_np')
 
 
-def run_oup_3d():
+def _calc_oup_3d():
     eq = EquationOUP(d=3)
     eq.set_coef_rhs(np.array([
         [1.5, 0.0, 0.0],
@@ -160,7 +162,7 @@ def run_oup_3d():
     fpc.plot('./demo/result/oup_3d')
 
 
-def run_oup_3d_np():
+def _calc_oup_3d_np():
     eq = EquationOUP(d=3, is_full=True)
     eq.set_coef_rhs(np.array([
         [1.5, 0.0, 0.0],
@@ -174,7 +176,7 @@ def run_oup_3d_np():
     fpc.plot('./demo/result/oup_3d_np')
 
 
-def run_oup_5d():
+def _calc_oup_5d():
     eq = EquationOUP(d=5)
     eq.set_coef_rhs(np.array([
         [1.5, 0.0, 0.0, 0.0, 0.0],
