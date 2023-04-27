@@ -1,3 +1,10 @@
+"""Package fpcross, module equation: general representation of the target.
+
+This module contains the class Equation, which provides a set of methods for
+setting the parameters of the multidimensional Fokker-Planck equation and
+calculating auxiliary quantities.
+
+"""
 import numpy as np
 import teneva
 
@@ -64,10 +71,15 @@ class Equation:
             Y0 = teneva.rand(self.n, self.cross_r)
 
         if self.is_full:
-            Y = teneva.cheb_bld_full(func, self.a, self.b, self.n)
+            I = teneva.grid_flat(self.n)
+            X = teneva.ind_to_poi(I, self.a, self.b, self.n, 'cheb')
+            Y = func(X).reshape(self.n, order='F')
+
         else:
             e = e or self.e
-            Y = teneva.cheb_bld(func, self.a, self.b, self.n, eps=e, Y0=Y0,
+            f = lambda I: func(
+                teneva.ind_to_poi(I, self.a, self.b, self.n, 'cheb'))
+            Y = teneva.cross(f, Y0,
                 m=self.cross_m,
                 e=e,
                 nswp=self.cross_nswp,
@@ -78,6 +90,7 @@ class Equation:
                 k0=self.cross_k0,
                 info=self.cross_info,
                 cache=self.cross_cache)
+            Y = teneva.truncate(Y, e)
 
         return Y
 
@@ -155,8 +168,8 @@ class Equation:
             t (float): the current value of time.
 
         Returns:
-            np.ndarray: the values of the vector-values rhs for all samples (it
-            is 2D array of the shape [samples, dimensions]).
+            np.ndarray: the values of the vector rhs for all samples (it is 2D
+            array of the shape [samples, dimensions]).
 
         """
         return np.zeros(X.shape)
@@ -180,8 +193,8 @@ class Equation:
     def init(self):
         """The function is used to initialize the equation parameters.
 
-        Run it before the solution by FPCross solver but after the setting all
-        equation parameters ("set_coef", "set_grid", etc.).
+        Run it before the computations with FPCross solver but after the
+        setting all equation parameters (by "set_coef", "set_grid", etc.).
 
         """
         self.with_rs = False
@@ -224,7 +237,7 @@ class Equation:
             This function can be defined in a child class. In this case, the
             flag "self.with_rs" must also be set manually to True value (e.g.,
             inside the "init" function). In this case, the Fokker-Planck solver
-            will automatically check the accuracy of the received solution.
+            will automatically check the accuracy of the computed solution.
 
         """
         return
@@ -245,7 +258,7 @@ class Equation:
             This function can be defined in a child class. In this case, the
             flag "self.with_rt" must also be set manually to True value (e.g.,
             inside the "init" function). In this case, the Fokker-Planck solver
-            will automatically check the accuracy of the received solution.
+            will automatically check the accuracy of the computed solution.
 
         """
         return
@@ -268,13 +281,15 @@ class Equation:
         """
         self.coef_pdf = coef_pdf
 
-    def set_cross_opts(self, m=None, e=None, nswp=10, tau=1.1, dr_min=1, dr_max=1, tau0=1.05, k0=100, with_cache=True, r=1):
+    def set_cross_opts(self, m=None, e=None, nswp=10, tau=1.1, dr_min=1,
+                       dr_max=1, tau0=1.05, k0=100, with_cache=True, r=1):
         """Set parameters for the TT-cross method.
 
-        See "https://teneva.readthedocs.io/code/core/cross.html" with a
-        detailed description of the parameters. In addition to this parameters,
-        function also accepts "with_cache" (if flag is True, then cache for
-        TT-cross will be used) and "r" (TT-rank for initial approximation).
+        See "https://teneva.readthedocs.io/code/cross.html#teneva.cross.cross"
+        with a detailed description of the parameters. In addition to this
+        parameters, function also accepts "with_cache" (if flag is True, then
+        cache for TT-cross will be used) and "r" (TT-rank for initial
+        approximation).
 
         """
         self.cross_m = m
