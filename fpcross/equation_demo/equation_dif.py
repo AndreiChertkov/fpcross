@@ -1,3 +1,10 @@
+"""Package fpcross, module equation_demo.equation_dif: diffusion problem.
+
+This module contains the class EquationDif, which extends the base class
+Equation and provides a description of the simple diffusion problem (a special
+case of the Fokker-Planck equation with zero convection term).
+
+"""
 import numpy as np
 
 
