@@ -6,36 +6,36 @@ of the project as "clear && python demo/check.py". The output should looks like
 this (see also the folder "demo/result" with auto-generated plots):
 "
 >>>>>  DIF-3D
-Solve: 100step [00:06, 15.47step/s,  | t=2.50 | r=1.0 | e_t=1.50e-02]
------  Solved > Time :   7.0189 sec
+Solve: 100step [00:06, 16.01step/s,  | t=2.50 | r=1.0 | e_t=1.51e-02]
+-----  Solved > Time :   6.8367 sec
 
 >>>>>  OUP-3D
-Solve: 100step [00:08, 11.91step/s,  | t=5.00 | r=4.0 | e_s=1.57e-03]
------  Solved > Time :   8.7419 sec
+Solve: 100step [00:10,  9.58step/s,  | t=5.00 | r=4.0 | e_s=2.19e-03]
+-----  Solved > Time :  10.9529 sec
 
 >>>>>  OUP-5D
-Solve: 100step [00:39,  2.56step/s,  | t=5.00 | r=4.5 | e_s=1.95e-03]
------  Solved > Time :  39.4404 sec
+Solve: 100step [00:46,  2.16step/s,  | t=5.00 | r=4.5 | e_s=3.30e-03]
+-----  Solved > Time :  46.9134 sec
 
 >>>>>  DIF-3D (Numpy format)
-Solve: 100step [00:58,  1.72step/s,  | t=2.50 | e_t=1.50e-02]
------  Solved > Time :  58.3198 sec
+Solve: 100step [00:54,  1.83step/s,  | t=2.50 | e_t=1.51e-02]
+-----  Solved > Time :  54.8423 sec
 
 >>>>>  OUP-1D (Numpy format)
-Solve: 100step [00:00, 644.19step/s,  | t=5.00 | e_s=3.59e-04 | e_t=3.59e-04]
------  Solved > Time :   0.4358 sec
+Solve: 100step [00:00, 420.77step/s,  | t=5.00 | e_s=4.00e-04 | e_t=4.00e-04]
+-----  Solved > Time :   0.6074 sec
 
 >>>>>  OUP-2D (Numpy format)
-Solve: 100step [00:02, 36.88step/s,  | t=5.00 | e_s=7.07e-04]
------  Solved > Time :   3.0187 sec
+Solve: 100step [00:02, 35.30step/s,  | t=5.00 | e_s=7.68e-04]
+-----  Solved > Time :   3.1674 sec
 
 >>>>>  OUP-3D (Numpy format)
-Solve: 100step [03:44,  2.25s/step,  | t=5.00 | e_s=1.98e-03]
------  Solved > Time : 225.1532 sec
+Solve: 100step [03:19,  1.99s/step,  | t=5.00 | e_s=1.35e-03]
+-----  Solved > Time : 199.7536 sec
 
 >>>>>  DUM-3D
-Solve: 100step [01:20,  1.24step/s,  | t=10.00 | r=7.9 | e_eta=1.05e-03 | e_psi=3.72e-04]
------  Solved > Time :  80.9169 sec
+Solve: 100step [01:43,  1.04s/step,  | t=10.00 | r=7.9 | e_eta=2.04e-03 | e_psi=2.72e-03]
+-----  Solved > Time : 103.9188 sec
 ".
 
 """
