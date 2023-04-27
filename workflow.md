@@ -50,9 +50,9 @@
     clear && python demo/check.py
     ```
 
-3. Update version (like `0.6.X`) in the file `fpcross/__init__.py`
+3. Update version (like `0.5.X`) in the file `fpcross/__init__.py`
 
-4. Do commit `Update version (0.6.X)` and push
+4. Do commit `Update version (0.5.X)` and push
 
 5. Upload new version to `pypi` (login: AndreiChertkov)
     ```bash
