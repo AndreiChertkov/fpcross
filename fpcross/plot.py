@@ -1,3 +1,9 @@
+"""Package fpcross, module plot: utilities for drawing graphs and charts.
+
+This module contains the helpers to plot the approximation accuracy and tensor
+rank as a function of the time step while solving the Fokker-Planck equation.
+
+"""
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
@@ -7,6 +13,7 @@ COLOR2 = '#5f91ac'
 
 
 def plot(res, fpath=None):
+    """Function to plot computation results."""
     t = [i*res.eq.h for i in range(1, res.eq.m + 1)]
 
     if res.is_full:
@@ -38,13 +45,11 @@ def plot(res, fpath=None):
             markeredgewidth=1, markeredgecolor=COLOR1)
         prep(ax2, with_leg=False, is_log=False)
 
-    if fpath:
-        plt.savefig(fpath, bbox_inches='tight')
-    else:
-        plt.show()
+    plt.savefig(fpath, bbox_inches='tight') if fpath else plt.show()
 
 
 def plot_spec(res, fpath=None):
+    """Function to plot results for the 3D dumbbell model."""
     t = [i*res.eq.h for i in range(1, res.eq.m + 1)]
 
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(16, 8))
@@ -75,13 +80,11 @@ def plot_spec(res, fpath=None):
         markeredgewidth=1, markeredgecolor='#8b1d1d')
     prep(ax2, with_leg=False, is_log=False)
 
-    if fpath:
-        plt.savefig(fpath, bbox_inches='tight')
-    else:
-        plt.show()
+    plt.savefig(fpath, bbox_inches='tight') if fpath else plt.show()
 
 
 def prep(ax, with_leg=True, is_log=True, is_int_x=False):
+    """Helper function to prepare the matplotlib axis."""
     if with_leg:
         ax.legend(loc='best', frameon=True)
     if is_log:
