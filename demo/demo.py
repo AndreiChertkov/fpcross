@@ -1,7 +1,8 @@
-"""Demo script that shows how to use the Fokker-Planck solver.
+"""Package fpcross, module demo.demo: script that shows how to use the solver.
 
-Run it from the root of the project as "clear && python demo/demo.py". The
-output should look like this (see also the plot "demo/demo_result.png"):
+Demo script that shows how to use the Fokker-Planck solver. Run it from the
+root of the project as "clear && python demo/demo.py". The output should looks
+like this (see also the auto-generated plot "demo/demo_result.png"):
 "
 Solve: 100step [00:06, 15.92step/s,  | t=2.50 | r=1.0 | e_t=1.51e-02]
 
