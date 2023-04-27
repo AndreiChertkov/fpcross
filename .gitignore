@@ -18,10 +18,7 @@ package/
 *synctex.gz*
 *.egg-info/
 *.egg
-_.md
-_pack
 _tmp
-_text
 demo/demo_result.png
 demo/result/*
 demo/test.py

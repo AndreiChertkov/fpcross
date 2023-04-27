@@ -40,7 +40,7 @@ setup_args = dict(
     author_email='andre.chertkov@gmail.com',
     url='https://github.com/AndreiChertkov/fpcross',
     classifiers=[
-        'Development Status :: 3 - Alpha', # 4 - Beta, 5 - Production/Stable
+        'Development Status :: 4 - Beta', # 3 - Alpha, 5 - Production/Stable
         'License :: OSI Approved :: MIT License',
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Mathematics',
