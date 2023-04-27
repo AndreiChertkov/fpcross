@@ -1,3 +1,9 @@
+"""Package fpcross, module fpcross: the solver for the Fokker-Planck equation.
+
+This module contains the class FPCross, which represents the Fokker-Planck
+solver based on the cross approximation method in the tensor train format.
+
+"""
 import numpy as np
 from scipy.linalg import expm
 from scipy.linalg import toeplitz
@@ -11,7 +17,8 @@ from .plot import plot_spec
 
 
 class FPCross:
-    def __init__(self, eq, with_hist=False, with_y_list=False, with_a_list=False):
+    def __init__(self, eq, with_hist=False, with_y_list=False,
+                 with_a_list=False):
         """Class that represents the solver for the Fokker-Planck equation.
 
         Args:
@@ -39,14 +46,14 @@ class FPCross:
         self.t = 0.    # Current value of the time variable
         self.tc = 0.   # Computation time (duration of solver work)
 
-        # Special varuables:
+        # Special variables:
         self.is_last = False
 
         # History for errors, ranks ant integral while computation proccess:
-        self.es_list = []
-        self.et_list = []
-        self.r_list = []
-        self.s_list = []
+        self.es_list = []  # Errors vs stationary exact solution
+        self.et_list = []  # Errors vs time dependent exact solution
+        self.r_list = []   # TT-ranks of the TT-tensor Y
+        self.s_list = []   # Y integrals over the spatial domain
 
         # History for solutions from each time step:
         self.with_y_list = bool(with_y_list)
@@ -74,7 +81,7 @@ class FPCross:
         if is_one:
             X = X.reshape(1, -1)
 
-        func = teneva.cheb_get_full if self.is_full else teneva.cheb_get
+        func = teneva.func_get_full if self.is_full else teneva.func_get
         y = func(X, self.A, self.eq.a, self.eq.b)
 
         return y[0] if is_one else y
@@ -104,6 +111,7 @@ class FPCross:
             self.is_last = (m == self.eq.m)
 
             self._step()
+            self._step_hist()
             self._step_proc()
             self.text += self.eq.callback(self) or ''
 
@@ -137,12 +145,7 @@ class FPCross:
         self.text += f' | e_t={e:-8.2e}'
         return e
 
-    def _conv_apply(self, n_fine_fact=None):
-        if n_fine_fact is not None and not self.is_full:
-            # Experimental option!! Should be "None" in actual code
-            n_fine = self.eq.n * n_fine_fact
-            Z = teneva.cheb_gets(self.A, self.eq.a, self.eq.b, n_fine)
-
+    def _conv_apply(self):
         def func(y, t):
             X, r = y[:, :-1], y[:, -1]
             f0 = self.eq.f(X, self.t)
@@ -155,14 +158,9 @@ class FPCross:
             X0 = ode_solve(self.eq.f, X, self.t, 2, -self.eq.h)
 
             if self.is_full:
-                w0 = teneva.cheb_get_full(X0, self.A, self.eq.a, self.eq.b)
+                w0 = teneva.func_get_full(X0, self.A, self.eq.a, self.eq.b)
             else:
-                if n_fine_fact is None:
-                    w0 = teneva.cheb_get(X0, self.A, self.eq.a, self.eq.b)
-                else:
-                    I0 = teneva.poi_to_ind(X0,
-                        self.eq.a, self.eq.b, n_fine, 'cheb')
-                    w0 = teneva.get_many(Z, I0)
+                w0 = teneva.func_get(X0, self.A, self.eq.a, self.eq.b)
 
             y0 = np.hstack([X0, w0.reshape(-1, 1)])
 
@@ -187,7 +185,7 @@ class FPCross:
 
     def _diff_init(self):
         n = self.eq.n[0]
-        D1, D2 = teneva.cheb_diff_matrix(self.eq.a[0], self.eq.b[0], n, 2)
+        D1, D2 = teneva.func_diff_matrix(self.eq.a[0], self.eq.b[0], n, 2)
         h0 = self.eq.h / 2
         J0 = np.eye(n)
         J0[+0, +0] = 0.
@@ -201,18 +199,18 @@ class FPCross:
 
     def _interpolate(self):
         if self.is_full:
-            self.A = teneva.cheb_int_full(self.Y)
+            self.A = teneva.func_int_full(self.Y)
         else:
-            self.A = teneva.cheb_int(self.Y)
+            self.A = teneva.func_int(self.Y)
             # TODO. Do we need truncation here (?):
             self.A = teneva.truncate(self.A, self.eq.e)
 
     def _renormalize(self):
         if self.is_full:
-            self.s = teneva.cheb_sum_full(self.A, self.eq.a, self.eq.b)
+            self.s = teneva.func_sum_full(self.A, self.eq.a, self.eq.b)
             self.Y = (1. / self.s) * self.Y
         else:
-            self.s = teneva.cheb_sum(self.A, self.eq.a, self.eq.b)
+            self.s = teneva.func_sum(self.A, self.eq.a, self.eq.b)
             self.Y = teneva.mul(1. / self.s, self.Y)
 
     def _step(self):
@@ -227,15 +225,11 @@ class FPCross:
         self._interpolate()
         self.tc += tpc() - tc
 
-        self._step_hist()
-
     def _step_hist(self):
         if self.with_y_list:
-            Y = self.Y.copy() if self.is_full else teneva.copy(self.Y)
-            self.Y_list.append(Y)
+            self.Y_list.append(teneva.copy(self.Y))
         if self.with_a_list:
-            A = self.A.copy() if self.is_full else teneva.copy(self.A)
-            self.A_list.append(A)
+            self.A_list.append(teneva.copy(self.A))
 
     def _step_init(self):
         tc = tpc()
@@ -244,8 +238,6 @@ class FPCross:
 
         self._interpolate()
         self._renormalize()
-
-
 
         self.W = teneva.copy(self.Y)
         self.tc += tpc() - tc
