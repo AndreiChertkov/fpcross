@@ -70,7 +70,7 @@ def run():
 def run_np():
     print(f'>>>>>  DIF-3D (Numpy format)')
     t = tpc()
-    r_calc_dif_3d_np()
+    _calc_dif_3d_np()
     print(f'-----  Solved > Time : {tpc()-t:-8.4f} sec\n')
 
     print(f'>>>>>  OUP-1D (Numpy format)')
