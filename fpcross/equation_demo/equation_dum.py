@@ -1,3 +1,14 @@
+"""Package fpcross, module equation_demo.equation_dum: dumbbell problem.
+
+This module contains the class EquationDum, which extends the base class
+Equation and provides a description of the 3-dimensional dumbbell model, which
+is a case of the Fokker-Planck equation. The formulation is based on the work
+Dolgov, S. V., Khoromskij, B. N., and Oseledets, I. V. (2012). Fast Solution of
+Parabolic Problems in the Tensor Train/Quantized Tensor Train Format with
+Initial Application to the Fokker--Planck Equation. SIAM J. Sci. Comput. 34,
+A3016–A3038; doi:10.1137/120864210.
+
+"""
 import numpy as np
 import teneva
 
@@ -25,24 +36,24 @@ class EquationDum(Equation):
 
     def calc_eta(self, A):
         def func(X):
-            R = teneva.cheb_get(X, A, self.a, self.b)
+            R = teneva.func_get(X, A, self.a, self.b)
             return self.deta(X, R)
 
         Y_ = self.build(func)
-        A_ = teneva.cheb_int(Y_)
+        A_ = teneva.func_int(Y_)
 
-        eta = teneva.cheb_sum(A_, self.a, self.b)
+        eta = teneva.func_sum(A_, self.a, self.b)
         self.eta_list.append(eta)
 
     def calc_psi(self, A):
         def func(X):
-            R = teneva.cheb_get(X, A, self.a, self.b)
+            R = teneva.func_get(X, A, self.a, self.b)
             return self.dpsi(X, R)
 
         Y_ = self.build(func)
-        A_ = teneva.cheb_int(Y_)
+        A_ = teneva.func_int(Y_)
 
-        psi = teneva.cheb_sum(A_, self.a, self.b)
+        psi = teneva.func_sum(A_, self.a, self.b)
         self.psi_list.append(psi)
 
     def callback(self, solver):
