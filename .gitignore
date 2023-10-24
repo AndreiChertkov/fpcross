@@ -24,3 +24,4 @@ demo/result/*
 demo/test.py
 doc/_build/*
 dev/
+_.md
