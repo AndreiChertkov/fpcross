@@ -18,7 +18,7 @@ from .plot import plot_spec
 
 class FPCross:
     def __init__(self, eq, with_hist=False, with_y_list=False,
-                 with_a_list=False):
+                 with_a_list=False, with_log=True):
         """Class that represents the solver for the Fokker-Planck equation.
 
         Args:
@@ -31,11 +31,14 @@ class FPCross:
             with_a_list (bool): if flag is set, then interpoltation
                 coefficients of the solutions from each time step will be saved
                 in "A_list" variable.
+            with_log (bool): if flag is set, then the computation process is
+                presented in console.
 
         """
         self.eq = eq
         self.is_full = self.eq.is_full
         self.with_hist = bool(with_hist)
+        self.with_log = bool(with_log)
 
         self.A = None  # Interpolation coefficients for the Y
         self.W = None  # Copy of the conv. solution from the previous time step
@@ -102,7 +105,9 @@ class FPCross:
 
     def solve(self):
         """Solve the Fokker-Planck equation."""
-        tqdm_ = tqdm(desc='Solve', unit='step', total=self.eq.m-1, ncols=90)
+        if self.with_log:
+            tqdm_ = tqdm(desc='Solve', unit='step', total=self.eq.m-1, ncols=90)
+
         self._step_init()
 
         for m in range(1, self.eq.m + 1):
@@ -115,10 +120,12 @@ class FPCross:
             self._step_proc()
             self.text += self.eq.callback(self) or ''
 
-            tqdm_.set_postfix_str(self.text, refresh=True)
-            tqdm_.update(1)
+            if self.with_log:
+                tqdm_.set_postfix_str(self.text, refresh=True)
+                tqdm_.update(1)
 
-        tqdm_.close()
+        if self.with_log:
+            tqdm_.close()
 
     def _check_rs(self):
         if not self.eq.with_rs:
